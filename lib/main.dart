@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -9,16 +10,68 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:path_provider/path_provider.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:curved_labeled_navigation_bar/curved_navigation_bar.dart';
+import 'package:curved_labeled_navigation_bar/curved_navigation_bar_item.dart';
 
 Map<String, double> tasasCambio = {'USD': 1.0, 'COP': 4500.0, 'VES': 60.0};
 Map<String, String> simbolosMoneda = {'USD': '\$', 'COP': '\$', 'VES': 'Bs.'};
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Supabase.initialize(
+    url: 'https://rbgtbwzyvrgaslaajxev.supabase.co',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiZ3Rid3p5dnJnYXNsYWFqeGV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5NjMzMDksImV4cCI6MjEwMDUzOTMwOX0.uc85JmtU1SfO7vBTwuSMJEqqIlHK9mAR2jtyH9c8EnA',
+  );
+
   final prefs = await SharedPreferences.getInstance();
   tasasCambio['COP'] = prefs.getDouble('tasa_cop') ?? 4500.0;
   tasasCambio['VES'] = prefs.getDouble('tasa_ves') ?? 60.0;
   runApp(const MiApp());
+}
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+// ============================================
+// SERVICIO DE SONIDO - BEEP ARREGLADO DIRECTO Y SIMPLE
+// ============================================
+class SoundService {
+  static final SoundService _instance = SoundService._();
+  factory SoundService() => _instance;
+  SoundService._();
+
+  final AudioPlayer _player = AudioPlayer();
+  bool _isPlaying = false;
+
+  Future<void> playBeep() async {
+    if (_isPlaying) return;
+    _isPlaying = true;
+
+    try {
+      await _player.stop();
+      await _player.play(AssetSource('sounds/beep.mp3'));
+      await Future.delayed(const Duration(milliseconds: 200));
+    } catch (e) {
+      debugPrint('Error reproduciendo beep: $e');
+      // Respaldo: usar sonido del sistema
+      SystemSound.play(SystemSoundType.click);
+      HapticFeedback.mediumImpact();
+    } finally {
+      _isPlaying = false;
+    }
+  }
+
+  void dispose() {
+    _player.dispose();
+  }
 }
 
 class AppColors {
@@ -182,74 +235,157 @@ class DatabaseService {
   DatabaseService._();
 
   Future<List<Map<String, dynamic>>> getProductos() async {
-    final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getString('productos_local');
-    if (data != null) {
-      return List<Map<String, dynamic>>.from(jsonDecode(data));
+    try {
+      final response = await Supabase.instance.client
+          .from('productos')
+          .select()
+          .order('nombre');
+      final productos = List<Map<String, dynamic>>.from(response as List);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('productos_local', jsonEncode(productos));
+
+      return productos;
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final data = prefs.getString('productos_local');
+      if (data != null) {
+        return List<Map<String, dynamic>>.from(jsonDecode(data));
+      }
+      return [];
     }
-    return [];
   }
 
   Future<Map<String, dynamic>?> crearProducto(Map<String, dynamic> prod) async {
-    final prefs = await SharedPreferences.getInstance();
-    final productos = await getProductos();
-    prod['id'] = DateTime.now().millisecondsSinceEpoch.toString();
-    prod['creado_en'] = DateTime.now().toIso8601String();
-    productos.add(prod);
-    await prefs.setString('productos_local', jsonEncode(productos));
-    return prod;
+    try {
+      final response = await Supabase.instance.client
+          .from('productos')
+          .insert(prod)
+          .select()
+          .single();
+      return response as Map<String, dynamic>;
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final productos = await getProductos();
+      prod['id'] = DateTime.now().millisecondsSinceEpoch.toString();
+      prod['creado_en'] = DateTime.now().toIso8601String();
+      productos.add(prod);
+      await prefs.setString('productos_local', jsonEncode(productos));
+      return prod;
+    }
   }
 
   Future<Map<String, dynamic>?> actualizarProducto(
       String id, Map<String, dynamic> prod) async {
-    final prefs = await SharedPreferences.getInstance();
-    final productos = await getProductos();
-    final index = productos.indexWhere((p) => p['id'] == id);
-    if (index >= 0) {
-      productos[index] = {...productos[index], ...prod};
-      await prefs.setString('productos_local', jsonEncode(productos));
+    try {
+      final response = await Supabase.instance.client
+          .from('productos')
+          .update(prod)
+          .eq('id', id)
+          .select()
+          .single();
+      return response as Map<String, dynamic>;
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final productos = await getProductos();
+      final index = productos.indexWhere((p) => p['id'].toString() == id);
+      if (index >= 0) {
+        productos[index] = {...productos[index], ...prod};
+        await prefs.setString('productos_local', jsonEncode(productos));
+      }
+      return prod;
     }
-    return prod;
   }
 
   Future<void> eliminarProducto(String id) async {
-    final prefs = await SharedPreferences.getInstance();
-    final productos = await getProductos();
-    productos.removeWhere((p) => p['id'] == id);
-    await prefs.setString('productos_local', jsonEncode(productos));
+    try {
+      await Supabase.instance.client.from('productos').delete().eq('id', id);
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final productos = await getProductos();
+      productos.removeWhere((p) => p['id'].toString() == id);
+      await prefs.setString('productos_local', jsonEncode(productos));
+    }
   }
 
   Future<Map<String, dynamic>?> buscarPorCodigo(String codigo) async {
-    final productos = await getProductos();
-    for (var p in productos) {
-      if (p['codigo_barras'] == codigo) return p;
+    try {
+      final response = await Supabase.instance.client
+          .from('productos')
+          .select()
+          .eq('codigo_barras', codigo)
+          .single();
+      return response as Map<String, dynamic>;
+    } catch (e) {
+      final productos = await getProductos();
+      for (var p in productos) {
+        if (p['codigo_barras'] == codigo) return p;
+      }
+      return null;
     }
-    return null;
   }
 
   Future<Map<String, dynamic>?> crearVenta(Map<String, dynamic> venta) async {
-    final prefs = await SharedPreferences.getInstance();
-    final ventasData = prefs.getString('ventas_local');
-    List<Map<String, dynamic>> ventas = [];
-    if (ventasData != null) {
-      ventas = List<Map<String, dynamic>>.from(jsonDecode(ventasData));
+    try {
+      final response = await Supabase.instance.client
+          .from('ventas')
+          .insert(venta)
+          .select()
+          .single();
+      return response as Map<String, dynamic>;
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final ventasData = prefs.getString('ventas_local');
+      List<Map<String, dynamic>> ventas = [];
+      if (ventasData != null) {
+        ventas = List<Map<String, dynamic>>.from(jsonDecode(ventasData));
+      }
+      venta['id'] = DateTime.now().millisecondsSinceEpoch.toString();
+      venta['fecha'] = DateTime.now().toIso8601String();
+      ventas.add(venta);
+      await prefs.setString('ventas_local', jsonEncode(ventas));
+      return venta;
     }
-    venta['id'] = DateTime.now().millisecondsSinceEpoch.toString();
-    venta['fecha'] = DateTime.now().toIso8601String();
-    ventas.add(venta);
-    await prefs.setString('ventas_local', jsonEncode(ventas));
-    return venta;
   }
 
-  Future<void> crearDetalleVenta(Map<String, dynamic> detalle) async {}
+  Future<void> crearDetalleVenta(Map<String, dynamic> detalle) async {
+    try {
+      await Supabase.instance.client.from('detalle_venta').insert(detalle);
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final detallesData = prefs.getString('detalle_venta_local');
+      List<Map<String, dynamic>> detalles = [];
+      if (detallesData != null) {
+        detalles = List<Map<String, dynamic>>.from(jsonDecode(detallesData));
+      }
+      detalles.add(detalle);
+      await prefs.setString('detalle_venta_local', jsonEncode(detalles));
+    }
+  }
 
   Future<List<Map<String, dynamic>>> getVentasHoy() async {
-    final prefs = await SharedPreferences.getInstance();
-    final ventasData = prefs.getString('ventas_local');
-    if (ventasData != null) {
-      return List<Map<String, dynamic>>.from(jsonDecode(ventasData));
+    try {
+      final hoy = DateTime.now();
+      final inicio = DateTime(hoy.year, hoy.month, hoy.day).toIso8601String();
+      final response = await Supabase.instance.client
+          .from('ventas')
+          .select()
+          .gte('fecha', inicio)
+          .order('fecha', ascending: false);
+      final ventas = List<Map<String, dynamic>>.from(response as List);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('ventas_local', jsonEncode(ventas));
+
+      return ventas;
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final ventasData = prefs.getString('ventas_local');
+      if (ventasData != null) {
+        return List<Map<String, dynamic>>.from(jsonDecode(ventasData));
+      }
+      return [];
     }
-    return [];
   }
 
   Future<double> getTotalVentasHoy() async {
@@ -267,155 +403,281 @@ class DatabaseService {
   }
 
   Future<List<Map<String, dynamic>>> getClientes() async {
-    final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getString('clientes_local');
-    if (data != null) {
-      return List<Map<String, dynamic>>.from(jsonDecode(data));
+    try {
+      final response = await Supabase.instance.client
+          .from('clientes')
+          .select()
+          .order('nombre');
+      final clientes = List<Map<String, dynamic>>.from(response as List);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('clientes_local', jsonEncode(clientes));
+
+      return clientes;
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final data = prefs.getString('clientes_local');
+      if (data != null) {
+        return List<Map<String, dynamic>>.from(jsonDecode(data));
+      }
+      return [];
     }
-    return [];
+  }
+
+  Future<Map<String, dynamic>?> buscarClientePorCedula(String cedula) async {
+    try {
+      final response = await Supabase.instance.client
+          .from('clientes')
+          .select()
+          .eq('identificacion', cedula)
+          .single();
+      return response as Map<String, dynamic>;
+    } catch (e) {
+      final clientes = await getClientes();
+      for (var c in clientes) {
+        if (c['identificacion'] == cedula) return c;
+      }
+      return null;
+    }
   }
 
   Future<void> crearCliente(Map<String, dynamic> cliente) async {
-    final prefs = await SharedPreferences.getInstance();
-    final clientes = await getClientes();
-    cliente['id'] = DateTime.now().millisecondsSinceEpoch.toString();
-    clientes.add(cliente);
-    await prefs.setString('clientes_local', jsonEncode(clientes));
-  }
-
-  Future<void> actualizarCliente(
-      String id, Map<String, dynamic> cliente) async {
-    final prefs = await SharedPreferences.getInstance();
-    final clientes = await getClientes();
-    final index = clientes.indexWhere((c) => c['id'] == id);
-    if (index >= 0) {
-      clientes[index] = {...clientes[index], ...cliente};
+    try {
+      await Supabase.instance.client.from('clientes').insert(cliente);
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final clientes = await getClientes();
+      cliente['id'] = DateTime.now().millisecondsSinceEpoch.toString();
+      clientes.add(cliente);
       await prefs.setString('clientes_local', jsonEncode(clientes));
     }
   }
 
+  Future<void> actualizarCliente(
+      String id, Map<String, dynamic> cliente) async {
+    try {
+      await Supabase.instance.client
+          .from('clientes')
+          .update(cliente)
+          .eq('id', id);
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final clientes = await getClientes();
+      final index = clientes.indexWhere((c) => c['id'].toString() == id);
+      if (index >= 0) {
+        clientes[index] = {...clientes[index], ...cliente};
+        await prefs.setString('clientes_local', jsonEncode(clientes));
+      }
+    }
+  }
+
   Future<void> eliminarCliente(String id) async {
-    final prefs = await SharedPreferences.getInstance();
-    final clientes = await getClientes();
-    clientes.removeWhere((c) => c['id'] == id);
-    await prefs.setString('clientes_local', jsonEncode(clientes));
+    try {
+      await Supabase.instance.client.from('clientes').delete().eq('id', id);
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final clientes = await getClientes();
+      clientes.removeWhere((c) => c['id'].toString() == id);
+      await prefs.setString('clientes_local', jsonEncode(clientes));
+    }
   }
 
   Future<List<Map<String, dynamic>>> getCategorias() async {
-    final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getString('categorias_local');
-    if (data != null) {
-      return List<Map<String, dynamic>>.from(jsonDecode(data));
-    }
-    return [
-      {
-        'id': '1',
-        'nombre': 'General',
-        'descripcion': 'Categoria general',
-        'activo': 1
+    try {
+      final response = await Supabase.instance.client
+          .from('categorias')
+          .select()
+          .order('nombre');
+      final categorias = List<Map<String, dynamic>>.from(response as List);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('categorias_local', jsonEncode(categorias));
+
+      return categorias;
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final data = prefs.getString('categorias_local');
+      if (data != null) {
+        return List<Map<String, dynamic>>.from(jsonDecode(data));
       }
-    ];
+      return [
+        {
+          'id': 1,
+          'nombre': 'General',
+          'descripcion': 'Categoria general',
+          'activo': true
+        }
+      ];
+    }
   }
 
   Future<void> crearCategoria(Map<String, dynamic> categoria) async {
-    final prefs = await SharedPreferences.getInstance();
-    final categorias = await getCategorias();
-    categoria['id'] = DateTime.now().millisecondsSinceEpoch.toString();
-    categorias.add(categoria);
-    await prefs.setString('categorias_local', jsonEncode(categorias));
-  }
-
-  Future<void> actualizarCategoria(
-      String id, Map<String, dynamic> categoria) async {
-    final prefs = await SharedPreferences.getInstance();
-    final categorias = await getCategorias();
-    final index = categorias.indexWhere((c) => c['id'] == id);
-    if (index >= 0) {
-      categorias[index] = {...categorias[index], ...categoria};
+    try {
+      await Supabase.instance.client.from('categorias').insert(categoria);
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final categorias = await getCategorias();
+      categorias.add(categoria);
       await prefs.setString('categorias_local', jsonEncode(categorias));
     }
   }
 
+  Future<void> actualizarCategoria(
+      String id, Map<String, dynamic> categoria) async {
+    try {
+      await Supabase.instance.client
+          .from('categorias')
+          .update(categoria)
+          .eq('id', id);
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final categorias = await getCategorias();
+      final index = categorias.indexWhere((c) => c['id'].toString() == id);
+      if (index >= 0) {
+        categorias[index] = {...categorias[index], ...categoria};
+        await prefs.setString('categorias_local', jsonEncode(categorias));
+      }
+    }
+  }
+
   Future<void> eliminarCategoria(String id) async {
-    final prefs = await SharedPreferences.getInstance();
-    final categorias = await getCategorias();
-    categorias.removeWhere((c) => c['id'] == id);
-    await prefs.setString('categorias_local', jsonEncode(categorias));
+    try {
+      await Supabase.instance.client.from('categorias').delete().eq('id', id);
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final categorias = await getCategorias();
+      categorias.removeWhere((c) => c['id'].toString() == id);
+      await prefs.setString('categorias_local', jsonEncode(categorias));
+    }
   }
 
   Future<List<Map<String, dynamic>>> getMetodosPago() async {
-    final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getString('metodos_pago_local');
-    if (data != null) {
-      return List<Map<String, dynamic>>.from(jsonDecode(data));
+    try {
+      final response = await Supabase.instance.client
+          .from('metodos_pago')
+          .select()
+          .order('nombre');
+      final metodos = List<Map<String, dynamic>>.from(response as List);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('metodos_pago_local', jsonEncode(metodos));
+
+      return metodos;
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final data = prefs.getString('metodos_pago_local');
+      if (data != null) {
+        return List<Map<String, dynamic>>.from(jsonDecode(data));
+      }
+      return [
+        {'id': 1, 'nombre': 'Efectivo', 'activo': true},
+        {'id': 2, 'nombre': 'Tarjeta', 'activo': true},
+        {'id': 3, 'nombre': 'Transferencia', 'activo': true},
+        {'id': 4, 'nombre': 'Pago Movil', 'activo': true},
+      ];
     }
-    return [
-      {'id': '1', 'nombre': 'Efectivo', 'activo': 1},
-      {'id': '2', 'nombre': 'Tarjeta', 'activo': 1},
-      {'id': '3', 'nombre': 'Transferencia', 'activo': 1},
-      {'id': '4', 'nombre': 'Pago Movil', 'activo': 1},
-    ];
   }
 
   Future<void> crearMetodoPago(Map<String, dynamic> metodo) async {
-    final prefs = await SharedPreferences.getInstance();
-    final metodos = await getMetodosPago();
-    metodo['id'] = DateTime.now().millisecondsSinceEpoch.toString();
-    metodos.add(metodo);
-    await prefs.setString('metodos_pago_local', jsonEncode(metodos));
-  }
-
-  Future<void> actualizarMetodoPago(
-      String id, Map<String, dynamic> metodo) async {
-    final prefs = await SharedPreferences.getInstance();
-    final metodos = await getMetodosPago();
-    final index = metodos.indexWhere((m) => m['id'] == id);
-    if (index >= 0) {
-      metodos[index] = {...metodos[index], ...metodo};
+    try {
+      await Supabase.instance.client.from('metodos_pago').insert(metodo);
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final metodos = await getMetodosPago();
+      metodos.add(metodo);
       await prefs.setString('metodos_pago_local', jsonEncode(metodos));
     }
   }
 
+  Future<void> actualizarMetodoPago(
+      String id, Map<String, dynamic> metodo) async {
+    try {
+      await Supabase.instance.client
+          .from('metodos_pago')
+          .update(metodo)
+          .eq('id', id);
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final metodos = await getMetodosPago();
+      final index = metodos.indexWhere((m) => m['id'].toString() == id);
+      if (index >= 0) {
+        metodos[index] = {...metodos[index], ...metodo};
+        await prefs.setString('metodos_pago_local', jsonEncode(metodos));
+      }
+    }
+  }
+
   Future<void> eliminarMetodoPago(String id) async {
-    final prefs = await SharedPreferences.getInstance();
-    final metodos = await getMetodosPago();
-    metodos.removeWhere((m) => m['id'] == id);
-    await prefs.setString('metodos_pago_local', jsonEncode(metodos));
+    try {
+      await Supabase.instance.client.from('metodos_pago').delete().eq('id', id);
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final metodos = await getMetodosPago();
+      metodos.removeWhere((m) => m['id'].toString() == id);
+      await prefs.setString('metodos_pago_local', jsonEncode(metodos));
+    }
   }
 
   Future<List<Map<String, dynamic>>> getVendedores() async {
-    final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getString('vendedores_local');
-    if (data != null) {
-      return List<Map<String, dynamic>>.from(jsonDecode(data));
+    try {
+      final response = await Supabase.instance.client
+          .from('vendedores')
+          .select()
+          .order('nombre');
+      final vendedores = List<Map<String, dynamic>>.from(response as List);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('vendedores_local', jsonEncode(vendedores));
+
+      return vendedores;
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final data = prefs.getString('vendedores_local');
+      if (data != null) {
+        return List<Map<String, dynamic>>.from(jsonDecode(data));
+      }
+      return [];
     }
-    return [];
   }
 
   Future<void> crearVendedor(Map<String, dynamic> vendedor) async {
-    final prefs = await SharedPreferences.getInstance();
-    final vendedores = await getVendedores();
-    vendedor['id'] = DateTime.now().millisecondsSinceEpoch.toString();
-    vendedores.add(vendedor);
-    await prefs.setString('vendedores_local', jsonEncode(vendedores));
-  }
-
-  Future<void> actualizarVendedor(
-      String id, Map<String, dynamic> vendedor) async {
-    final prefs = await SharedPreferences.getInstance();
-    final vendedores = await getVendedores();
-    final index = vendedores.indexWhere((v) => v['id'] == id);
-    if (index >= 0) {
-      vendedores[index] = {...vendedores[index], ...vendedor};
+    try {
+      await Supabase.instance.client.from('vendedores').insert(vendedor);
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final vendedores = await getVendedores();
+      vendedores.add(vendedor);
       await prefs.setString('vendedores_local', jsonEncode(vendedores));
     }
   }
 
+  Future<void> actualizarVendedor(
+      String id, Map<String, dynamic> vendedor) async {
+    try {
+      await Supabase.instance.client
+          .from('vendedores')
+          .update(vendedor)
+          .eq('id', id);
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final vendedores = await getVendedores();
+      final index = vendedores.indexWhere((v) => v['id'].toString() == id);
+      if (index >= 0) {
+        vendedores[index] = {...vendedores[index], ...vendedor};
+        await prefs.setString('vendedores_local', jsonEncode(vendedores));
+      }
+    }
+  }
+
   Future<void> eliminarVendedor(String id) async {
-    final prefs = await SharedPreferences.getInstance();
-    final vendedores = await getVendedores();
-    vendedores.removeWhere((v) => v['id'] == id);
-    await prefs.setString('vendedores_local', jsonEncode(vendedores));
+    try {
+      await Supabase.instance.client.from('vendedores').delete().eq('id', id);
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final vendedores = await getVendedores();
+      vendedores.removeWhere((v) => v['id'].toString() == id);
+      await prefs.setString('vendedores_local', jsonEncode(vendedores));
+    }
   }
 
   Future<Map<String, dynamic>?> getConfiguracion() async {
@@ -430,30 +692,64 @@ class DatabaseService {
   Future<void> guardarConfiguracion(Map<String, dynamic> config) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('configuracion_local', jsonEncode(config));
+    try {
+      await Supabase.instance.client.from('configuracion').upsert(config);
+    } catch (e) {
+      // Silencioso - guardado localmente
+    }
+  }
+
+  Future<String?> subirImagenSupabase(Uint8List bytes, String path) async {
+    try {
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final fullPath = '$path/$fileName';
+      await Supabase.instance.client.storage
+          .from('imagenes')
+          .uploadBinary(fullPath, bytes);
+      final url = Supabase.instance.client.storage
+          .from('imagenes')
+          .getPublicUrl(fullPath);
+      return url;
+    } catch (e) {
+      debugPrint('Error subiendo imagen: $e');
+      return null;
+    }
   }
 
   Future<void> registrarMovimientoInventario(Map<String, dynamic> mov) async {
-    final prefs = await SharedPreferences.getInstance();
-    final movimientosData = prefs.getString('movimientos_inventario_local');
-    List<Map<String, dynamic>> movimientos = [];
-    if (movimientosData != null) {
-      movimientos =
-          List<Map<String, dynamic>>.from(jsonDecode(movimientosData));
+    try {
+      await Supabase.instance.client.from('movimientos_inventario').insert(mov);
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final movimientosData = prefs.getString('movimientos_inventario_local');
+      List<Map<String, dynamic>> movimientos = [];
+      if (movimientosData != null) {
+        movimientos =
+            List<Map<String, dynamic>>.from(jsonDecode(movimientosData));
+      }
+      mov['id'] = DateTime.now().millisecondsSinceEpoch.toString();
+      mov['fecha'] = DateTime.now().toIso8601String();
+      movimientos.add(mov);
+      await prefs.setString(
+          'movimientos_inventario_local', jsonEncode(movimientos));
     }
-    mov['id'] = DateTime.now().millisecondsSinceEpoch.toString();
-    mov['fecha'] = DateTime.now().toIso8601String();
-    movimientos.add(mov);
-    await prefs.setString(
-        'movimientos_inventario_local', jsonEncode(movimientos));
   }
 
   Future<List<Map<String, dynamic>>> getMovimientosInventario() async {
-    final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getString('movimientos_inventario_local');
-    if (data != null) {
-      return List<Map<String, dynamic>>.from(jsonDecode(data));
+    try {
+      final response = await Supabase.instance.client
+          .from('movimientos_inventario')
+          .select()
+          .order('fecha', ascending: false);
+      return List<Map<String, dynamic>>.from(response as List);
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final data = prefs.getString('movimientos_inventario_local');
+      if (data != null) {
+        return List<Map<String, dynamic>>.from(jsonDecode(data));
+      }
+      return [];
     }
-    return [];
   }
 
   Future<Map<String, dynamic>> getReporteGeneral(
@@ -471,16 +767,30 @@ class DatabaseService {
   }
 
   Future<Map<String, dynamic>?> getPerfilUsuario() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = prefs.getString('perfil_usuario');
+    if (data != null) {
+      return jsonDecode(data) as Map<String, dynamic>;
+    }
     return {
-      'id': '1',
+      'id': 1,
       'email': 'admin@sinthetix.com',
       'nombre': 'Admin',
       'rol': 'admin'
     };
   }
 
-  Future<void> actualizarPerfil(Map<String, dynamic> data) async {}
-  Future<void> cambiarPassword(String newPassword) async {}
+  Future<void> actualizarPerfil(Map<String, dynamic> data) async {
+    final prefs = await SharedPreferences.getInstance();
+    final perfilActual = await getPerfilUsuario() ?? {};
+    final nuevoPerfil = {...perfilActual, ...data};
+    await prefs.setString('perfil_usuario', jsonEncode(nuevoPerfil));
+  }
+
+  Future<void> cambiarPassword(String newPassword) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('password_local', newPassword);
+  }
 }
 
 class CajaService {
@@ -488,78 +798,103 @@ class CajaService {
   final _historialKey = 'caja_historial';
 
   Future<Map<String, dynamic>?> getCajaAbierta() async {
-    final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getString(_prefsKey);
-    if (data != null) return jsonDecode(data) as Map<String, dynamic>;
-    return null;
+    try {
+      final response = await Supabase.instance.client
+          .from('cierres_caja')
+          .select()
+          .eq('estado', 'Abierta')
+          .single();
+      return response as Map<String, dynamic>;
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final data = prefs.getString(_prefsKey);
+      if (data != null) return jsonDecode(data) as Map<String, dynamic>;
+      return null;
+    }
   }
 
   Future<void> abrirCaja(double montoInicial) async {
-    final prefs = await SharedPreferences.getInstance();
-    final caja = {
-      'id': DateTime.now().millisecondsSinceEpoch.toString(),
-      'fecha_apertura': DateTime.now().toIso8601String(),
-      'monto_inicial': montoInicial,
-      'total_ventas': 0.0,
-      'total_ingresos': 0.0,
-      'total_egresos': 0.0,
-      'estado': 'Abierta',
-      'movimientos': []
-    };
-    await prefs.setString(_prefsKey, jsonEncode(caja));
+    try {
+      await Supabase.instance.client.from('cierres_caja').insert({
+        'monto_inicial': montoInicial,
+        'estado': 'Abierta',
+      });
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final caja = {
+        'id': DateTime.now().millisecondsSinceEpoch.toString(),
+        'fecha_apertura': DateTime.now().toIso8601String(),
+        'monto_inicial': montoInicial,
+        'total_ventas': 0.0,
+        'estado': 'Abierta',
+        'movimientos': []
+      };
+      await prefs.setString(_prefsKey, jsonEncode(caja));
+    }
   }
 
   Future<void> cerrarCaja(double montoFinal) async {
-    final prefs = await SharedPreferences.getInstance();
-    final cajaData = prefs.getString(_prefsKey);
-    if (cajaData == null) return;
-    final caja = jsonDecode(cajaData) as Map<String, dynamic>;
-    caja['fecha_cierre'] = DateTime.now().toIso8601String();
-    caja['monto_final'] = montoFinal;
-    caja['estado'] = 'Cerrada';
-    caja['diferencia'] = montoFinal -
-        ((caja['monto_inicial'] as num).toDouble() +
-            (caja['total_ventas'] as num).toDouble() +
-            (caja['total_ingresos'] as num).toDouble() -
-            (caja['total_egresos'] as num).toDouble());
-    final historial = prefs.getStringList(_historialKey) ?? [];
-    historial.add(jsonEncode(caja));
-    await prefs.setStringList(_historialKey, historial);
-    await prefs.remove(_prefsKey);
+    try {
+      final caja = await getCajaAbierta();
+      if (caja != null) {
+        await Supabase.instance.client.from('cierres_caja').update({
+          'monto_final': montoFinal,
+          'estado': 'Cerrada',
+          'fecha_cierre': DateTime.now().toIso8601String(),
+        }).eq('id', caja['id']);
+      }
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_prefsKey);
+    }
   }
 
   Future<void> agregarVentaACaja(double monto) async {
-    final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getString(_prefsKey);
-    if (data != null) {
-      final caja = jsonDecode(data) as Map<String, dynamic>;
-      caja['total_ventas'] = (caja['total_ventas'] as num).toDouble() + monto;
-      await prefs.setString(_prefsKey, jsonEncode(caja));
+    try {
+      final caja = await getCajaAbierta();
+      if (caja != null) {
+        final nuevoTotal = (caja['total_ventas'] as num).toDouble() + monto;
+        await Supabase.instance.client
+            .from('cierres_caja')
+            .update({'total_ventas': nuevoTotal}).eq('id', caja['id']);
+      }
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final data = prefs.getString(_prefsKey);
+      if (data != null) {
+        final caja = jsonDecode(data) as Map<String, dynamic>;
+        caja['total_ventas'] = (caja['total_ventas'] as num).toDouble() + monto;
+        await prefs.setString(_prefsKey, jsonEncode(caja));
+      }
     }
   }
 
   Future<void> registrarMovimiento(
       String tipo, double monto, String descripcion) async {
-    final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getString(_prefsKey);
-    if (data != null) {
-      final caja = jsonDecode(data) as Map<String, dynamic>;
-      final movimientos = caja['movimientos'] as List? ?? [];
-      movimientos.add({
-        'tipo': tipo,
-        'monto': monto,
-        'descripcion': descripcion,
-        'fecha': DateTime.now().toIso8601String()
-      });
-      caja['movimientos'] = movimientos;
-      if (tipo == 'Ingreso') {
-        caja['total_ingresos'] =
-            (caja['total_ingresos'] as num).toDouble() + monto;
-      } else {
-        caja['total_egresos'] =
-            (caja['total_egresos'] as num).toDouble() + monto;
+    try {
+      final caja = await getCajaAbierta();
+      if (caja != null) {
+        await Supabase.instance.client.from('gastos').insert({
+          'caja_id': caja['id'],
+          'descripcion': descripcion,
+          'monto': monto,
+        });
       }
-      await prefs.setString(_prefsKey, jsonEncode(caja));
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final data = prefs.getString(_prefsKey);
+      if (data != null) {
+        final caja = jsonDecode(data) as Map<String, dynamic>;
+        final movimientos = caja['movimientos'] as List? ?? [];
+        movimientos.add({
+          'tipo': tipo,
+          'monto': monto,
+          'descripcion': descripcion,
+          'fecha': DateTime.now().toIso8601String()
+        });
+        caja['movimientos'] = movimientos;
+        await prefs.setString(_prefsKey, jsonEncode(caja));
+      }
     }
   }
 
@@ -572,11 +907,20 @@ class CajaService {
   }
 
   Future<List<Map<String, dynamic>>> getHistorialCajas() async {
-    final prefs = await SharedPreferences.getInstance();
-    final historial = prefs.getStringList(_historialKey) ?? [];
-    return historial.map((h) => jsonDecode(h) as Map<String, dynamic>).toList()
-      ..sort((a, b) => (b['fecha_apertura'] as String)
-          .compareTo(a['fecha_apertura'] as String));
+    try {
+      final response = await Supabase.instance.client
+          .from('cierres_caja')
+          .select()
+          .eq('estado', 'Cerrada')
+          .order('fecha_cierre', ascending: false);
+      return List<Map<String, dynamic>>.from(response as List);
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final historial = prefs.getStringList(_historialKey) ?? [];
+      return historial
+          .map((h) => jsonDecode(h) as Map<String, dynamic>)
+          .toList();
+    }
   }
 }
 
@@ -619,7 +963,11 @@ class _MiAppState extends State<MiApp> {
       'caja': 10,
       'perfil': 11,
       'inventario': 12,
-      'tienda': 13
+      'tienda': 13,
+      'proveedores': 14,
+      'promociones': 15,
+      'compras': 16,
+      'roles': 17
     };
     setState(() => _currentIndex = m[ruta] ?? 0);
   }
@@ -627,6 +975,7 @@ class _MiAppState extends State<MiApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'SINTHETIX PRO',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -717,23 +1066,82 @@ class _MiAppState extends State<MiApp> {
               modoOscuro: _modoOscuro,
             ),
             UniversalFlyCartStore(onAbrirSidebar: _abrirSidebar),
+            ProveedoresScreen(
+              onAbrirSidebar: _abrirSidebar,
+              modoOscuro: _modoOscuro,
+            ),
+            PromocionesScreen(
+              onAbrirSidebar: _abrirSidebar,
+              modoOscuro: _modoOscuro,
+            ),
+            ComprasScreen(
+              onAbrirSidebar: _abrirSidebar,
+              modoOscuro: _modoOscuro,
+            ),
+            RolesScreen(
+              onAbrirSidebar: _abrirSidebar,
+              modoOscuro: _modoOscuro,
+            ),
           ],
         ),
         bottomNavigationBar: _currentIndex <= 1
-            ? BottomNavigationBar(
-                currentIndex: _currentIndex,
-                onTap: (i) => setState(() => _currentIndex = i),
-                backgroundColor:
-                    _modoOscuro ? const Color(0xFF1F222B) : Colors.white,
-                selectedItemColor: AppColors.primary,
-                unselectedItemColor: AppColors.subtext(_modoOscuro),
-                elevation: 0,
-                items: const [
-                  BottomNavigationBarItem(
-                      icon: Icon(Icons.shopping_cart_outlined), label: 'POS'),
-                  BottomNavigationBarItem(
-                      icon: Icon(Icons.dashboard_outlined), label: 'Dashboard'),
+            ? CurvedNavigationBar(
+                backgroundColor: Colors.transparent,
+                color: _modoOscuro
+                    ? const Color(0xFF2A2A2A)
+                    : const Color(0xFFE0E0E0),
+                buttonBackgroundColor: _modoOscuro
+                    ? const Color(0xFF3A3A3A)
+                    : const Color(0xFFBDBDBD),
+                height: 65,
+                animationDuration: const Duration(milliseconds: 300),
+                animationCurve: Curves.easeInOut,
+                index: _currentIndex,
+                items: [
+                  CurvedNavigationBarItem(
+                    child: Icon(
+                      Icons.shopping_cart_outlined,
+                      size: 26,
+                      color: _currentIndex == 0
+                          ? (_modoOscuro ? Colors.white : Colors.black)
+                          : AppColors.subtext(_modoOscuro),
+                    ),
+                    label: 'POS',
+                    labelStyle: TextStyle(
+                      color: _currentIndex == 0
+                          ? (_modoOscuro ? Colors.white : Colors.black)
+                          : AppColors.subtext(_modoOscuro),
+                      fontSize: 10,
+                      fontWeight: _currentIndex == 0
+                          ? FontWeight.w700
+                          : FontWeight.w400,
+                    ),
+                  ),
+                  CurvedNavigationBarItem(
+                    child: Icon(
+                      Icons.dashboard_outlined,
+                      size: 26,
+                      color: _currentIndex == 1
+                          ? (_modoOscuro ? Colors.white : Colors.black)
+                          : AppColors.subtext(_modoOscuro),
+                    ),
+                    label: 'Dashboard',
+                    labelStyle: TextStyle(
+                      color: _currentIndex == 1
+                          ? (_modoOscuro ? Colors.white : Colors.black)
+                          : AppColors.subtext(_modoOscuro),
+                      fontSize: 10,
+                      fontWeight: _currentIndex == 1
+                          ? FontWeight.w700
+                          : FontWeight.w400,
+                    ),
+                  ),
                 ],
+                onTap: (index) {
+                  setState(() {
+                    _currentIndex = index;
+                  });
+                },
               )
             : null,
       ),
@@ -768,9 +1176,7 @@ class SidebarMenu extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppColors.primary, AppColors.secondary],
-                    ),
+                    color: AppColors.primary,
                     borderRadius: BorderRadius.circular(14)),
                 child: const Icon(Icons.store_rounded,
                     color: Colors.white, size: 28),
@@ -829,6 +1235,14 @@ class SidebarMenu extends StatelessWidget {
                     () => onNavigate('clientes'), modoOscuro),
                 _item(Icons.inventory_2_outlined, 'Inventario',
                     () => onNavigate('inventario'), modoOscuro),
+                _item(Icons.local_shipping_outlined, 'Proveedores',
+                    () => onNavigate('proveedores'), modoOscuro),
+                _item(Icons.shopping_cart_checkout, 'Compras',
+                    () => onNavigate('compras'), modoOscuro),
+                _item(Icons.local_offer_outlined, 'Promociones',
+                    () => onNavigate('promociones'), modoOscuro),
+                _item(Icons.admin_panel_settings, 'Usuarios y Roles',
+                    () => onNavigate('roles'), modoOscuro),
                 const SizedBox(height: 16),
                 _sec('FINANZAS', modoOscuro),
                 _item(Icons.point_of_sale, 'Caja', () => onNavigate('caja'),
@@ -848,7 +1262,7 @@ class SidebarMenu extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Text('v5.0.0 - SINTHETIX PRO',
+            child: Text('v5.1.0 - SINTHETIX PRO',
                 style: TextStyle(
                     color: AppColors.subtext(modoOscuro), fontSize: 11),
                 textAlign: TextAlign.center),
@@ -899,26 +1313,41 @@ class EscanerVentas extends StatefulWidget {
 }
 
 class _EscanerVentasState extends State<EscanerVentas> {
-  final cameraController = MobileScannerController();
+  final cameraController = MobileScannerController(
+    formats: [BarcodeFormat.all],
+    detectionSpeed: DetectionSpeed.normal,
+  );
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _escuchando = false;
+  String _textoVoz = '';
   final _buscador = TextEditingController();
   final _db = DatabaseService();
   final _cajaService = CajaService();
+  final SoundService _soundService = SoundService();
   List<Map<String, dynamic>> carrito = [];
   List<Map<String, dynamic>> listaProductos = [];
   List<Map<String, dynamic>> busqueda = [];
   bool _camara = false;
   bool _mostrarBusqueda = false;
+  bool _mostrarTodos = false;
   bool _cargando = true;
   bool _sonando = false;
+  String? _ultimoCodigoEscaneado;
+  DateTime? _ultimoEscaneo;
+
+  bool get _isTablet => MediaQuery.of(context).size.width >= 600;
+  bool get _isDesktop => MediaQuery.of(context).size.width >= 1024;
 
   void _vibrar() => HapticFeedback.heavyImpact();
 
   void _sonidoExito() {
     if (_sonando) return;
     _sonando = true;
-    SystemSound.play(SystemSoundType.alert);
+
+    _soundService.playBeep();
     _vibrar();
-    Future.delayed(const Duration(milliseconds: 800), () {
+
+    Future.delayed(const Duration(milliseconds: 500), () {
       _sonando = false;
     });
   }
@@ -926,6 +1355,60 @@ class _EscanerVentasState extends State<EscanerVentas> {
   String _precio(double pre) {
     final sim = simbolosMoneda['USD'] ?? '\$';
     return '$sim ${pre.toStringAsFixed(2)}';
+  }
+
+  void _mostrarSnackbarProductoAgregado(Map<String, dynamic> prod,
+      {double? peso}) {
+    if (!mounted) return;
+
+    final mensaje = peso != null
+        ? '${prod['nombre']} (${peso.toStringAsFixed(2)}kg) agregado'
+        : '${prod['nombre']} agregado';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppColors.success,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.check, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Producto Agregado',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    mensaje,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: AppColors.success,
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+      ),
+    );
   }
 
   void _agregar(Map<String, dynamic> prod) {
@@ -950,11 +1433,10 @@ class _EscanerVentasState extends State<EscanerVentas> {
           'peso': 0.0,
         });
       }
-      busqueda.clear();
-      _mostrarBusqueda = false;
-      _buscador.clear();
-      _vibrar();
     });
+
+    _sonidoExito();
+    _mostrarSnackbarProductoAgregado(prod);
   }
 
   void _agregarPorKilo(Map<String, dynamic> prod) {
@@ -963,49 +1445,127 @@ class _EscanerVentasState extends State<EscanerVentas> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card(widget.modoOscuro),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('${prod['nombre']} - Por Kilo',
-            style: TextStyle(
-                color: AppColors.text(widget.modoOscuro),
-                fontWeight: FontWeight.w700)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.scale, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    prod['nombre'],
+                    style: TextStyle(
+                      color: AppColors.text(widget.modoOscuro),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Text(
+                    'Producto por kilo',
+                    style: TextStyle(
+                      color: AppColors.subtext(widget.modoOscuro),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-                'Precio por kilo: \$${(prod['precio'] as num).toStringAsFixed(2)}',
-                style: TextStyle(color: AppColors.subtext(widget.modoOscuro))),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '\$${(prod['precio'] as num).toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  Text(
+                    ' / kg',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.subtext(widget.modoOscuro),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: pesoCtrl,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
-              style: TextStyle(color: AppColors.text(widget.modoOscuro)),
+              style: TextStyle(
+                color: AppColors.text(widget.modoOscuro),
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
               decoration: InputDecoration(
                 labelText: 'Peso (kg)',
                 labelStyle:
                     TextStyle(color: AppColors.subtext(widget.modoOscuro)),
                 hintText: 'Ej: 0.5 = medio kilo, 0.25 = 250 gramos',
                 hintStyle: TextStyle(
-                    color: AppColors.subtext(widget.modoOscuro), fontSize: 11),
+                  color: AppColors.subtext(widget.modoOscuro),
+                  fontSize: 11,
+                ),
+                prefixIcon:
+                    Icon(Icons.scale_outlined, color: AppColors.primary),
                 filled: true,
                 fillColor: AppColors.background(widget.modoOscuro),
                 border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none),
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide:
+                      BorderSide(color: AppColors.divider(widget.modoOscuro)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide:
+                      const BorderSide(color: AppColors.primary, width: 2),
+                ),
               ),
             ),
           ],
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('Cancelar',
-                  style:
-                      TextStyle(color: AppColors.subtext(widget.modoOscuro)))),
-          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              'Cancelar',
+              style: TextStyle(color: AppColors.subtext(widget.modoOscuro)),
+            ),
+          ),
+          ElevatedButton.icon(
             onPressed: () {
               final peso = double.tryParse(pesoCtrl.text) ?? 0;
               if (peso <= 0) return;
+
               setState(() {
                 carrito.add({
                   'id': prod['id'] ??
@@ -1019,12 +1579,27 @@ class _EscanerVentasState extends State<EscanerVentas> {
                   'peso': peso,
                 });
               });
+
               Navigator.pop(ctx);
-              _vibrar();
+              _sonidoExito();
+              _mostrarSnackbarProductoAgregado(prod, peso: peso);
             },
-            child: const Text('Agregar',
-                style: TextStyle(
-                    color: AppColors.primary, fontWeight: FontWeight.w600)),
+            icon: const Icon(Icons.add_shopping_cart,
+                color: Colors.white, size: 18),
+            label: const Text(
+              'Agregar',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
           ),
         ],
       ),
@@ -1067,11 +1642,53 @@ class _EscanerVentasState extends State<EscanerVentas> {
     );
   }
 
+  Future<void> _iniciarEscucha() async {
+    try {
+      final disponible = await _speech.initialize(
+        onStatus: (status) {
+          if (status == 'done' || status == 'notListening') {
+            setState(() => _escuchando = false);
+          }
+        },
+        onError: (error) {
+          setState(() => _escuchando = false);
+        },
+      );
+
+      if (disponible) {
+        setState(() => _escuchando = true);
+        _buscador.clear();
+        await _speech.listen(
+          onResult: (result) {
+            setState(() {
+              _textoVoz = result.recognizedWords;
+              _buscador.text = _textoVoz;
+              _buscar(_textoVoz);
+            });
+          },
+          localeId: 'es_ES',
+          listenFor: const Duration(seconds: 5),
+          pauseFor: const Duration(seconds: 3),
+        );
+      } else {
+        _snack('Reconocimiento de voz no disponible', AppColors.warning);
+      }
+    } catch (e) {
+      _snack('Error al iniciar voz: $e', AppColors.danger);
+    }
+  }
+
+  Future<void> _detenerEscucha() async {
+    await _speech.stop();
+    setState(() => _escuchando = false);
+  }
+
   void _buscar(String q) {
     setState(() {
       if (q.isEmpty) {
         busqueda.clear();
         _mostrarBusqueda = false;
+        _mostrarTodos = false;
       } else {
         final f = q.toLowerCase();
         busqueda = listaProductos
@@ -1080,7 +1697,26 @@ class _EscanerVentasState extends State<EscanerVentas> {
                 (prod['codigo_barras'] as String).toLowerCase().contains(f))
             .toList();
         _mostrarBusqueda = busqueda.isNotEmpty;
+        _mostrarTodos = false;
       }
+    });
+  }
+
+  void _verTodos() {
+    setState(() {
+      _mostrarTodos = true;
+      _mostrarBusqueda = false;
+      busqueda.clear();
+      _buscador.clear();
+    });
+  }
+
+  void _limpiarBusqueda() {
+    setState(() {
+      _mostrarBusqueda = false;
+      _mostrarTodos = false;
+      busqueda.clear();
+      _buscador.clear();
     });
   }
 
@@ -1134,14 +1770,14 @@ class _EscanerVentasState extends State<EscanerVentas> {
         carrito: carrito,
         total: total,
         formatearPrecio: _precio,
-        onVentaCompletada: (m, mt, n, t) => _venta(m, mt, n, t),
+        onVentaCompletada: (m, mt, n, t, c) => _venta(m, mt, n, t, c),
         modoOscuro: widget.modoOscuro,
       ),
     );
   }
 
-  Future<void> _venta(
-      String metodo, String monto, String nombre, String telefono) async {
+  Future<void> _venta(String metodo, String monto, String nombre,
+      String telefono, String cedula) async {
     try {
       final fac = DatosPrueba.generarNumeroFactura();
       final venta = {
@@ -1151,6 +1787,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
         'moneda': 'USD',
         'cliente_nombre': nombre.isNotEmpty ? nombre : 'Publico General',
         'cliente_telefono': telefono,
+        'cliente_cedula': cedula,
         'estado': 'Pagada',
         'fecha': DateTime.now().toIso8601String(),
       };
@@ -1167,13 +1804,329 @@ class _EscanerVentasState extends State<EscanerVentas> {
           });
         }
         await _cajaService.agregarVentaACaja(total);
+
+        if (nombre.isNotEmpty) {
+          try {
+            final clientes = await _db.getClientes();
+            final clienteExistente = clientes
+                .where((c) =>
+                    (c['nombre']?.toString().toLowerCase() ?? '') ==
+                    nombre.toLowerCase())
+                .toList();
+
+            if (clienteExistente.isNotEmpty) {
+              final cliente = clienteExistente.first;
+              final puntosGanados = total.floor();
+              final puntosActuales = (cliente['puntos'] ?? 0) as int;
+              final totalCompras = (cliente['total_compras'] ?? 0) as num;
+
+              await _db.actualizarCliente(cliente['id'].toString(), {
+                'puntos': puntosActuales + puntosGanados,
+                'total_compras': totalCompras.toDouble() + total,
+                'fecha_ultima_compra': DateTime.now().toIso8601String(),
+              });
+            }
+          } catch (e) {
+            // Silencioso
+          }
+        }
+
         setState(() => carrito.clear());
         Navigator.pop(context);
         _snack('Venta exitosa - $fac', AppColors.success);
+
+        _mostrarNotificacionVenta(fac, nombre, telefono, total);
       }
     } catch (e) {
       _snack('Error: $e', AppColors.danger);
     }
+  }
+
+  void _mostrarNotificacionVenta(
+      String factura, String nombre, String telefono, double totalVenta) {
+    final isDark = widget.modoOscuro;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isTablet = screenWidth >= 600;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          width: isTablet ? 420 : double.infinity,
+          padding: EdgeInsets.all(isTablet ? 28 : 20),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1F222B) : Colors.white,
+            borderRadius: BorderRadius.circular(isTablet ? 28 : 22),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.3),
+                blurRadius: 32,
+                offset: const Offset(0, 12),
+              ),
+            ],
+            border: Border.all(
+              color: AppColors.success.withValues(alpha: 0.3),
+              width: 2,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: isTablet ? 72 : 60,
+                height: isTablet ? 72 : 60,
+                decoration: BoxDecoration(
+                  color: AppColors.success,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.success.withValues(alpha: 0.4),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  Icons.check_rounded,
+                  color: Colors.white,
+                  size: isTablet ? 40 : 32,
+                ),
+              ),
+              SizedBox(height: isTablet ? 20 : 16),
+              Text(
+                '¡VENTA EXITOSA!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.text(isDark),
+                  fontSize: isTablet ? 22 : 18,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              SizedBox(height: isTablet ? 12 : 8),
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(isTablet ? 20 : 16),
+                decoration: BoxDecoration(
+                  color: AppColors.background(isDark),
+                  borderRadius: BorderRadius.circular(isTablet ? 16 : 14),
+                  border: Border.all(
+                    color: AppColors.divider(isDark),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    _buildDetalleVenta(
+                      icon: Icons.receipt_long_rounded,
+                      label: 'Factura',
+                      value: factura,
+                      isDark: isDark,
+                    ),
+                    SizedBox(height: 8),
+                    _buildDetalleVenta(
+                      icon: Icons.person_outline_rounded,
+                      label: 'Cliente',
+                      value: nombre.isEmpty ? 'Público General' : nombre,
+                      isDark: isDark,
+                    ),
+                    SizedBox(height: 8),
+                    Divider(color: AppColors.divider(isDark)),
+                    SizedBox(height: 8),
+                    _buildDetalleVenta(
+                      icon: Icons.payment_rounded,
+                      label: 'Total',
+                      value: '\$${totalVenta.toStringAsFixed(2)}',
+                      isDark: isDark,
+                      esTotal: true,
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: isTablet ? 24 : 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildBotonAccionPremium(
+                      icon: Icons.chat_rounded,
+                      label: 'WhatsApp',
+                      color: const Color(0xFF25D366),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _enviarWhatsAppCliente(
+                            nombre, telefono, factura, totalVenta);
+                      },
+                      isTablet: isTablet,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: _buildBotonAccionPremium(
+                      icon: Icons.print_rounded,
+                      label: 'Imprimir',
+                      color: AppColors.primary,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _snack('Imprimiendo ticket...', AppColors.primary);
+                      },
+                      isTablet: isTablet,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.symmetric(
+                      vertical: isTablet ? 12 : 8,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(isTablet ? 14 : 10),
+                    ),
+                    backgroundColor: AppColors.background(isDark),
+                  ),
+                  child: Text(
+                    'CERRAR',
+                    style: TextStyle(
+                      color: AppColors.subtext(isDark),
+                      fontSize: isTablet ? 14 : 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetalleVenta({
+    required IconData icon,
+    required String label,
+    required String value,
+    required bool isDark,
+    bool esTotal = false,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            icon,
+            color: AppColors.primary,
+            size: 16,
+          ),
+        ),
+        SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: AppColors.subtext(isDark),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Text(
+                value,
+                style: TextStyle(
+                  color: esTotal ? AppColors.success : AppColors.text(isDark),
+                  fontSize: esTotal ? 18 : 14,
+                  fontWeight: esTotal ? FontWeight.w800 : FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBotonAccionPremium({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+    required bool isTablet,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          vertical: isTablet ? 14 : 10,
+          horizontal: 8,
+        ),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(isTablet ? 14 : 10),
+          border: Border.all(
+            color: color.withValues(alpha: 0.3),
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: color,
+              size: isTablet ? 18 : 15,
+            ),
+            SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: isTablet ? 13 : 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _enviarWhatsAppCliente(
+      String nombre, String telefono, String factura, double totalVenta) {
+    if (telefono.isEmpty) {
+      _snack('El cliente no tiene número de teléfono', AppColors.warning);
+      return;
+    }
+    String phone = telefono.replaceAll(RegExp(r'[^0-9]'), '');
+    if (phone.startsWith('0')) {
+      phone = '58' + phone.substring(1);
+    }
+    String message = "🛍️ *SINTHETIX - COMPROBANTE DE VENTA*\n\n";
+    message += "📄 Factura: $factura\n";
+    message += "👤 Cliente: $nombre\n";
+    message += "💰 Total: \$${totalVenta.toStringAsFixed(2)}\n";
+    message +=
+        "📅 Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}\n\n";
+    message += "¡Gracias por su compra! 🎉";
+
+    final whatsappUrl =
+        "https://wa.me/$phone?text=${Uri.encodeComponent(message)}";
+    launchURL(whatsappUrl);
+    _snack('Enviando WhatsApp a $telefono...', AppColors.whatsapp);
   }
 
   @override
@@ -1186,6 +2139,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
   void dispose() {
     cameraController.dispose();
     _buscador.dispose();
+    _speech.stop();
+    _soundService.dispose();
     super.dispose();
   }
 
@@ -1194,141 +2149,57 @@ class _EscanerVentasState extends State<EscanerVentas> {
     final isDark = widget.modoOscuro;
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Row(children: [
-          GestureDetector(
-            onTap: widget.onAbrirSidebar,
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.1),
-                    AppColors.secondary.withValues(alpha: 0.1),
-                  ],
-                ),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.menu_rounded,
-                  color: AppColors.primary, size: 22),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('SINTHETIX POS',
-                  style: TextStyle(
-                      color: AppColors.text(isDark),
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.5)),
-              Text('${listaProductos.length} productos',
-                  style: TextStyle(
-                      color: AppColors.subtext(isDark),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500)),
-            ],
-          ),
-        ]),
-        actions: [
-          _buildActionButton(
-            icon: isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-            onTap: widget.onToggleModoOscuro,
-            isDark: isDark,
-          ),
-          _buildActionButton(
-            icon: Icons.dashboard_outlined,
-            onTap: widget.onNavigateToDashboard,
-            isDark: isDark,
-          ),
-          _buildActionButton(
-            icon: Icons.refresh_rounded,
-            onTap: () {
-              _cargar();
-              _snack('Actualizado', AppColors.primary);
-            },
-            isDark: isDark,
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
+      appBar: _buildAppBar(isDark),
       body: SafeArea(
         child: Column(children: [
           _buildSearchBar(isDark),
-          if (_mostrarBusqueda && busqueda.isNotEmpty)
-            Container(
-              constraints: const BoxConstraints(maxHeight: 250),
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: AppColors.card(isDark),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.06),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
+          if (_mostrarBusqueda || _mostrarTodos)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(children: [
+                if (_mostrarBusqueda)
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _verTodos,
+                      icon: const Icon(Icons.grid_view,
+                          color: AppColors.primary, size: 18),
+                      label: const Text('VER TODOS',
+                          style: TextStyle(
+                              color: AppColors.primary, fontSize: 11)),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.primary),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                    ),
                   ),
-                ],
-              ),
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: busqueda.length,
-                itemBuilder: (_, i) {
-                  final prod = busqueda[i];
-                  return ListTile(
-                    leading: GestureDetector(
-                      onTap: () => _verFotoGrande(prod),
-                      child: Container(
-                        width: 45,
-                        height: 45,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.05),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ImagenProducto(
-                          imagenUrl: prod['imagen_url']?.toString(),
-                          width: 45,
-                          height: 45,
-                          fit: BoxFit.cover,
-                        ),
+                if (_mostrarBusqueda) const SizedBox(width: 8),
+                if (_mostrarBusqueda || _mostrarTodos)
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _limpiarBusqueda,
+                      icon: Icon(Icons.close,
+                          color: AppColors.danger.withValues(alpha: 0.8),
+                          size: 18),
+                      label: Text('LIMPIAR',
+                          style: TextStyle(
+                              color: AppColors.danger.withValues(alpha: 0.8),
+                              fontSize: 11)),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(
+                            color: AppColors.danger.withValues(alpha: 0.5)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
                     ),
-                    title: Text(prod['nombre'] ?? '',
-                        style: TextStyle(
-                            color: AppColors.text(isDark),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600)),
-                    subtitle: Text(
-                        prod['tipo'] == 'kilo'
-                            ? '\$${(prod['precio'] as num).toStringAsFixed(2)}/kg'
-                            : '\$${(prod['precio'] as num).toStringAsFixed(2)}',
-                        style: const TextStyle(
-                            color: AppColors.primary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700)),
-                    trailing: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                            colors: [AppColors.primary, AppColors.secondary]),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.add_rounded,
-                          color: Colors.white, size: 22),
-                    ),
-                    onTap: () => _agregar(prod),
-                  );
-                },
-              ),
+                  ),
+              ]),
             ),
           if (_camara)
             Container(
-              height: 220,
+              height: _isDesktop ? 280 : 220,
               margin: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
@@ -1341,26 +2212,29 @@ class _EscanerVentasState extends State<EscanerVentas> {
                   children: [
                     MobileScanner(
                       controller: cameraController,
-                      onDetect: (cap) async {
+                      onDetect: (capture) {
                         if (_sonando) return;
-                        if (cap.barcodes.isEmpty) return;
-                        final barcode = cap.barcodes.first;
-                        if (barcode.rawValue != null &&
-                            barcode.rawValue!.isNotEmpty) {
-                          final prod =
-                              await _db.buscarPorCodigo(barcode.rawValue!);
-                          if (prod != null) {
-                            _agregar(prod);
-                            _sonidoExito();
-                            _snack('${prod['nombre']} agregado',
-                                AppColors.success);
-                            setState(() => _camara = false);
-                          } else {
-                            _snack(
-                                'Producto no encontrado: ${barcode.rawValue}',
-                                AppColors.danger);
-                          }
+                        final barcodes = capture.barcodes;
+                        if (barcodes.isEmpty) return;
+
+                        final barcode = barcodes.first;
+                        final rawValue = barcode.rawValue;
+
+                        if (rawValue == null || rawValue.isEmpty) return;
+
+                        // Evitar lecturas duplicadas del mismo código
+                        final ahora = DateTime.now();
+                        if (_ultimoCodigoEscaneado == rawValue &&
+                            _ultimoEscaneo != null &&
+                            ahora.difference(_ultimoEscaneo!) <
+                                const Duration(seconds: 2)) {
+                          return;
                         }
+
+                        _ultimoCodigoEscaneado = rawValue;
+                        _ultimoEscaneo = ahora;
+
+                        _procesarCodigoEscaneado(rawValue);
                       },
                     ),
                     Center(
@@ -1430,12 +2304,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                       width: 100,
                       height: 100,
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            AppColors.primary.withValues(alpha: 0.1),
-                            AppColors.secondary.withValues(alpha: 0.1),
-                          ],
-                        ),
+                        color: AppColors.primary.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(Icons.shopping_bag_outlined,
@@ -1471,13 +2340,52 @@ class _EscanerVentasState extends State<EscanerVentas> {
                 ),
               ),
             ),
-          if (!_cargando && !_mostrarBusqueda && listaProductos.isNotEmpty)
+          if (!_cargando &&
+              listaProductos.isNotEmpty &&
+              !_mostrarBusqueda &&
+              !_mostrarTodos)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _verTodos,
+                  icon: const Icon(Icons.grid_view,
+                      color: Colors.white, size: 20),
+                  label: const Text('VER PRODUCTOS',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
+                  ),
+                ),
+              ),
+            ),
+          if (!_cargando &&
+              (_mostrarTodos || _mostrarBusqueda) &&
+              listaProductos.isNotEmpty)
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: listaProductos.length,
-                itemBuilder: (_, i) =>
-                    _buildProductCard(listaProductos[i], isDark),
+              child: GridView.builder(
+                padding: EdgeInsets.all(_isDesktop ? 24 : 16),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: _isDesktop ? 4 : (_isTablet ? 3 : 2),
+                  childAspectRatio:
+                      _isDesktop ? 0.75 : (_isTablet ? 0.7 : 0.68),
+                  crossAxisSpacing: _isDesktop ? 16 : 12,
+                  mainAxisSpacing: _isDesktop ? 16 : 12,
+                ),
+                itemCount:
+                    _mostrarTodos ? listaProductos.length : busqueda.length,
+                itemBuilder: (_, i) {
+                  final prod = _mostrarTodos ? listaProductos[i] : busqueda[i];
+                  return _buildProductCard(prod, isDark);
+                },
               ),
             ),
           if (carrito.isNotEmpty) _buildCartPreview(isDark),
@@ -1486,24 +2394,123 @@ class _EscanerVentasState extends State<EscanerVentas> {
     );
   }
 
-  Widget _buildActionButton(
-      {required IconData icon,
-      required VoidCallback onTap,
-      required bool isDark}) {
+  Future<void> _procesarCodigoEscaneado(String codigo) async {
+    final prod = await _db.buscarPorCodigo(codigo);
+    if (prod != null) {
+      _agregar(prod);
+      _snack('${prod['nombre']} agregado', AppColors.success);
+      setState(() => _camara = false);
+    } else {
+      _snack('Producto no encontrado: $codigo', AppColors.danger);
+    }
+  }
+
+  AppBar _buildAppBar(bool isDark) {
+    return AppBar(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      title: Row(children: [
+        GestureDetector(
+          onTap: widget.onAbrirSidebar,
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.2),
+                width: 1,
+              ),
+            ),
+            child: const Icon(Icons.menu_rounded,
+                color: AppColors.primary, size: 22),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'SINTHETIX POS',
+              style: TextStyle(
+                color: AppColors.text(isDark),
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+              ),
+            ),
+            Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.success,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${listaProductos.length} productos disponibles',
+                  style: TextStyle(
+                    color: AppColors.subtext(isDark),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ]),
+      actions: [
+        _buildActionButton(
+          icon: isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+          onTap: widget.onToggleModoOscuro,
+          isDark: isDark,
+        ),
+        _buildActionButton(
+          icon: Icons.dashboard_outlined,
+          onTap: widget.onNavigateToDashboard,
+          isDark: isDark,
+        ),
+        _buildActionButton(
+          icon: Icons.refresh_rounded,
+          onTap: () {
+            _cargar();
+            _snack('Productos actualizados', AppColors.primary);
+          },
+          isDark: isDark,
+        ),
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    required bool isDark,
+  }) {
     return Container(
-      margin: const EdgeInsets.only(right: 4),
+      margin: const EdgeInsets.only(right: 8),
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          width: 40,
-          height: 40,
+          width: 42,
+          height: 42,
           decoration: BoxDecoration(
-            color: AppColors.card(isDark),
+            color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF0F0F0),
             shape: BoxShape.circle,
+            border: Border.all(
+              color: AppColors.divider(isDark),
+              width: 1,
+            ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.06),
-                blurRadius: 8,
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 4,
                 offset: const Offset(0, 2),
               ),
             ],
@@ -1516,15 +2523,19 @@ class _EscanerVentasState extends State<EscanerVentas> {
 
   Widget _buildSearchBar(bool isDark) {
     return Container(
-      margin: const EdgeInsets.all(16),
+      margin: EdgeInsets.all(_isDesktop ? 24 : 16),
       decoration: BoxDecoration(
         color: AppColors.card(isDark),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppColors.divider(isDark),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -1536,14 +2547,16 @@ class _EscanerVentasState extends State<EscanerVentas> {
           child: TextField(
             controller: _buscador,
             style: TextStyle(
-                color: AppColors.text(isDark),
-                fontSize: 15,
-                fontWeight: FontWeight.w500),
+              color: AppColors.text(isDark),
+              fontSize: _isDesktop ? 16 : 15,
+              fontWeight: FontWeight.w500,
+            ),
             onChanged: _buscar,
             decoration: InputDecoration(
               hintText: 'Buscar producto o escanear...',
-              hintStyle:
-                  TextStyle(color: AppColors.subtext(isDark), fontSize: 14),
+              hintStyle: TextStyle(
+                  color: AppColors.subtext(isDark),
+                  fontSize: _isDesktop ? 15 : 14),
               border: InputBorder.none,
             ),
           ),
@@ -1551,17 +2564,56 @@ class _EscanerVentasState extends State<EscanerVentas> {
         Container(
           margin: const EdgeInsets.only(right: 8),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                AppColors.primary.withValues(alpha: 0.1),
-                AppColors.secondary.withValues(alpha: 0.1),
-              ],
+            color: _escuchando
+                ? AppColors.danger
+                : (isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF0F0F0)),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: _escuchando ? AppColors.danger : AppColors.divider(isDark),
+              width: 1,
             ),
-            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: IconButton(
-            icon: const Icon(Icons.qr_code_scanner_rounded,
-                color: AppColors.primary, size: 22),
+            icon: Icon(
+              _escuchando ? Icons.mic : Icons.mic_none,
+              color: _escuchando ? Colors.white : AppColors.primary,
+              size: 20,
+            ),
+            onPressed: _escuchando ? _detenerEscucha : _iniciarEscucha,
+          ),
+        ),
+        Container(
+          margin: const EdgeInsets.only(right: 8),
+          decoration: BoxDecoration(
+            color: _camara
+                ? AppColors.primary
+                : (isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF0F0F0)),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: _camara ? AppColors.primary : AppColors.divider(isDark),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: IconButton(
+            icon: Icon(
+              _camara ? Icons.qr_code_scanner : Icons.qr_code_scanner_rounded,
+              color: _camara ? Colors.white : AppColors.primary,
+              size: 20,
+            ),
             onPressed: () {
               setState(() {
                 _camara = !_camara;
@@ -1576,129 +2628,253 @@ class _EscanerVentasState extends State<EscanerVentas> {
 
   Widget _buildProductCard(Map<String, dynamic> prod, bool isDark) {
     final stock = prod['stock'] ?? 0;
+    final stockMin = prod['stock_minimo'] ?? 5;
+    final descuento = prod['descuento'] ?? 0;
+    final categoria = prod['categoria'] ?? 'General';
+    final destacado = prod['destacado'] == 1;
+    final precio = (prod['precio'] as num).toDouble();
+    final precioFinal = descuento > 0 ? precio * (1 - descuento / 100) : precio;
+
     final stockColor = stock == 0
         ? AppColors.danger
-        : stock < 5
+        : stock < stockMin
             ? AppColors.warning
             : AppColors.success;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: AppColors.card(isDark),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
         ],
+        border: Border.all(
+          color: destacado
+              ? AppColors.warning.withValues(alpha: 0.5)
+              : AppColors.divider(isDark),
+          width: destacado ? 2 : 1,
+        ),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Row(children: [
-          GestureDetector(
-            onTap: () => _verFotoGrande(prod),
-            child: Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.05),
-                    AppColors.secondary.withValues(alpha: 0.05),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
+        borderRadius: BorderRadius.circular(19),
+        child: Stack(children: [
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: () => _verFotoGrande(prod),
               child: ImagenProducto(
                 imagenUrl: prod['imagen_url']?.toString(),
-                width: 80,
-                height: 80,
+                width: double.infinity,
+                height: double.infinity,
                 fit: BoxFit.cover,
               ),
             ),
           ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => _agregar(prod),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(prod['nombre'] ?? '',
-                        style: TextStyle(
-                            color: AppColors.text(isDark),
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: -0.3),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 8),
-                    Row(children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                              colors: [AppColors.primary, AppColors.secondary]),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                            prod['tipo'] == 'kilo'
-                                ? '\$${(prod['precio'] as num).toStringAsFixed(2)}/kg'
-                                : '\$${(prod['precio'] as num).toStringAsFixed(2)}',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700)),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: stockColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          stock == 0 ? 'Agotado' : 'Stock: $stock',
-                          style: TextStyle(
-                              color: stockColor,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ]),
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.transparent,
+                    Colors.transparent,
+                    const Color(0xCC000000),
+                    Colors.black.withValues(alpha: 0.95),
                   ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: const [0.2, 0.5, 0.8, 1.0],
                 ),
               ),
             ),
           ),
-          Container(
-            margin: const EdgeInsets.all(16),
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                  colors: [AppColors.primary, AppColors.secondary],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight),
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
+          if (destacado)
+            Positioned(
+              top: 12,
+              left: 12,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.warning,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.warning.withValues(alpha: 0.4),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.star_rounded, color: Colors.white, size: 14),
+                    SizedBox(width: 4),
+                    Text('TOP',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800)),
+                  ],
+                ),
+              ),
+            ),
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: stockColor.withValues(alpha: 0.95),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: stockColor.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    stock == 0 ? Icons.block : Icons.check_circle,
+                    color: Colors.white,
+                    size: 12,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    stock == 0 ? 'AGOTADO' : '$stock',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (descuento > 0)
+            Positioned(
+              top: 48,
+              right: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.danger,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '-$descuento%',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 16,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  prod['nombre'] ?? '',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    height: 1.2,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        categoria,
+                        style: const TextStyle(
+                          fontSize: 9,
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (descuento > 0)
+                          Text(
+                            '\$${precio.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.white54,
+                              decoration: TextDecoration.lineThrough,
+                            ),
+                          ),
+                        Text(
+                          prod['tipo'] == 'kilo'
+                              ? '\$${precioFinal.toStringAsFixed(2)}/kg'
+                              : '\$${precioFinal.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.logoCyan,
+                          ),
+                        ),
+                      ],
+                    ),
+                    GestureDetector(
+                      onTap: () => _agregar(prod),
+                      child: Container(
+                        width: _isDesktop ? 44 : 40,
+                        height: _isDesktop ? 44 : 40,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.3),
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.4),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.add_rounded,
+                              color: Colors.white, size: 22),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
-            ),
-            child: GestureDetector(
-              onTap: () => _agregar(prod),
-              child:
-                  const Icon(Icons.add_rounded, color: Colors.white, size: 24),
             ),
           ),
         ]),
@@ -1708,130 +2884,351 @@ class _EscanerVentasState extends State<EscanerVentas> {
 
   Widget _buildCartPreview(bool isDark) {
     return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(16),
+      margin: EdgeInsets.fromLTRB(
+        _isDesktop ? 24 : 16,
+        0,
+        _isDesktop ? 24 : 16,
+        _isDesktop ? 24 : 16,
+      ),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.secondary],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
+        color: isDark ? const Color(0xFF1F222B) : Colors.white,
+        borderRadius: BorderRadius.circular(_isDesktop ? 28 : 22),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.3),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.12),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
           ),
         ],
+        border: Border.all(
+          color: AppColors.primary.withValues(alpha: 0.15),
+          width: 1.5,
+        ),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: carrito.length,
-            itemBuilder: (_, i) {
-              final item = carrito[i];
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: _isDesktop ? 24 : 20,
+              vertical: _isDesktop ? 18 : 14,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(_isDesktop ? 28 : 22),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.shopping_cart_rounded,
+                    color: Colors.white,
+                    size: _isDesktop ? 22 : 18,
+                  ),
                 ),
-                child: Row(
+                SizedBox(width: _isDesktop ? 14 : 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        item['tipo'] == 'kilo'
-                            ? '${item['nombre']} (${item['peso']}kg)'
-                            : item['nombre'],
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 12),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    Text(
+                      'CARRITO DE COMPRAS',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: _isDesktop ? 16 : 13,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
                       ),
                     ),
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          if (item['cantidad'] > 1) {
-                            item['cantidad'] -= 1;
-                          } else {
-                            carrito.removeAt(i);
-                          }
-                        });
-                      },
-                      child: Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.remove,
-                            color: AppColors.primary, size: 14),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('${item['cantidad']}',
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold)),
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          item['cantidad'] += 1;
-                        });
-                      },
-                      child: Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.add,
-                            color: AppColors.primary, size: 14),
+                    Text(
+                      '${carrito.length} producto${carrito.length != 1 ? 's' : ''}',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: _isDesktop ? 13 : 11,
                       ),
                     ),
                   ],
                 ),
-              );
-            },
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('\$${total.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700)),
-              GestureDetector(
-                onTap: _cobrar,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () {
+                    setState(() => carrito.clear());
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: _isDesktop ? 14 : 10,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.delete_outline_rounded,
+                          color: Colors.white,
+                          size: _isDesktop ? 18 : 15,
+                        ),
+                        SizedBox(width: 4),
+                        Text(
+                          'Vaciar',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: _isDesktop ? 13 : 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: const Text('COBRAR',
-                      style: TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1)),
                 ),
+              ],
+            ),
+          ),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.symmetric(
+                horizontal: _isDesktop ? 24 : 16,
+                vertical: _isDesktop ? 16 : 12,
               ),
-            ],
+              itemCount: carrito.length,
+              itemBuilder: (_, i) {
+                final item = carrito[i];
+                return Container(
+                  margin: EdgeInsets.only(bottom: _isDesktop ? 12 : 8),
+                  padding: EdgeInsets.all(_isDesktop ? 14 : 10),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF161820)
+                        : const Color(0xFFF8F9FA),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppColors.divider(isDark).withValues(alpha: 0.5),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: _isDesktop ? 50 : 40,
+                        height: _isDesktop ? 50 : 40,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.2),
+                            width: 1,
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(9),
+                          child: ImagenProducto(
+                            imagenUrl: item['imagen_url']?.toString(),
+                            width: _isDesktop ? 50 : 40,
+                            height: _isDesktop ? 50 : 40,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: _isDesktop ? 14 : 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item['tipo'] == 'kilo'
+                                  ? '${item['nombre']} (${item['peso']}kg)'
+                                  : item['nombre'],
+                              style: TextStyle(
+                                color: AppColors.text(isDark),
+                                fontSize: _isDesktop ? 15 : 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              '\$${(item['precio'] * item['cantidad']).toStringAsFixed(2)}',
+                              style: TextStyle(
+                                color: AppColors.primary,
+                                fontSize: _isDesktop ? 16 : 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color:
+                              isDark ? const Color(0xFF1F222B) : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.2),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            _buildQuantityButton(
+                              icon: Icons.remove_rounded,
+                              onTap: () {
+                                setState(() {
+                                  if (item['cantidad'] > 1) {
+                                    item['cantidad'] -= 1;
+                                  } else {
+                                    carrito.removeAt(i);
+                                  }
+                                });
+                              },
+                            ),
+                            Container(
+                              margin: EdgeInsets.symmetric(horizontal: 8),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '${item['cantidad']}',
+                                style: TextStyle(
+                                  color: AppColors.primary,
+                                  fontSize: _isDesktop ? 16 : 14,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            _buildQuantityButton(
+                              icon: Icons.add_rounded,
+                              onTap: () {
+                                setState(() {
+                                  item['cantidad'] += 1;
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            padding: EdgeInsets.all(_isDesktop ? 24 : 16),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF161820) : const Color(0xFFF8F9FA),
+              borderRadius: BorderRadius.vertical(
+                bottom: Radius.circular(_isDesktop ? 28 : 22),
+              ),
+            ),
+            child: Row(
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'TOTAL A PAGAR',
+                      style: TextStyle(
+                        color: AppColors.subtext(isDark),
+                        fontSize: _isDesktop ? 13 : 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      '\$${total.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        color: AppColors.text(isDark),
+                        fontSize: _isDesktop ? 32 : 24,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: _cobrar,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: _isDesktop ? 36 : 28,
+                      vertical: _isDesktop ? 18 : 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(_isDesktop ? 18 : 14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.payment_rounded,
+                          color: Colors.white,
+                          size: _isDesktop ? 22 : 18,
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'COBRAR',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: _isDesktop ? 16 : 14,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildQuantityButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: _isDesktop ? 32 : 28,
+        height: _isDesktop ? 32 : 28,
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          icon,
+          color: AppColors.primary,
+          size: _isDesktop ? 18 : 16,
+        ),
       ),
     );
   }
@@ -1841,7 +3238,7 @@ class PantallaCobro extends StatefulWidget {
   final List<Map<String, dynamic>> carrito;
   final double total;
   final String Function(double) formatearPrecio;
-  final Function(String, String, String, String) onVentaCompletada;
+  final Function(String, String, String, String, String) onVentaCompletada;
   final bool modoOscuro;
   const PantallaCobro(
       {super.key,
@@ -1861,10 +3258,16 @@ class _PantallaCobroState extends State<PantallaCobro> {
   final _montoCtrl = TextEditingController();
   final _nombreCtrl = TextEditingController();
   final _telefonoCtrl = TextEditingController();
+  final _cedulaCtrl = TextEditingController();
+  final _direccionCtrl = TextEditingController();
   String _clienteSel = '';
   List<Map<String, dynamic>> _clientes = [];
   List<Map<String, dynamic>> _metodosPago = [];
   bool _cargandoMetodos = true;
+  bool _buscandoCliente = false;
+
+  bool get _isTablet => MediaQuery.of(context).size.width >= 600;
+  bool get _isDesktop => MediaQuery.of(context).size.width >= 1024;
 
   @override
   void initState() {
@@ -1878,10 +3281,18 @@ class _PantallaCobroState extends State<PantallaCobro> {
       final metodos = await _db.getMetodosPago();
       if (metodos.isEmpty) {
         _metodosPago = [
-          {'id': '1', 'nombre': 'Efectivo'},
-          {'id': '2', 'nombre': 'Tarjeta'},
-          {'id': '3', 'nombre': 'Transferencia'},
-          {'id': '4', 'nombre': 'Pago Movil'},
+          {'id': '1', 'nombre': 'Efectivo', 'icono': Icons.payments_outlined},
+          {'id': '2', 'nombre': 'Tarjeta', 'icono': Icons.credit_card_outlined},
+          {
+            'id': '3',
+            'nombre': 'Transferencia',
+            'icono': Icons.swap_horiz_rounded
+          },
+          {
+            'id': '4',
+            'nombre': 'Pago Movil',
+            'icono': Icons.phone_android_rounded
+          },
         ];
       } else {
         _metodosPago = metodos;
@@ -1897,6 +3308,29 @@ class _PantallaCobroState extends State<PantallaCobro> {
     }
   }
 
+  Future<void> _buscarClientePorCedula() async {
+    final cedula = _cedulaCtrl.text.trim();
+    if (cedula.isEmpty) return;
+    setState(() => _buscandoCliente = true);
+    final cliente = await _db.buscarClientePorCedula(cedula);
+    if (cliente != null) {
+      setState(() {
+        _clienteSel = cliente['id'].toString();
+        _nombreCtrl.text = cliente['nombre'] ?? '';
+        _telefonoCtrl.text = cliente['telefono'] ?? '';
+        _direccionCtrl.text = cliente['direccion'] ?? '';
+      });
+      _mostrarSnackbar('Cliente encontrado', AppColors.success);
+    } else {
+      setState(() {
+        _clienteSel = '';
+      });
+      _mostrarSnackbar(
+          'Cliente nuevo - se registrará automáticamente', AppColors.primary);
+    }
+    setState(() => _buscandoCliente = false);
+  }
+
   double _totalEnMoneda() {
     final tasa = tasasCambio[_moneda] ?? 1.0;
     return widget.total * tasa;
@@ -1908,396 +3342,756 @@ class _PantallaCobroState extends State<PantallaCobro> {
     return m - _totalEnMoneda();
   }
 
+  Future<void> _confirmarVenta() async {
+    if (_cedulaCtrl.text.trim().isEmpty ||
+        _nombreCtrl.text.trim().isEmpty ||
+        _telefonoCtrl.text.trim().isEmpty) {
+      _mostrarSnackbar(
+          'Debe ingresar Cédula, Nombre y Teléfono', AppColors.danger);
+      return;
+    }
+
+    if (_metodo == 'Efectivo' && _vuelto() < 0) {
+      _mostrarSnackbar('Monto insuficiente', AppColors.danger);
+      return;
+    }
+
+    final clienteExistente =
+        await _db.buscarClientePorCedula(_cedulaCtrl.text.trim());
+    if (clienteExistente == null) {
+      await _db.crearCliente({
+        'nombre': _nombreCtrl.text.trim(),
+        'telefono': _telefonoCtrl.text.trim(),
+        'identificacion': _cedulaCtrl.text.trim(),
+        'direccion': _direccionCtrl.text.trim(),
+        'tipo': 'Regular',
+      });
+    }
+
+    widget.onVentaCompletada(
+      _metodo,
+      _montoCtrl.text,
+      _nombreCtrl.text.trim(),
+      _telefonoCtrl.text.trim(),
+      _cedulaCtrl.text.trim(),
+    );
+  }
+
+  void _mostrarSnackbar(String mensaje, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensaje, style: const TextStyle(color: Colors.white)),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = widget.modoOscuro;
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
+      height: screenHeight * (_isDesktop ? 0.85 : 0.92),
       decoration: BoxDecoration(
         color: AppColors.card(isDark),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(_isDesktop ? 32 : 24),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 24,
+            offset: const Offset(0, -8),
+          ),
+        ],
       ),
-      child: Column(children: [
-        Container(
-          margin: const EdgeInsets.only(top: 12),
-          width: 40,
-          height: 4,
-          decoration: BoxDecoration(
-            color: AppColors.subtext(isDark),
-            borderRadius: BorderRadius.circular(2),
+      child: Column(
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            width: _isDesktop ? 60 : 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.subtext(isDark).withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
-        ),
-        const SizedBox(height: 16),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('COBRAR',
-                  style: TextStyle(
-                      color: AppColors.text(isDark),
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700)),
-              IconButton(
-                icon: Icon(Icons.close_rounded, color: AppColors.text(isDark)),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            children: ['USD', 'COP', 'VES'].map((moneda) {
-              final sel = _moneda == moneda;
-              return GestureDetector(
-                onTap: () => setState(() => _moneda = moneda),
-                child: Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+          Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: _isDesktop ? 32 : 20,
+              vertical: _isDesktop ? 16 : 12,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: _isDesktop ? 48 : 40,
+                  height: _isDesktop ? 48 : 40,
                   decoration: BoxDecoration(
-                    color:
-                        sel ? AppColors.primary : AppColors.background(isDark),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: sel
-                            ? AppColors.primary
-                            : AppColors.divider(isDark)),
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(14),
                   ),
+                  child: Icon(
+                    Icons.point_of_sale_rounded,
+                    color: Colors.white,
+                    size: _isDesktop ? 24 : 20,
+                  ),
+                ),
+                SizedBox(width: _isDesktop ? 16 : 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'FINALIZAR VENTA',
+                      style: TextStyle(
+                        color: AppColors.text(isDark),
+                        fontSize: _isDesktop ? 20 : 16,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    Text(
+                      '${widget.carrito.length} producto${widget.carrito.length != 1 ? 's' : ''} en el carrito',
+                      style: TextStyle(
+                        color: AppColors.subtext(isDark),
+                        fontSize: _isDesktop ? 13 : 11,
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    width: _isDesktop ? 40 : 36,
+                    height: _isDesktop ? 40 : 36,
+                    decoration: BoxDecoration(
+                      color: AppColors.background(isDark),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppColors.divider(isDark),
+                        width: 1,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.close_rounded,
+                      color: AppColors.text(isDark),
+                      size: _isDesktop ? 22 : 18,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(color: AppColors.divider(isDark), height: 1),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(
+                horizontal: _isDesktop ? 32 : 20,
+                vertical: _isDesktop ? 20 : 16,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSelectorMoneda(isDark),
+                  SizedBox(height: _isDesktop ? 20 : 16),
+                  _buildTotalPagar(isDark),
+                  SizedBox(height: _isDesktop ? 24 : 20),
+                  _buildTituloSeccion('INFORMACIÓN DEL CLIENTE', isDark),
+                  SizedBox(height: _isDesktop ? 14 : 10),
+                  _buildFormularioCliente(isDark),
+                  SizedBox(height: _isDesktop ? 24 : 20),
+                  _buildTituloSeccion('MÉTODO DE PAGO', isDark),
+                  SizedBox(height: _isDesktop ? 14 : 10),
+                  _buildMetodosPago(isDark),
+                  if (_metodo == 'Efectivo') ...[
+                    SizedBox(height: _isDesktop ? 24 : 20),
+                    _buildTituloSeccion('MONTO RECIBIDO', isDark),
+                    SizedBox(height: _isDesktop ? 14 : 10),
+                    _buildMontoRecibido(isDark),
+                  ],
+                  SizedBox(height: _isDesktop ? 24 : 20),
+                  _buildTituloSeccion('RESUMEN DE COMPRA', isDark),
+                  SizedBox(height: _isDesktop ? 14 : 10),
+                  _buildResumenCompra(isDark),
+                  SizedBox(height: _isDesktop ? 24 : 20),
+                  _buildBotonConfirmar(isDark),
+                  SizedBox(height: _isDesktop ? 24 : 16),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectorMoneda(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.background(isDark),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppColors.divider(isDark),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: ['USD', 'COP', 'VES'].map((moneda) {
+          final sel = _moneda == moneda;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _moneda = moneda),
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  vertical: _isDesktop ? 14 : 10,
+                ),
+                decoration: BoxDecoration(
+                  color: sel ? AppColors.primary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Center(
                   child: Text(
                     moneda,
                     style: TextStyle(
                       color: sel ? Colors.white : AppColors.subtext(isDark),
-                      fontSize: 14,
-                      fontWeight: sel ? FontWeight.w700 : FontWeight.w400,
+                      fontSize: _isDesktop ? 15 : 13,
+                      fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),
                 ),
-              );
-            }).toList(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppColors.primary, AppColors.secondary],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+              ),
             ),
-            borderRadius: BorderRadius.circular(16),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildTotalPagar(bool isDark) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(_isDesktop ? 24 : 18),
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(_isDesktop ? 20 : 16),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.3),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('TOTAL ${simbolosMoneda[_moneda] ?? '\$'}',
-                  style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 12)),
               Text(
-                  '${simbolosMoneda[_moneda] ?? '\$'} ${_totalEnMoneda().toStringAsFixed(2)}',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700)),
+                'TOTAL A PAGAR',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontSize: _isDesktop ? 14 : 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                '${simbolosMoneda[_moneda] ?? '\$'} ${_totalEnMoneda().toStringAsFixed(2)}',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: _isDesktop ? 36 : 28,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ],
           ),
+          Container(
+            padding: EdgeInsets.all(_isDesktop ? 16 : 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              Icons.payments_rounded,
+              color: Colors.white,
+              size: _isDesktop ? 32 : 24,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTituloSeccion(String titulo, bool isDark) {
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: _isDesktop ? 20 : 16,
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(2),
+          ),
         ),
-        const SizedBox(height: 16),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                DropdownButtonFormField<String>(
-                  initialValue: _clienteSel.isEmpty ? null : _clienteSel,
-                  decoration: InputDecoration(
-                    labelText: 'Cliente',
-                    labelStyle: TextStyle(color: AppColors.subtext(isDark)),
-                    prefixIcon: Icon(Icons.person_outline_rounded,
-                        color: AppColors.subtext(isDark), size: 20),
-                    filled: true,
-                    fillColor: AppColors.background(isDark),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  items: [
-                    const DropdownMenuItem(
-                        value: '', child: Text('Sin cliente')),
-                    ..._clientes.map((c) => DropdownMenuItem(
-                          value: c['id'].toString(),
-                          child: Text(c['nombre'] ?? '',
-                              style: TextStyle(color: AppColors.text(isDark))),
-                        )),
-                  ],
-                  onChanged: (v) {
-                    setState(() {
-                      _clienteSel = v ?? '';
-                      if (_clienteSel.isNotEmpty) {
-                        final c = _clientes.firstWhere(
-                            (x) => x['id'].toString() == _clienteSel);
-                        _nombreCtrl.text = c['nombre'] ?? '';
-                        _telefonoCtrl.text = c['telefono'] ?? '';
-                      }
-                    });
-                  },
-                  style: TextStyle(color: AppColors.text(isDark)),
-                  dropdownColor: AppColors.card(isDark),
+        SizedBox(width: 8),
+        Text(
+          titulo,
+          style: TextStyle(
+            color: AppColors.subtext(isDark),
+            fontSize: _isDesktop ? 13 : 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 1.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFormularioCliente(bool isDark) {
+    return Container(
+      padding: EdgeInsets.all(_isDesktop ? 20 : 14),
+      decoration: BoxDecoration(
+        color: AppColors.background(isDark),
+        borderRadius: BorderRadius.circular(_isDesktop ? 18 : 14),
+        border: Border.all(
+          color: AppColors.divider(isDark),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _buildCampoTexto(
+                  controller: _cedulaCtrl,
+                  label: 'Cédula *',
+                  icon: Icons.badge_outlined,
+                  isDark: isDark,
+                  keyboardType: TextInputType.number,
+                  onSubmitted: (_) => _buscarClientePorCedula(),
                 ),
-                const SizedBox(height: 12),
-                Row(children: [
-                  Expanded(
-                    flex: 2,
-                    child: TextField(
-                      controller: _nombreCtrl,
-                      style: TextStyle(color: AppColors.text(isDark)),
-                      decoration: InputDecoration(
-                        labelText: 'Nombre',
-                        labelStyle: TextStyle(color: AppColors.subtext(isDark)),
-                        filled: true,
-                        fillColor: AppColors.background(isDark),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: _telefonoCtrl,
-                      style: TextStyle(color: AppColors.text(isDark)),
-                      keyboardType: TextInputType.phone,
-                      decoration: InputDecoration(
-                        labelText: 'Telefono',
-                        labelStyle: TextStyle(color: AppColors.subtext(isDark)),
-                        filled: true,
-                        fillColor: AppColors.background(isDark),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                ]),
-                const SizedBox(height: 16),
-                Text('METODO DE PAGO',
-                    style: TextStyle(
-                        color: AppColors.subtext(isDark),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.5)),
-                const SizedBox(height: 8),
-                if (_cargandoMetodos)
-                  const Center(
-                      child:
-                          CircularProgressIndicator(color: AppColors.primary))
-                else
-                  Wrap(
-                    children: _metodosPago.map((mp) {
-                      final nombre = mp['nombre'] ?? '';
-                      final sel = _metodo == nombre;
-                      return GestureDetector(
-                        onTap: () => setState(() => _metodo = nombre),
-                        child: Container(
-                          margin: const EdgeInsets.all(4),
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 12, horizontal: 16),
-                          decoration: BoxDecoration(
-                            color: sel
-                                ? AppColors.primary
-                                : AppColors.background(isDark),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color: sel
-                                    ? AppColors.primary
-                                    : AppColors.divider(isDark)),
-                          ),
-                          child: Text(
-                            nombre,
-                            style: TextStyle(
-                              color: sel
-                                  ? Colors.white
-                                  : AppColors.subtext(isDark),
-                              fontSize: 12,
-                              fontWeight:
-                                  sel ? FontWeight.w600 : FontWeight.w400,
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                const SizedBox(height: 16),
-                if (_metodo == 'Efectivo') ...[
-                  Text('MONTO RECIBIDO (${simbolosMoneda[_moneda] ?? '\$'})',
-                      style: TextStyle(
-                          color: AppColors.subtext(isDark),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.5)),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _montoCtrl,
-                    style: TextStyle(
-                        color: AppColors.text(isDark),
-                        fontSize: 24,
-                        fontWeight: FontWeight.w300),
-                    keyboardType: TextInputType.number,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      hintText: '0.00',
-                      hintStyle: TextStyle(
-                          color: AppColors.subtext(isDark), fontSize: 24),
-                      prefixText: '${simbolosMoneda[_moneda] ?? '\$'} ',
-                      prefixStyle: TextStyle(
-                          color: AppColors.text(isDark), fontSize: 24),
-                      filled: true,
-                      fillColor: AppColors.background(isDark),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  if (_montoCtrl.text.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.background(isDark),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _vuelto() >= 0
-                              ? AppColors.success.withValues(alpha: 0.3)
-                              : AppColors.danger.withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Vuelto',
-                              style: TextStyle(
-                                  color: AppColors.subtext(isDark),
-                                  fontSize: 14)),
-                          Text(
-                            '${simbolosMoneda[_moneda] ?? '\$'} ${_vuelto().toStringAsFixed(2)}',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w300,
-                              color: _vuelto() >= 0
-                                  ? AppColors.success
-                                  : AppColors.danger,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-                const SizedBox(height: 16),
-                Text('RESUMEN',
-                    style: TextStyle(
-                        color: AppColors.subtext(isDark),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 1.5)),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(12),
+              ),
+              SizedBox(width: 8),
+              GestureDetector(
+                onTap: _buscandoCliente ? null : _buscarClientePorCedula,
+                child: Container(
+                  width: _isDesktop ? 52 : 46,
+                  height: _isDesktop ? 52 : 46,
                   decoration: BoxDecoration(
-                    color: AppColors.background(isDark),
+                    color: AppColors.primary,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Column(
-                    children: widget.carrito
-                        .map((item) => Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      item['tipo'] == 'kilo'
-                                          ? '${item['cantidad']}x ${item['nombre']} (${item['peso']}kg)'
-                                          : '${item['cantidad']}x ${item['nombre']}',
-                                      style: TextStyle(
-                                          color: AppColors.text(isDark),
-                                          fontSize: 13),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  Text(
-                                    '\$${(item['precio'] * item['cantidad']).toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                        color: AppColors.primary, fontSize: 13),
-                                  ),
-                                ],
-                              ),
-                            ))
-                        .toList(),
+                  child: Center(
+                    child: _buscandoCliente
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : Icon(
+                            Icons.search_rounded,
+                            color: Colors.white,
+                            size: _isDesktop ? 24 : 20,
+                          ),
                   ),
                 ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      if (_metodo == 'Efectivo' && _vuelto() < 0) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Monto insuficiente'),
-                              backgroundColor: AppColors.danger),
-                        );
-                        return;
-                      }
-                      widget.onVentaCompletada(_metodo, _montoCtrl.text,
-                          _nombreCtrl.text, _telefonoCtrl.text);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      elevation: 0,
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+              ),
+            ],
+          ),
+          SizedBox(height: _isDesktop ? 14 : 10),
+          _buildCampoTexto(
+            controller: _nombreCtrl,
+            label: 'Nombre completo *',
+            icon: Icons.person_outline_rounded,
+            isDark: isDark,
+          ),
+          SizedBox(height: _isDesktop ? 14 : 10),
+          _buildCampoTexto(
+            controller: _telefonoCtrl,
+            label: 'Teléfono *',
+            icon: Icons.phone_outlined,
+            isDark: isDark,
+            keyboardType: TextInputType.phone,
+          ),
+          SizedBox(height: _isDesktop ? 14 : 10),
+          _buildCampoTexto(
+            controller: _direccionCtrl,
+            label: 'Dirección',
+            icon: Icons.location_on_outlined,
+            isDark: isDark,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCampoTexto({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    required bool isDark,
+    TextInputType? keyboardType,
+    Function(String)? onSubmitted,
+  }) {
+    return TextField(
+      controller: controller,
+      style: TextStyle(
+        color: AppColors.text(isDark),
+        fontSize: _isDesktop ? 15 : 13,
+        fontWeight: FontWeight.w500,
+      ),
+      keyboardType: keyboardType,
+      onSubmitted: onSubmitted,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(
+          color: AppColors.subtext(isDark),
+          fontSize: _isDesktop ? 13 : 12,
+        ),
+        prefixIcon: Icon(
+          icon,
+          color: AppColors.primary,
+          size: _isDesktop ? 22 : 18,
+        ),
+        filled: true,
+        fillColor: AppColors.card(isDark),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: AppColors.divider(isDark),
+            width: 1,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(
+            color: AppColors.primary,
+            width: 2,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMetodosPago(bool isDark) {
+    if (_cargandoMetodos) {
+      return Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      );
+    }
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: _isDesktop ? 4 : 2,
+        childAspectRatio: _isDesktop ? 1.5 : 1.3,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+      ),
+      itemCount: _metodosPago.length,
+      itemBuilder: (_, i) {
+        final mp = _metodosPago[i];
+        final nombre = mp['nombre'] ?? '';
+        final sel = _metodo == nombre;
+        final icono = mp['icono'] ?? Icons.payment_rounded;
+
+        return GestureDetector(
+          onTap: () => setState(() => _metodo = nombre),
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: _isDesktop ? 14 : 10,
+              vertical: _isDesktop ? 14 : 10,
+            ),
+            decoration: BoxDecoration(
+              color: sel ? AppColors.primary : AppColors.background(isDark),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: sel ? AppColors.primary : AppColors.divider(isDark),
+                width: sel ? 2 : 1,
+              ),
+              boxShadow: sel
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
                       ),
-                    ),
-                    child: Ink(
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [AppColors.primary, AppColors.secondary],
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        child: const Text('CONFIRMAR',
-                            style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 1.5,
-                                color: Colors.white)),
-                      ),
-                    ),
-                  ),
+                    ]
+                  : null,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icono,
+                  color: sel ? Colors.white : AppColors.primary,
+                  size: _isDesktop ? 24 : 20,
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: 6),
+                Text(
+                  nombre,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: sel ? Colors.white : AppColors.text(isDark),
+                    fontSize: _isDesktop ? 12 : 10,
+                    fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMontoRecibido(bool isDark) {
+    return Column(
+      children: [
+        TextField(
+          controller: _montoCtrl,
+          style: TextStyle(
+            color: AppColors.text(isDark),
+            fontSize: _isDesktop ? 28 : 24,
+            fontWeight: FontWeight.w600,
+          ),
+          keyboardType: TextInputType.number,
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            hintText: '0.00',
+            hintStyle: TextStyle(
+              color: AppColors.subtext(isDark),
+              fontSize: _isDesktop ? 28 : 24,
+            ),
+            prefixText: '${simbolosMoneda[_moneda] ?? '\$'} ',
+            prefixStyle: TextStyle(
+              color: AppColors.primary,
+              fontSize: _isDesktop ? 28 : 24,
+              fontWeight: FontWeight.w700,
+            ),
+            prefixIcon: Icon(
+              Icons.payments_outlined,
+              color: AppColors.primary,
+              size: _isDesktop ? 28 : 24,
+            ),
+            filled: true,
+            fillColor: AppColors.background(isDark),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(
+                color: AppColors.divider(isDark),
+                width: 1,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: AppColors.primary,
+                width: 2,
+              ),
+            ),
+          ),
         ),
-      ]),
+        if (_montoCtrl.text.isNotEmpty) ...[
+          SizedBox(height: _isDesktop ? 14 : 10),
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(_isDesktop ? 18 : 14),
+            decoration: BoxDecoration(
+              color: _vuelto() >= 0
+                  ? AppColors.success.withValues(alpha: 0.1)
+                  : AppColors.danger.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: _vuelto() >= 0
+                    ? AppColors.success.withValues(alpha: 0.3)
+                    : AppColors.danger.withValues(alpha: 0.3),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      _vuelto() >= 0
+                          ? Icons.check_circle_outline
+                          : Icons.error_outline,
+                      color:
+                          _vuelto() >= 0 ? AppColors.success : AppColors.danger,
+                      size: _isDesktop ? 22 : 18,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Vuelto',
+                      style: TextStyle(
+                        color: AppColors.subtext(isDark),
+                        fontSize: _isDesktop ? 15 : 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  '${simbolosMoneda[_moneda] ?? '\$'} ${_vuelto().toStringAsFixed(2)}',
+                  style: TextStyle(
+                    color:
+                        _vuelto() >= 0 ? AppColors.success : AppColors.danger,
+                    fontSize: _isDesktop ? 22 : 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildResumenCompra(bool isDark) {
+    return Container(
+      padding: EdgeInsets.all(_isDesktop ? 18 : 14),
+      decoration: BoxDecoration(
+        color: AppColors.background(isDark),
+        borderRadius: BorderRadius.circular(_isDesktop ? 18 : 14),
+        border: Border.all(
+          color: AppColors.divider(isDark),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: widget.carrito.map((item) {
+          return Container(
+            padding: EdgeInsets.symmetric(
+              vertical: _isDesktop ? 10 : 8,
+            ),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: AppColors.divider(isDark),
+                  width: 0.5,
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item['tipo'] == 'kilo'
+                            ? '${item['cantidad']}x ${item['nombre']} (${item['peso']}kg)'
+                            : '${item['cantidad']}x ${item['nombre']}',
+                        style: TextStyle(
+                          color: AppColors.text(isDark),
+                          fontSize: _isDesktop ? 14 : 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        'Precio unitario: \$${(item['precio'] / item['cantidad']).toStringAsFixed(2)}',
+                        style: TextStyle(
+                          color: AppColors.subtext(isDark),
+                          fontSize: _isDesktop ? 11 : 10,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(width: 8),
+                Text(
+                  '\$${(item['precio'] * item['cantidad']).toStringAsFixed(2)}',
+                  style: TextStyle(
+                    color: AppColors.primary,
+                    fontSize: _isDesktop ? 16 : 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildBotonConfirmar(bool isDark) {
+    return Container(
+      width: double.infinity,
+      height: _isDesktop ? 60 : 52,
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(_isDesktop ? 18 : 14),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.35),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: _confirmarVenta,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(_isDesktop ? 18 : 14),
+          ),
+          padding: EdgeInsets.symmetric(
+            horizontal: _isDesktop ? 32 : 24,
+            vertical: _isDesktop ? 16 : 12,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.check_circle_outline_rounded,
+              color: Colors.white,
+              size: _isDesktop ? 26 : 22,
+            ),
+            SizedBox(width: _isDesktop ? 12 : 8),
+            Text(
+              'CONFIRMAR PAGO',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: _isDesktop ? 17 : 15,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -2920,9 +4714,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [AppColors.primary, AppColors.secondary],
-                            ),
+                            color: AppColors.primary,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(Icons.qr_code_scanner_rounded,
@@ -3191,7 +4983,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     dynamic r;
                     if (esEdicion) {
                       r = await _db.actualizarProducto(
-                          productoEditar['id'], prod);
+                          productoEditar['id'].toString(), prod);
                     } else {
                       r = await _db.crearProducto(prod);
                     }
@@ -3245,8 +5037,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         width: 4,
         height: 16,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-              colors: [AppColors.primary, AppColors.secondary]),
+          color: AppColors.primary,
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -3258,6 +5049,157 @@ class _DashboardScreenState extends State<DashboardScreen> {
               fontWeight: FontWeight.w700,
               letterSpacing: 0.5)),
     ]);
+  }
+
+  Widget _buildGraficoVentas(bool isDark) {
+    if (ventasFiltradas.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.card(isDark),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Center(
+          child: Text('No hay datos para mostrar',
+              style: TextStyle(color: AppColors.subtext(isDark))),
+        ),
+      );
+    }
+
+    final ventasPorHora = <int, double>{};
+    for (var i = 8; i <= 20; i++) {
+      ventasPorHora[i] = 0;
+    }
+
+    for (var v in ventasFiltradas) {
+      if (v['fecha'] != null) {
+        final fecha = DateTime.parse(v['fecha'].toString());
+        final hora = fecha.hour;
+        if (ventasPorHora.containsKey(hora)) {
+          ventasPorHora[hora] = (ventasPorHora[hora] ?? 0) +
+              ((v['total'] ?? 0) as num).toDouble();
+        }
+      }
+    }
+
+    final maxY =
+        ventasPorHora.values.fold<double>(0, (max, v) => v > max ? v : max) +
+            10;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.card(isDark),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('VENTAS POR HORA',
+                  style: TextStyle(
+                      color: AppColors.text(isDark),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1)),
+              Icon(Icons.bar_chart, color: AppColors.primary, size: 20),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 180,
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                maxY: maxY,
+                barTouchData: BarTouchData(
+                  touchTooltipData: BarTouchTooltipData(
+                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                      return BarTooltipItem(
+                        '\$${rod.toY.toStringAsFixed(2)}',
+                        TextStyle(
+                          color: AppColors.text(isDark),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  show: true,
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text('${value.toInt()}',
+                              style: TextStyle(
+                                  color: AppColors.subtext(isDark),
+                                  fontSize: 9)),
+                        );
+                      },
+                      reservedSize: 24,
+                    ),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        return Text('\$${value.toInt()}',
+                            style: TextStyle(
+                                color: AppColors.subtext(isDark), fontSize: 8));
+                      },
+                      reservedSize: 40,
+                    ),
+                  ),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                ),
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: maxY / 5,
+                  getDrawingHorizontalLine: (value) => FlLine(
+                    color: AppColors.divider(isDark),
+                    strokeWidth: 0.5,
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                barGroups: ventasPorHora.entries.map((entry) {
+                  return BarChartGroupData(
+                    x: entry.key,
+                    barRods: [
+                      BarChartRodData(
+                        toY: entry.value,
+                        color: AppColors.primary,
+                        width: 8,
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(4)),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -3276,12 +5218,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.1),
-                    AppColors.secondary.withValues(alpha: 0.1),
-                  ],
-                ),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.menu_rounded,
@@ -3348,7 +5285,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.04),
+                      color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -3386,15 +5323,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: AppColors.card(isDark),
+            color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF0F0F0),
             shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.06),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            border: Border.all(
+              color: AppColors.divider(isDark),
+              width: 1,
+            ),
           ),
           child: Icon(icon, color: color ?? AppColors.text(isDark), size: 20),
         ),
@@ -3410,10 +5344,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            gradient: sel
-                ? const LinearGradient(
-                    colors: [AppColors.primary, AppColors.secondary])
-                : null,
+            color: sel ? AppColors.primary : Colors.transparent,
             borderRadius: BorderRadius.circular(14),
           ),
           child: Center(
@@ -3444,11 +5375,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppColors.primary, AppColors.secondary],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: AppColors.primary,
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
@@ -3519,6 +5446,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const SizedBox(height: 16),
         _buildAccesosRapidos(isDark),
         const SizedBox(height: 16),
+        _buildGraficoVentas(isDark),
+        const SizedBox(height: 16),
         if (ventasFiltradas.isNotEmpty) _buildUltimasVentas(isDark),
       ]),
     );
@@ -3535,12 +5464,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               width: 100,
               height: 100,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.1),
-                    AppColors.secondary.withValues(alpha: 0.1),
-                  ],
-                ),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.storefront,
@@ -3565,11 +5489,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [AppColors.primary, AppColors.secondary],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  color: AppColors.primary,
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
@@ -3705,7 +5625,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -3753,11 +5673,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: _cajaActual != null
-                      ? [AppColors.primary, AppColors.secondary]
-                      : [AppColors.success, AppColors.secondary],
-                ),
+                color:
+                    _cajaActual != null ? AppColors.primary : AppColors.success,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -3783,7 +5700,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -3826,12 +5743,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           width: 50,
           height: 50,
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                AppColors.primary.withValues(alpha: 0.1),
-                AppColors.secondary.withValues(alpha: 0.1),
-              ],
-            ),
+            color: AppColors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(14),
           ),
           child: Icon(icon, color: AppColors.primary, size: 24),
@@ -3851,7 +5763,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -3921,7 +5833,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -3966,7 +5878,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -4014,8 +5926,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                    colors: [AppColors.primary, AppColors.secondary]),
+                color: AppColors.primary,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: IconButton(
@@ -4060,7 +5971,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.04),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -4179,7 +6090,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             icon: Icon(Icons.delete_outline_rounded,
                                 color: AppColors.danger.withValues(alpha: 0.7),
                                 size: 18),
-                            onPressed: () => eliminarProducto(prod['id']),
+                            onPressed: () =>
+                                eliminarProducto(prod['id'].toString()),
                           ),
                         ]),
                       ]),
@@ -4244,9 +6156,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [AppColors.primary, AppColors.secondary],
-          ),
+          color: AppColors.primary,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -4311,7 +6221,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.04),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -4402,10 +6312,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-// ============================================
-// PANTALLAS RESTANTES CON MODO OSCURO GLOBAL
-// ============================================
-
 class ConfiguracionScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
   final bool modoOscuro;
@@ -4424,8 +6330,11 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
   final _correoCtrl = TextEditingController();
   final _tasaCOPCtrl = TextEditingController();
   final _tasaVESCtrl = TextEditingController();
+  String? _logoUrl;
+  Uint8List? _logoBytes;
   bool _cargando = true;
   bool _guardando = false;
+  bool _subiendoLogo = false;
 
   @override
   void initState() {
@@ -4442,10 +6351,34 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
       _direccionCtrl.text = config['direccion'] ?? '';
       _telefonoCtrl.text = config['telefono'] ?? '';
       _correoCtrl.text = config['correo'] ?? '';
+      _logoUrl = config['logo_url'];
     }
     _tasaCOPCtrl.text = (prefs.getDouble('tasa_cop') ?? 4500.0).toString();
     _tasaVESCtrl.text = (prefs.getDouble('tasa_ves') ?? 60.0).toString();
     setState(() => _cargando = false);
+  }
+
+  Future<void> _subirLogo() async {
+    final f = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+    if (f == null) return;
+    setState(() => _subiendoLogo = true);
+    try {
+      final bytes = await f.readAsBytes();
+      setState(() {
+        _logoBytes = bytes;
+      });
+      // Subir a Supabase
+      final url = await _db.subirImagenSupabase(bytes, 'logos');
+      if (url != null) {
+        _logoUrl = url;
+      }
+    } catch (e) {
+      debugPrint('Error subiendo logo: $e');
+    }
+    setState(() => _subiendoLogo = false);
   }
 
   Future<void> _guardar() async {
@@ -4463,6 +6396,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
       'direccion': _direccionCtrl.text,
       'telefono': _telefonoCtrl.text,
       'correo': _correoCtrl.text,
+      'logo_url': _logoUrl,
     });
     setState(() => _guardando = false);
     if (mounted) {
@@ -4494,12 +6428,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.1),
-                    AppColors.secondary.withValues(alpha: 0.1),
-                  ],
-                ),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.menu_rounded,
@@ -4523,6 +6452,57 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                   child: CircularProgressIndicator(color: AppColors.primary))
               : ListView(
                   children: [
+                    // LOGO
+                    Center(
+                      child: GestureDetector(
+                        onTap: _subiendoLogo ? null : _subirLogo,
+                        child: Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            color: AppColors.background(isDark),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.3),
+                              width: 2,
+                            ),
+                          ),
+                          child: _subiendoLogo
+                              ? const Center(
+                                  child: CircularProgressIndicator(
+                                      color: AppColors.primary))
+                              : _logoBytes != null
+                                  ? ClipOval(
+                                      child: Image.memory(_logoBytes!,
+                                          fit: BoxFit.cover))
+                                  : _logoUrl != null && _logoUrl!.isNotEmpty
+                                      ? ClipOval(
+                                          child: Image.network(_logoUrl!,
+                                              fit: BoxFit.cover))
+                                      : Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.store_rounded,
+                                              color: AppColors.primary,
+                                              size: 48,
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'Subir Logo',
+                                              style: TextStyle(
+                                                color: AppColors.primary,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
                     _buildTextField(_nombreCtrl, 'Nombre del Negocio', isDark),
                     const SizedBox(height: 12),
                     _buildTextField(_rifCtrl, 'RIF / Cedula', isDark),
@@ -4561,36 +6541,24 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
                       child: ElevatedButton(
                         onPressed: _guardando ? null : _guardar,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          elevation: 0,
-                          padding: EdgeInsets.zero,
+                          backgroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: Ink(
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [AppColors.primary, AppColors.secondary],
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            child: _guardando
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                        color: Colors.white, strokeWidth: 2))
-                                : const Text('GUARDAR CAMBIOS',
-                                    style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        letterSpacing: 1,
-                                        color: Colors.white)),
-                          ),
-                        ),
+                        child: _guardando
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                    color: Colors.white, strokeWidth: 2))
+                            : const Text('GUARDAR CAMBIOS',
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 1,
+                                    color: Colors.white)),
                       ),
                     ),
                   ],
@@ -4661,73 +6629,161 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
     final nombreCtrl = TextEditingController(text: categoria?['nombre'] ?? '');
     final descCtrl =
         TextEditingController(text: categoria?['descripcion'] ?? '');
+    String? imagenUrl = categoria?['imagen_url'];
+    Uint8List? imagenBytes;
+    bool subiendo = false;
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.card(isDark),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          categoria != null ? 'Editar Categoria' : 'Nueva Categoria',
-          style: TextStyle(
-              color: AppColors.text(isDark), fontWeight: FontWeight.w700),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nombreCtrl,
-              style: TextStyle(color: AppColors.text(isDark)),
-              decoration: InputDecoration(
-                labelText: 'Nombre *',
-                labelStyle: TextStyle(color: AppColors.subtext(isDark)),
-                filled: true,
-                fillColor: AppColors.background(isDark),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none),
-              ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.card(isDark),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            categoria != null ? 'Editar Categoria' : 'Nueva Categoria',
+            style: TextStyle(
+                color: AppColors.text(isDark), fontWeight: FontWeight.w700),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // FOTO OPCIONAL
+                Center(
+                  child: GestureDetector(
+                    onTap: subiendo
+                        ? null
+                        : () async {
+                            final f = await ImagePicker().pickImage(
+                              source: ImageSource.gallery,
+                              imageQuality: 70,
+                            );
+                            if (f != null) {
+                              setDialogState(() => subiendo = true);
+                              final bytes = await f.readAsBytes();
+                              final base64String = base64Encode(bytes);
+                              setDialogState(() {
+                                imagenBytes = bytes;
+                                imagenUrl =
+                                    'data:image/jpeg;base64,$base64String';
+                                subiendo = false;
+                              });
+                            }
+                          },
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: AppColors.background(isDark),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: AppColors.primary.withValues(alpha: 0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: subiendo
+                          ? const Center(
+                              child: CircularProgressIndicator(
+                                  color: AppColors.primary, strokeWidth: 2))
+                          : imagenBytes != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(15),
+                                  child: Image.memory(imagenBytes!,
+                                      fit: BoxFit.cover))
+                              : imagenUrl != null && imagenUrl!.isNotEmpty
+                                  ? ClipRRect(
+                                      borderRadius: BorderRadius.circular(15),
+                                      child: ImagenProducto(
+                                        imagenUrl: imagenUrl,
+                                        width: 80,
+                                        height: 80,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    )
+                                  : Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.photo_camera_outlined,
+                                          color: AppColors.primary,
+                                          size: 28,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Foto',
+                                          style: TextStyle(
+                                            color: AppColors.primary,
+                                            fontSize: 10,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nombreCtrl,
+                  style: TextStyle(color: AppColors.text(isDark)),
+                  decoration: InputDecoration(
+                    labelText: 'Nombre *',
+                    labelStyle: TextStyle(color: AppColors.subtext(isDark)),
+                    filled: true,
+                    fillColor: AppColors.background(isDark),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: descCtrl,
+                  style: TextStyle(color: AppColors.text(isDark)),
+                  decoration: InputDecoration(
+                    labelText: 'Descripcion',
+                    labelStyle: TextStyle(color: AppColors.subtext(isDark)),
+                    filled: true,
+                    fillColor: AppColors.background(isDark),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: descCtrl,
-              style: TextStyle(color: AppColors.text(isDark)),
-              decoration: InputDecoration(
-                labelText: 'Descripcion',
-                labelStyle: TextStyle(color: AppColors.subtext(isDark)),
-                filled: true,
-                fillColor: AppColors.background(isDark),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none),
-              ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('Cancelar',
+                    style: TextStyle(color: AppColors.subtext(isDark)))),
+            TextButton(
+              onPressed: () async {
+                if (nombreCtrl.text.isEmpty) return;
+                final data = {
+                  'nombre': nombreCtrl.text,
+                  'descripcion': descCtrl.text,
+                  'imagen_url': imagenUrl,
+                };
+                if (categoria != null) {
+                  await _db.actualizarCategoria(
+                    categoria['id'].toString(),
+                    data,
+                  );
+                } else {
+                  await _db.crearCategoria(data);
+                }
+                Navigator.pop(ctx);
+                _cargarCategorias();
+              },
+              child: const Text('Guardar',
+                  style: TextStyle(
+                      color: AppColors.primary, fontWeight: FontWeight.w600)),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('Cancelar',
-                  style: TextStyle(color: AppColors.subtext(isDark)))),
-          TextButton(
-            onPressed: () async {
-              if (nombreCtrl.text.isEmpty) return;
-              if (categoria != null) {
-                await _db.actualizarCategoria(
-                  categoria['id'].toString(),
-                  {'nombre': nombreCtrl.text, 'descripcion': descCtrl.text},
-                );
-              } else {
-                await _db.crearCategoria(
-                    {'nombre': nombreCtrl.text, 'descripcion': descCtrl.text});
-              }
-              Navigator.pop(ctx);
-              _cargarCategorias();
-            },
-            child: const Text('Guardar',
-                style: TextStyle(
-                    color: AppColors.primary, fontWeight: FontWeight.w600)),
-          ),
-        ],
       ),
     );
   }
@@ -4747,12 +6803,7 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.1),
-                    AppColors.secondary.withValues(alpha: 0.1),
-                  ],
-                ),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.menu_rounded,
@@ -4785,6 +6836,7 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
                     itemCount: _categorias.length,
                     itemBuilder: (_, i) {
                       final cat = _categorias[i];
+                      final imagenUrl = cat['imagen_url'];
                       return Container(
                         margin: const EdgeInsets.only(bottom: 8),
                         padding: const EdgeInsets.all(14),
@@ -4793,7 +6845,7 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
                           borderRadius: BorderRadius.circular(14),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.04),
+                              color: Colors.black.withValues(alpha: 0.04),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -4801,19 +6853,24 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
                         ),
                         child: Row(children: [
                           Container(
-                            width: 40,
-                            height: 40,
+                            width: 50,
+                            height: 50,
                             decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  AppColors.primary.withValues(alpha: 0.1),
-                                  AppColors.secondary.withValues(alpha: 0.1),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(10),
+                              color: AppColors.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Icon(Icons.category_outlined,
-                                color: AppColors.primary, size: 20),
+                            child: imagenUrl != null && imagenUrl.isNotEmpty
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(11),
+                                    child: ImagenProducto(
+                                      imagenUrl: imagenUrl.toString(),
+                                      width: 50,
+                                      height: 50,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  )
+                                : const Icon(Icons.category_outlined,
+                                    color: AppColors.primary, size: 24),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -4963,12 +7020,7 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.1),
-                    AppColors.secondary.withValues(alpha: 0.1),
-                  ],
-                ),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.menu_rounded,
@@ -5009,7 +7061,7 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
                           borderRadius: BorderRadius.circular(14),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.04),
+                              color: Colors.black.withValues(alpha: 0.04),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -5020,12 +7072,7 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
                             width: 40,
                             height: 40,
                             decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  AppColors.primary.withValues(alpha: 0.1),
-                                  AppColors.secondary.withValues(alpha: 0.1),
-                                ],
-                              ),
+                              color: AppColors.primary.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Center(
@@ -5043,7 +7090,8 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
                                     fontWeight: FontWeight.w600)),
                           ),
                           Switch(
-                            value: metodo['activo'] == 1,
+                            value: metodo['activo'] == 1 ||
+                                metodo['activo'] == true,
                             onChanged: (val) async {
                               await _db.actualizarMetodoPago(
                                 metodo['id'].toString(),
@@ -5234,12 +7282,7 @@ class _VendedoresScreenState extends State<VendedoresScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.1),
-                    AppColors.secondary.withValues(alpha: 0.1),
-                  ],
-                ),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.menu_rounded,
@@ -5284,7 +7327,7 @@ class _VendedoresScreenState extends State<VendedoresScreen> {
                           borderRadius: BorderRadius.circular(14),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.04),
+                              color: Colors.black.withValues(alpha: 0.04),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -5295,12 +7338,7 @@ class _VendedoresScreenState extends State<VendedoresScreen> {
                             width: 44,
                             height: 44,
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [
-                                  AppColors.primary,
-                                  AppColors.secondary
-                                ],
-                              ),
+                              color: AppColors.primary,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Center(
@@ -5403,9 +7441,11 @@ class _ClientesScreenState extends State<ClientesScreen> {
     final nombreCtrl = TextEditingController(text: cliente?['nombre'] ?? '');
     final telefonoCtrl =
         TextEditingController(text: cliente?['telefono'] ?? '');
-    final correoCtrl = TextEditingController(text: cliente?['correo'] ?? '');
+    final correoCtrl = TextEditingController(text: cliente?['email'] ?? '');
     final direccionCtrl =
         TextEditingController(text: cliente?['direccion'] ?? '');
+    final cedulaCtrl =
+        TextEditingController(text: cliente?['identificacion'] ?? '');
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -5432,6 +7472,21 @@ class _ClientesScreenState extends State<ClientesScreen> {
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none),
                 ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: cedulaCtrl,
+                style: TextStyle(color: AppColors.text(isDark)),
+                decoration: InputDecoration(
+                  labelText: 'Cédula',
+                  labelStyle: TextStyle(color: AppColors.subtext(isDark)),
+                  filled: true,
+                  fillColor: AppColors.background(isDark),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none),
+                ),
+                keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 10),
               TextField(
@@ -5477,6 +7532,30 @@ class _ClientesScreenState extends State<ClientesScreen> {
                       borderSide: BorderSide.none),
                 ),
               ),
+              if (cliente != null && cliente['puntos'] != null) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.background(isDark),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.star, color: AppColors.warning, size: 20),
+                    const SizedBox(width: 10),
+                    Text('Puntos: ${cliente['puntos']}',
+                        style: TextStyle(
+                            color: AppColors.text(isDark),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600)),
+                    const Spacer(),
+                    Text('Total: \$${cliente['total_compras'] ?? 0}',
+                        style: TextStyle(
+                            color: AppColors.subtext(isDark), fontSize: 12)),
+                  ]),
+                ),
+              ],
             ],
           ),
         ),
@@ -5491,8 +7570,9 @@ class _ClientesScreenState extends State<ClientesScreen> {
               final data = {
                 'nombre': nombreCtrl.text,
                 'telefono': telefonoCtrl.text,
-                'correo': correoCtrl.text,
+                'email': correoCtrl.text,
                 'direccion': direccionCtrl.text,
+                'identificacion': cedulaCtrl.text,
               };
               if (cliente != null) {
                 await _db.actualizarCliente(cliente['id'].toString(), data);
@@ -5526,12 +7606,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.1),
-                    AppColors.secondary.withValues(alpha: 0.1),
-                  ],
-                ),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.menu_rounded,
@@ -5566,6 +7641,8 @@ class _ClientesScreenState extends State<ClientesScreen> {
                       final c = _clientes[i];
                       final nombre = c['nombre'] ?? '';
                       final telefono = c['telefono'] ?? '';
+                      final cedula = c['identificacion'] ?? '';
+                      final puntos = c['puntos'] ?? 0;
                       final inicial =
                           nombre.isNotEmpty ? nombre[0].toUpperCase() : '?';
                       return Container(
@@ -5576,7 +7653,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
                           borderRadius: BorderRadius.circular(14),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.04),
+                              color: Colors.black.withValues(alpha: 0.04),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -5587,12 +7664,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
                             width: 44,
                             height: 44,
                             decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  AppColors.primary.withValues(alpha: 0.1),
-                                  AppColors.secondary.withValues(alpha: 0.1),
-                                ],
-                              ),
+                              color: AppColors.primary.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Center(
@@ -5616,6 +7688,35 @@ class _ClientesScreenState extends State<ClientesScreen> {
                                     style: TextStyle(
                                         color: AppColors.subtext(isDark),
                                         fontSize: 11)),
+                                if (cedula.isNotEmpty)
+                                  Text('CI: $cedula',
+                                      style: TextStyle(
+                                          color: AppColors.subtext(isDark),
+                                          fontSize: 11)),
+                                if (puntos > 0)
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 4),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.warning
+                                          .withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.star,
+                                            color: AppColors.warning, size: 12),
+                                        const SizedBox(width: 4),
+                                        Text('$puntos pts',
+                                            style: const TextStyle(
+                                                color: AppColors.warning,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600)),
+                                      ],
+                                    ),
+                                  ),
                               ],
                             ),
                           ),
@@ -5724,12 +7825,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.1),
-                    AppColors.secondary.withValues(alpha: 0.1),
-                  ],
-                ),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.menu_rounded,
@@ -5758,7 +7854,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.04),
+                      color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -5774,6 +7870,10 @@ class _ReportesScreenState extends State<ReportesScreen> {
                           decoration: BoxDecoration(
                             color: AppColors.background(isDark),
                             borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: AppColors.divider(isDark),
+                              width: 1,
+                            ),
                           ),
                           child: Column(children: [
                             Text('Desde',
@@ -5799,6 +7899,10 @@ class _ReportesScreenState extends State<ReportesScreen> {
                           decoration: BoxDecoration(
                             color: AppColors.background(isDark),
                             borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: AppColors.divider(isDark),
+                              width: 1,
+                            ),
                           ),
                           child: Column(children: [
                             Text('Hasta',
@@ -5850,7 +7954,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.04),
+                          color: Colors.black.withValues(alpha: 0.04),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
                         ),
@@ -5864,12 +7968,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
                             child: Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [
-                                    AppColors.primary,
-                                    AppColors.secondary
-                                  ],
-                                ),
+                                color: AppColors.primary,
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Column(children: [
@@ -5893,6 +7992,10 @@ class _ReportesScreenState extends State<ReportesScreen> {
                               decoration: BoxDecoration(
                                 color: AppColors.background(isDark),
                                 borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: AppColors.divider(isDark),
+                                  width: 1,
+                                ),
                               ),
                               child: Column(children: [
                                 Text('Transacciones',
@@ -6044,12 +8147,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.1),
-                    AppColors.secondary.withValues(alpha: 0.1),
-                  ],
-                ),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.menu_rounded,
@@ -6077,7 +8175,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.04),
+                      color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -6159,7 +8257,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.04),
+                      color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -6305,7 +8403,7 @@ class _BackupScreenState extends State<BackupScreen> {
       'ventas': ventas,
       'clientes': clientes,
       'fecha_exportacion': DateTime.now().toIso8601String(),
-      'version': '5.0.0',
+      'version': '5.1.0',
     };
     final jsonStr = const JsonEncoder.withIndent('  ').convert(data);
     await Share.share(jsonStr,
@@ -6313,6 +8411,87 @@ class _BackupScreenState extends State<BackupScreen> {
             'Backup SINTHETIX PRO - ${DateFormat('dd/MM/yyyy').format(DateTime.now())}');
     _mostrarExito('Datos exportados correctamente');
     setState(() => _exportando = false);
+  }
+
+  Future<void> _exportarPDF() async {
+    final productos = await _db.getProductos();
+    final ventas = await _db.getVentasHoy();
+
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build: (context) => [
+          pw.Header(
+            level: 0,
+            child: pw.Text('SINTHETIX PRO - Reporte',
+                style:
+                    pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+          ),
+          pw.SizedBox(height: 20),
+          pw.Text(
+              'Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
+              style: const pw.TextStyle(fontSize: 12)),
+          pw.SizedBox(height: 20),
+          pw.Text('PRODUCTOS',
+              style:
+                  pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 10),
+          pw.Table.fromTextArray(
+            headers: ['Nombre', 'Código', 'Precio', 'Stock'],
+            data: productos
+                .map((p) => [
+                      p['nombre']?.toString() ?? '',
+                      p['codigo_barras']?.toString() ?? '',
+                      '\$${p['precio']?.toString() ?? '0'}',
+                      p['stock']?.toString() ?? '0',
+                    ])
+                .toList(),
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            headerDecoration:
+                const pw.BoxDecoration(color: PdfColors.purple100),
+            cellHeight: 25,
+          ),
+          pw.SizedBox(height: 30),
+          pw.Text('VENTAS',
+              style:
+                  pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 10),
+          pw.Table.fromTextArray(
+            headers: ['Factura', 'Fecha', 'Total', 'Método'],
+            data: ventas
+                .map((v) => [
+                      v['numero_factura']?.toString() ?? '',
+                      v['fecha']?.toString().substring(0, 10) ?? '',
+                      '\$${v['total']?.toString() ?? '0'}',
+                      v['metodo_pago']?.toString() ?? '',
+                    ])
+                .toList(),
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.cyan100),
+            cellHeight: 25,
+          ),
+        ],
+      ),
+    );
+
+    try {
+      final bytes = await pdf.save();
+      final dir = await getTemporaryDirectory();
+      final file = File(
+          '${dir.path}/Reporte_SINTHETIX_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.pdf');
+      await file.writeAsBytes(bytes);
+
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: 'Reporte SINTHETIX PRO',
+      );
+
+      _mostrarExito('PDF generado correctamente');
+    } catch (e) {
+      _mostrarExito('Error al generar PDF: $e');
+    }
   }
 
   void _mostrarExito(String msg) {
@@ -6341,12 +8520,7 @@ class _BackupScreenState extends State<BackupScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.1),
-                    AppColors.secondary.withValues(alpha: 0.1),
-                  ],
-                ),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.menu_rounded,
@@ -6374,7 +8548,7 @@ class _BackupScreenState extends State<BackupScreen> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.04),
+                      color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -6388,9 +8562,7 @@ class _BackupScreenState extends State<BackupScreen> {
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [AppColors.primary, AppColors.secondary],
-                          ),
+                          color: AppColors.primary,
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: const Icon(Icons.upload_file,
@@ -6428,7 +8600,7 @@ class _BackupScreenState extends State<BackupScreen> {
                             : const Icon(Icons.upload_file,
                                 color: Colors.white),
                         label: Text(
-                            _exportando ? 'Exportando...' : 'Exportar Ahora',
+                            _exportando ? 'Exportando...' : 'Exportar JSON',
                             style: const TextStyle(color: Colors.white)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
@@ -6438,71 +8610,17 @@ class _BackupScreenState extends State<BackupScreen> {
                         ),
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: AppColors.card(isDark),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.04),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              AppColors.primary.withValues(alpha: 0.1),
-                              AppColors.secondary.withValues(alpha: 0.1),
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(Icons.download,
-                            color: AppColors.primary, size: 24),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Importar Datos',
-                                style: TextStyle(
-                                    color: AppColors.text(isDark),
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600)),
-                            Text('Restaurar desde un archivo',
-                                style: TextStyle(
-                                    color: AppColors.subtext(isDark),
-                                    fontSize: 12)),
-                          ],
-                        ),
-                      ),
-                    ]),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
-                        onPressed: () => _mostrarExito('Funcion en desarrollo'),
-                        icon: const Icon(Icons.download,
-                            color: AppColors.primary),
-                        label: const Text('Importar Archivo',
-                            style: TextStyle(color: AppColors.primary)),
+                        onPressed: _exportarPDF,
+                        icon: const Icon(Icons.picture_as_pdf,
+                            color: AppColors.danger),
+                        label: const Text('Exportar PDF',
+                            style: TextStyle(color: AppColors.danger)),
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: AppColors.primary),
+                          side: const BorderSide(color: AppColors.danger),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
@@ -6551,9 +8669,11 @@ class CajaScreen extends StatefulWidget {
 
 class _CajaScreenState extends State<CajaScreen> {
   final CajaService _cajaService = CajaService();
+  final DatabaseService _db = DatabaseService();
   Map<String, dynamic>? _cajaActual;
   List<Map<String, dynamic>> _historialCajas = [];
   List<Map<String, dynamic>> _movimientos = [];
+  List<Map<String, dynamic>> _ventasHoy = [];
   bool _cargando = true;
   int _tabActual = 0;
 
@@ -6568,6 +8688,7 @@ class _CajaScreenState extends State<CajaScreen> {
     _cajaActual = await _cajaService.getCajaAbierta();
     _historialCajas = await _cajaService.getHistorialCajas();
     _movimientos = await _cajaService.getMovimientosHoy();
+    _ventasHoy = await _db.getVentasHoy();
     setState(() => _cargando = false);
   }
 
@@ -6788,10 +8909,7 @@ class _CajaScreenState extends State<CajaScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            gradient: sel
-                ? const LinearGradient(
-                    colors: [AppColors.primary, AppColors.secondary])
-                : null,
+            color: sel ? AppColors.primary : Colors.transparent,
             borderRadius: BorderRadius.circular(14),
           ),
           child: Center(
@@ -6848,9 +8966,7 @@ class _CajaScreenState extends State<CajaScreen> {
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppColors.primary, AppColors.secondary],
-            ),
+            color: AppColors.primary,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(children: [
@@ -6889,6 +9005,12 @@ class _CajaScreenState extends State<CajaScreen> {
             ),
           ]),
         ),
+        const SizedBox(height: 16),
+        // GRÁFICO DE VENTAS POR HORA
+        _buildGraficoVentasHora(),
+        const SizedBox(height: 16),
+        // GRÁFICO CIRCULAR DE MÉTODOS DE PAGO
+        _buildGraficoMetodosPago(),
         const SizedBox(height: 16),
         Row(children: [
           Expanded(
@@ -6942,6 +9064,210 @@ class _CajaScreenState extends State<CajaScreen> {
     );
   }
 
+  Widget _buildGraficoVentasHora() {
+    final isDark = widget.modoOscuro;
+    if (_ventasHoy.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.card(isDark),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Center(
+          child: Text('No hay ventas hoy',
+              style: TextStyle(color: AppColors.subtext(isDark))),
+        ),
+      );
+    }
+
+    final ventasPorHora = <int, double>{};
+    for (var i = 8; i <= 20; i++) {
+      ventasPorHora[i] = 0;
+    }
+
+    for (var v in _ventasHoy) {
+      if (v['fecha'] != null) {
+        final fecha = DateTime.parse(v['fecha'].toString());
+        final hora = fecha.hour;
+        if (ventasPorHora.containsKey(hora)) {
+          ventasPorHora[hora] = (ventasPorHora[hora] ?? 0) +
+              ((v['total'] ?? 0) as num).toDouble();
+        }
+      }
+    }
+
+    final maxY =
+        ventasPorHora.values.fold<double>(0, (max, v) => v > max ? v : max) +
+            10;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.card(isDark),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('VENTAS POR HORA',
+                  style: TextStyle(
+                      color: AppColors.text(isDark),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1)),
+              Icon(Icons.bar_chart, color: AppColors.primary, size: 20),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 150,
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                maxY: maxY,
+                titlesData: FlTitlesData(
+                  show: true,
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        return Text('${value.toInt()}',
+                            style: TextStyle(
+                                color: AppColors.subtext(isDark), fontSize: 8));
+                      },
+                      reservedSize: 20,
+                    ),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        return Text('\$${value.toInt()}',
+                            style: TextStyle(
+                                color: AppColors.subtext(isDark), fontSize: 7));
+                      },
+                      reservedSize: 35,
+                    ),
+                  ),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                ),
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: maxY / 5,
+                  getDrawingHorizontalLine: (value) => FlLine(
+                    color: AppColors.divider(isDark),
+                    strokeWidth: 0.5,
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                barGroups: ventasPorHora.entries.map((entry) {
+                  return BarChartGroupData(
+                    x: entry.key,
+                    barRods: [
+                      BarChartRodData(
+                        toY: entry.value,
+                        color: AppColors.primary,
+                        width: 6,
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(3)),
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGraficoMetodosPago() {
+    final isDark = widget.modoOscuro;
+    if (_ventasHoy.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final metodosMap = <String, double>{};
+    for (var v in _ventasHoy) {
+      final metodo = v['metodo_pago'] ?? 'Desconocido';
+      metodosMap[metodo] =
+          (metodosMap[metodo] ?? 0) + ((v['total'] ?? 0) as num).toDouble();
+    }
+
+    final totalVentas = metodosMap.values.fold<double>(0, (a, b) => a + b);
+    if (totalVentas == 0) return const SizedBox.shrink();
+
+    final colores = [
+      AppColors.primary,
+      AppColors.secondary,
+      AppColors.success,
+      AppColors.warning,
+      AppColors.danger,
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.card(isDark),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('MÉTODOS DE PAGO',
+              style: TextStyle(
+                  color: AppColors.text(isDark),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1)),
+          const SizedBox(height: 16),
+          ...metodosMap.entries.map((entry) {
+            final porcentaje = (entry.value / totalVentas) * 100;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(children: [
+                Expanded(
+                  child: Text(entry.key,
+                      style: TextStyle(
+                          color: AppColors.text(isDark), fontSize: 12)),
+                ),
+                Text(
+                  '\$${entry.value.toStringAsFixed(2)} (${porcentaje.toStringAsFixed(1)}%)',
+                  style:
+                      TextStyle(color: AppColors.subtext(isDark), fontSize: 11),
+                ),
+              ]),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMovimientos(bool isDark) {
     if (_movimientos.isEmpty) {
       return Center(
@@ -6961,7 +9287,7 @@ class _CajaScreenState extends State<CajaScreen> {
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.04),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -7032,7 +9358,7 @@ class _CajaScreenState extends State<CajaScreen> {
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.04),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -7043,9 +9369,7 @@ class _CajaScreenState extends State<CajaScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppColors.primary, AppColors.secondary],
-                ),
+                color: AppColors.primary,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(Icons.point_of_sale,
@@ -7098,12 +9422,7 @@ class _CajaScreenState extends State<CajaScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.1),
-                    AppColors.secondary.withValues(alpha: 0.1),
-                  ],
-                ),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.menu_rounded,
@@ -7167,7 +9486,7 @@ class _CajaScreenState extends State<CajaScreen> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.04),
+                      color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -7369,12 +9688,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.1),
-                    AppColors.secondary.withValues(alpha: 0.1),
-                  ],
-                ),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.menu_rounded,
@@ -7405,7 +9719,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.04),
+                            color: Colors.black.withValues(alpha: 0.04),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -7416,12 +9730,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                           width: 80,
                           height: 80,
                           decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [
-                                  AppColors.primary,
-                                  AppColors.secondary
-                                ],
-                              ),
+                              color: AppColors.primary,
                               borderRadius: BorderRadius.circular(40)),
                           child: Center(
                             child: Text(
@@ -7648,10 +9957,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            gradient: sel
-                ? const LinearGradient(
-                    colors: [AppColors.primary, AppColors.secondary])
-                : null,
+            color: sel ? AppColors.primary : Colors.transparent,
             borderRadius: BorderRadius.circular(14),
           ),
           child: Center(
@@ -7688,7 +9994,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.04),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -7767,7 +10073,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
             borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.04),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -7820,12 +10126,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.1),
-                    AppColors.secondary.withValues(alpha: 0.1),
-                  ],
-                ),
+                color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.menu_rounded,
@@ -7853,7 +10154,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.04),
+                      color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -7921,2929 +10222,1937 @@ class _InventarioScreenState extends State<InventarioScreen> {
 }
 
 // ============================================
-// TIENDA PRINCIPAL SINTHETIX
+// TIENDA SINTHETIX
 // ============================================
 class UniversalFlyCartStore extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
-  const UniversalFlyCartStore(
-      {super.key,
-      required this.onAbrirSidebar,
-      this.width,
-      this.height,
-      this.onProductTap});
-  final double? width;
-  final double? height;
-  final Future<dynamic> Function(dynamic selectedProduct)? onProductTap;
+  const UniversalFlyCartStore({super.key, required this.onAbrirSidebar});
   @override
   _UniversalFlyCartStoreState createState() => _UniversalFlyCartStoreState();
 }
 
-class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore>
-    with TickerProviderStateMixin {
-  late AnimationController _marqueeController;
-  final PageController _bannerController = PageController();
-  Timer? _bannerTimer;
-  int _currentBannerIndex = 0;
-  bool _showAnnouncementBar = true;
-  bool _isLoading = true;
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  final GlobalKey<RefreshIndicatorState> _refreshIndicatorKey =
-      GlobalKey<RefreshIndicatorState>();
-
-  bool _isDarkMode = false;
-
-  List<Map<String, dynamic>> _categories = [];
-  int _selectedCategoryIndex = 0;
-  List<Map<String, dynamic>> _allProducts = [];
-
-  final Set<String> _favoriteIds = {};
-  final List<Map<String, dynamic>> _favorites = [];
-
-  final ValueNotifier<double> _cartExtentNotifier = ValueNotifier<double>(0.15);
-  final List<Map<String, dynamic>> _cart = [];
-  final List<String> _cartImages = [];
-  final GlobalKey _cartTargetKey = GlobalKey();
-
-  final TextEditingController _nombreController = TextEditingController();
-  final TextEditingController _telefonoController = TextEditingController();
-  final TextEditingController _direccionController = TextEditingController();
+class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
+  List<Map<String, dynamic>> _productos = [];
+  List<Map<String, dynamic>> _categorias = [];
+  bool _cargando = true;
+  String _categoriaSeleccionada = 'Todas';
 
   @override
   void initState() {
     super.initState();
-    _marqueeController =
-        AnimationController(vsync: this, duration: const Duration(seconds: 12))
-          ..repeat();
-    _bannerTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
-      if (_bannerController.hasClients) {
-        int next = (_currentBannerIndex + 1) % 3;
-        _bannerController.animateToPage(next,
-            duration: const Duration(milliseconds: 500),
-            curve: Curves.easeInOut);
-      }
-    });
-    _loadSavedCart();
-    _fetchData();
+    _cargarDatos();
   }
 
-  Future<void> _loadSavedCart() async {
+  Future<void> _cargarDatos() async {
+    setState(() => _cargando = true);
     try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      List<String>? cartJson = prefs.getStringList('saved_cart');
-      if (cartJson != null && cartJson.isNotEmpty) {
-        setState(() {
-          _cart.clear();
-          _cartImages.clear();
-          for (String item in cartJson) {
-            Map<String, dynamic> product =
-                Map<String, dynamic>.from(jsonDecode(item));
-            _cart.add(product);
-            _cartImages.add(product['image'] ?? '');
-          }
-        });
-      }
+      final productosResponse = await Supabase.instance.client
+          .from('productos')
+          .select()
+          .eq('activo', true)
+          .order('nombre');
+      _productos = List<Map<String, dynamic>>.from(productosResponse as List);
+
+      final categoriasResponse = await Supabase.instance.client
+          .from('categorias')
+          .select()
+          .order('nombre');
+      _categorias = List<Map<String, dynamic>>.from(categoriasResponse as List);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('productos_local', jsonEncode(_productos));
+      await prefs.setString('categorias_local', jsonEncode(_categorias));
     } catch (e) {
-      debugPrint("Error cargando carrito: $e");
-    }
-  }
-
-  Future<void> _saveCart() async {
-    try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      List<String> cartJson = _cart.map((item) => jsonEncode(item)).toList();
-      await prefs.setStringList('saved_cart', cartJson);
-    } catch (e) {
-      debugPrint("Error guardando carrito: $e");
-    }
-  }
-
-  @override
-  void dispose() {
-    _marqueeController.dispose();
-    _bannerTimer?.cancel();
-    _bannerController.dispose();
-    _cartExtentNotifier.dispose();
-    _nombreController.dispose();
-    _telefonoController.dispose();
-    _direccionController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _fetchData() async {
-    try {
-      final db = DatabaseService();
-      final catResponse = await db.getCategorias();
-      final prodResponse = await db.getProductos();
-
-      List<Map<String, dynamic>> loadedCategories = [];
-      if (catResponse.isNotEmpty) {
-        loadedCategories = List<Map<String, dynamic>>.from(catResponse);
-        bool hasTodos = loadedCategories
-            .any((cat) => cat['nombre']?.toString().toLowerCase() == 'todos');
-        if (!hasTodos) {
-          loadedCategories
-              .insert(0, {'id': 0, 'nombre': 'Todos', 'imagen_url': null});
-        }
-      }
-
-      List<Map<String, dynamic>> allProds = [];
-
-      for (var item in prodResponse) {
-        String imageUrl = item['imagen_url']?.toString() ?? '';
-
-        final Map<String, dynamic> product = {
-          'id': item['id']?.toString() ?? '',
-          'name': item['nombre'] ?? 'Producto',
-          'category': item['categoria'] ?? 'General',
-          'subcategory': '',
-          'price': (item['precio'] ?? 0).toDouble(),
-          'image': imageUrl,
-          'images': imageUrl.isNotEmpty ? [imageUrl] : [],
-          'description': item['descripcion'] ?? '',
-          'isNew': false,
-          'isOffer': false,
-          'isDestacado': item['destacado'] == 1,
-          'isRecomendado': false,
-          'rawRow': item,
-        };
-
-        allProds.add(product);
-      }
-
-      setState(() {
-        _categories = loadedCategories;
-        _allProducts = allProds;
-        _isLoading = false;
-      });
-    } catch (e) {
-      debugPrint("Error en _fetchData: $e");
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  void _toggleDarkMode() => setState(() => _isDarkMode = !_isDarkMode);
-
-  void _toggleFavorite(Map<String, dynamic> product) {
-    setState(() {
-      final id = product['id'];
-      if (_favoriteIds.contains(id)) {
-        _favoriteIds.remove(id);
-        _favorites.removeWhere((p) => p['id'] == id);
+      final prefs = await SharedPreferences.getInstance();
+      final productosData = prefs.getString('productos_local');
+      final categoriasData = prefs.getString('categorias_local');
+      if (productosData != null) {
+        _productos = List<Map<String, dynamic>>.from(jsonDecode(productosData));
       } else {
-        _favoriteIds.add(id);
-        _favorites.add(product);
+        _productos = [];
       }
-    });
-  }
-
-  bool _isFavorite(String id) => _favoriteIds.contains(id);
-
-  void _executePurchase(GlobalKey itemKey, Map<String, dynamic> product) {
-    setState(() {
-      int index = _cart.indexWhere((element) => element['id'] == product['id']);
-      if (index != -1) {
-        _cart[index]['quantity'] = ((_cart[index]['quantity'] ?? 1) as int) +
-            (product['quantity'] ?? 1);
+      if (categoriasData != null) {
+        _categorias =
+            List<Map<String, dynamic>>.from(jsonDecode(categoriasData));
       } else {
-        _cart.add({...product, 'quantity': product['quantity'] ?? 1});
-        _cartImages.add(product['image'] ?? '');
+        _categorias = [];
       }
-    });
-    _saveCart();
-  }
-
-  void _addToCartSilent(GlobalKey itemKey, Map<String, dynamic> product) {
-    setState(() {
-      int index = _cart.indexWhere((element) => element['id'] == product['id']);
-      if (index != -1) {
-        _cart[index]['quantity'] = ((_cart[index]['quantity'] ?? 1) as int) +
-            (product['quantity'] ?? 1);
-      } else {
-        _cart.add({...product, 'quantity': product['quantity'] ?? 1});
-        _cartImages.add(product['image'] ?? '');
-      }
-    });
-    _saveCart();
-  }
-
-  void _openWhatsApp(String message) async {
-    String phone = "584241234567";
-    var whatsappUrl =
-        "https://wa.me/$phone?text=${Uri.encodeComponent(message)}";
-    debugPrint("WhatsApp URL: $whatsappUrl");
-  }
-
-  int get _cartTotalUnits =>
-      _cart.fold(0, (acc, item) => acc + ((item['quantity'] ?? 1) as int));
-
-  void _navigateToCart() {
-    Navigator.push(context,
-            MaterialPageRoute(builder: (context) => FullCartPage(cart: _cart)))
-        .then((_) => setState(() {}));
-  }
-
-  void _updateCartFromDetail() {
-    setState(() {});
-    _saveCart();
-  }
-
-  void _showCheckoutDialog() {
-    _nombreController.text = '';
-    _telefonoController.text = '';
-    _direccionController.text = '';
-    final scaffoldContext = context;
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.card(_isDarkMode),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(children: [
-          const Icon(Icons.shopping_cart_rounded,
-              color: AppColors.logoCyan, size: 28),
-          const SizedBox(width: 10),
-          Text("Datos del Cliente",
-              style: TextStyle(
-                  color: AppColors.text(_isDarkMode),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20)),
-        ]),
-        content: SingleChildScrollView(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text("Completa tus datos para enviar el pedido a SINTHETIX",
-                style: TextStyle(
-                    color: AppColors.subtext(_isDarkMode), fontSize: 13)),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _nombreController,
-              style: TextStyle(color: AppColors.text(_isDarkMode)),
-              decoration: InputDecoration(
-                labelText: "Nombre completo *",
-                labelStyle: TextStyle(color: AppColors.subtext(_isDarkMode)),
-                prefixIcon:
-                    const Icon(Icons.person_outline, color: AppColors.logoCyan),
-                enabledBorder: OutlineInputBorder(
-                    borderSide:
-                        BorderSide(color: AppColors.divider(_isDarkMode)),
-                    borderRadius: BorderRadius.circular(12)),
-                focusedBorder: OutlineInputBorder(
-                    borderSide:
-                        const BorderSide(color: AppColors.logoCyan, width: 2),
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _telefonoController,
-              keyboardType: TextInputType.phone,
-              style: TextStyle(color: AppColors.text(_isDarkMode)),
-              decoration: InputDecoration(
-                labelText: "Teléfono",
-                labelStyle: TextStyle(color: AppColors.subtext(_isDarkMode)),
-                prefixIcon:
-                    const Icon(Icons.phone_outlined, color: AppColors.logoCyan),
-                enabledBorder: OutlineInputBorder(
-                    borderSide:
-                        BorderSide(color: AppColors.divider(_isDarkMode)),
-                    borderRadius: BorderRadius.circular(12)),
-                focusedBorder: OutlineInputBorder(
-                    borderSide:
-                        const BorderSide(color: AppColors.logoCyan, width: 2),
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _direccionController,
-              style: TextStyle(color: AppColors.text(_isDarkMode)),
-              decoration: InputDecoration(
-                labelText: "Dirección de entrega",
-                labelStyle: TextStyle(color: AppColors.subtext(_isDarkMode)),
-                prefixIcon: const Icon(Icons.location_on_outlined,
-                    color: AppColors.logoCyan),
-                enabledBorder: OutlineInputBorder(
-                    borderSide:
-                        BorderSide(color: AppColors.divider(_isDarkMode)),
-                    borderRadius: BorderRadius.circular(12)),
-                focusedBorder: OutlineInputBorder(
-                    borderSide:
-                        const BorderSide(color: AppColors.logoCyan, width: 2),
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ]),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text("Cancelar",
-                  style: TextStyle(color: AppColors.subtext(_isDarkMode)))),
-          ElevatedButton(
-            onPressed: () {
-              if (_nombreController.text.trim().isEmpty) {
-                ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  const SnackBar(
-                      content: Text("Por favor ingresa tu nombre"),
-                      backgroundColor: AppColors.danger),
-                );
-                return;
-              }
-              Navigator.pop(dialogContext);
-              _enviarPedidoWhatsApp(scaffoldContext);
-            },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.logoCyan,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12))),
-            child: const Text("Enviar Pedido",
-                style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _enviarPedidoWhatsApp(BuildContext scaffoldContext) async {
-    double totalPrice = _cart.fold(
-        0.0,
-        (acc, item) =>
-            acc +
-            ((item['price'] as double) * ((item['quantity'] ?? 1) as int)));
-    String nombreCliente = _nombreController.text.trim();
-    String telefonoCliente = _telefonoController.text.trim();
-    String direccionCliente = _direccionController.text.trim();
-    String message =
-        "🛍️ *SINTHETIX - NUEVO PEDIDO* 🛍️\n\n👤 *Cliente:* $nombreCliente\n";
-    if (telefonoCliente.isNotEmpty) {
-      message += "📱 *Teléfono:* $telefonoCliente\n";
     }
-    if (direccionCliente.isNotEmpty) {
-      message += "📍 *Dirección:* $direccionCliente\n";
-    }
-    message += "\n📦 *PRODUCTOS:*\n";
-    for (var item in _cart) {
-      double itemTotal =
-          (item['price'] as double) * ((item['quantity'] ?? 1) as int);
-      message +=
-          "• ${item['name']} x${item['quantity'] ?? 1} = \$${itemTotal.toStringAsFixed(2)}\n";
-    }
-    message +=
-        "\n💰 *TOTAL:* \$${totalPrice.toStringAsFixed(2)}\n📅 *Fecha:* ${DateTime.now().toString().substring(0, 10)}\n\n✅ *Estado:* Pendiente\n\n¡Gracias por tu compra en SINTHETIX! 🛍️";
-    _openWhatsApp(message);
-    setState(() {
-      _cart.clear();
-      _cartImages.clear();
-    });
-    _saveCart();
-    ScaffoldMessenger.of(scaffoldContext).showSnackBar(
-      SnackBar(
-        content: const Text("¡Pedido enviado con éxito a SINTHETIX! 🎉🛍️"),
-        backgroundColor: AppColors.logoCyan,
-        duration: const Duration(seconds: 3),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-
-  Widget _buildCartIcon({double iconSize = 20}) {
-    return GestureDetector(
-      onTap: _navigateToCart,
-      child: Stack(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-                color: AppColors.iconBgHeader(_isDarkMode),
-                borderRadius: BorderRadius.circular(12)),
-            child: Icon(Icons.shopping_bag_outlined,
-                size: iconSize, color: AppColors.headerIcon(_isDarkMode)),
-          ),
-          if (_cart.isNotEmpty)
-            Positioned(
-              right: 2,
-              top: 2,
-              child: Container(
-                padding: const EdgeInsets.all(3),
-                decoration: const BoxDecoration(
-                    color: AppColors.logoRed, shape: BoxShape.circle),
-                constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
-                child: Text(
-                  "$_cartTotalUnits",
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 8,
-                      fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
+    setState(() => _cargando = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    int totalUnits = _cartTotalUnits;
-    double totalPrice = _cart.fold(
-        0.0,
-        (acc, item) =>
-            acc +
-            ((item['price'] as double) * ((item['quantity'] ?? 1) as int)));
+    final isDark = false;
+    final productosFiltrados = _categoriaSeleccionada == 'Todas'
+        ? _productos
+        : _productos
+            .where((p) => p['categoria'] == _categoriaSeleccionada)
+            .toList();
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (bool didPop, dynamic result) async {
-        if (!didPop) return;
-      },
-      child: SizedBox(
-        width: widget.width ?? double.infinity,
-        height: widget.height ?? double.infinity,
-        child: Scaffold(
-          key: _scaffoldKey,
-          backgroundColor: AppColors.background(_isDarkMode),
-          drawer: _buildDrawer(),
-          body: Stack(
-            children: [
-              SafeArea(
-                child: _isLoading
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                            color: AppColors.logoCyan))
-                    : RefreshIndicator(
-                        key: _refreshIndicatorKey,
-                        color: AppColors.logoCyan,
-                        backgroundColor: AppColors.card(_isDarkMode),
-                        onRefresh: _fetchData,
-                        child: CustomScrollView(
-                          physics: const AlwaysScrollableScrollPhysics(
-                              parent: BouncingScrollPhysics()),
-                          slivers: [
-                            if (_showAnnouncementBar)
-                              _buildSliverAnnouncementBar(),
-                            _buildSliverHeader(),
-                            _buildSliverBanner(),
-                            _buildSliverCategories(),
-                            if (_allProducts.isNotEmpty) ...[
-                              _buildSliverSectionTitle(
-                                  "🛍️ Todos los Productos"),
-                              _buildSliverHorizontalList(_allProducts),
-                              _buildSeeAllButton(
-                                  _allProducts, "Todos los Productos"),
-                            ],
-                            _buildSliverMiddlePromoBanner(),
-                            _buildSliverFooter(),
-                            const SliverToBoxAdapter(
-                                child: SizedBox(height: 180)),
-                          ],
-                        ),
-                      ),
-              ),
-              _buildWhatsAppFloatingButton(),
-              if (_cart.isNotEmpty) _buildDraggableCart(totalUnits, totalPrice),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSeeAllButton(List<Map<String, dynamic>> products, String title) {
-    if (products.isEmpty) {
-      return const SliverToBoxAdapter(child: SizedBox.shrink());
-    }
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-        child: GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => CategoryViewPage(
-                  title: title,
-                  products: products,
-                  cartItemCount: _cartTotalUnits,
-                  cartItems: _cart,
-                  favorites: _favoriteIds,
-                  isDarkMode: _isDarkMode,
-                  allProducts: _allProducts,
-                  onAddToCart: _addToCartSilent,
-                  onToggleFavorite: _toggleFavorite,
-                  onWhatsAppTap: _openWhatsApp,
-                  onCartTap: _navigateToCart,
-                ),
-              ),
-            );
-          },
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-                color: AppColors.logoCyan,
-                borderRadius: BorderRadius.circular(12)),
-            child: const Center(
-              child: Text("VER TODOS",
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      letterSpacing: 1)),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSliverSectionTitle(String title) {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-        child: Text(
-          title,
-          style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.2,
-              color: AppColors.text(_isDarkMode)),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWhatsAppFloatingButton() {
-    return Positioned(
-      bottom: _cart.isEmpty ? 32 : 132,
-      right: 24,
-      child: GestureDetector(
-        onTap: () => _openWhatsApp(
-            "Hola SINTHETIX, necesito información sobre sus productos"),
-        child: Container(
-          width: 58,
-          height: 58,
-          decoration: BoxDecoration(
-            color: const Color(0xFF25D366),
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                  color: const Color(0xFF25D366).withValues(alpha: 0.4),
-                  blurRadius: 16,
-                  offset: const Offset(0, 8)),
-            ],
-          ),
-          child: const Center(
-              child: FaIcon(FontAwesomeIcons.whatsapp,
-                  color: Colors.white, size: 30)),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSliverBanner() {
-    final List<String> imageUrls = [
-      "https://i.postimg.cc/nhy8FSZb/Messenger-creation-C45C1B69-8F69-4D54-A5D8-F2B1FECCD24B.jpg",
-      "https://i.postimg.cc/QC4PR0Sg/Messenger-creation-15D98706-C78D-4AAD-B9FD-ADE892AA5E51.jpg",
-      "https://i.postimg.cc/GtcsTjFs/Messenger-creation-942DCA75-52C7-411F-96CC-826ACAC3952A.png",
-    ];
-    return SliverToBoxAdapter(
-      child: Stack(
-        alignment: Alignment.bottomCenter,
-        children: [
-          SizedBox(
-            height: 300,
-            child: PageView.builder(
-              controller: _bannerController,
-              onPageChanged: (index) =>
-                  setState(() => _currentBannerIndex = index),
-              itemCount: imageUrls.length,
-              itemBuilder: (context, index) =>
-                  Image.network(imageUrls[index], fit: BoxFit.cover),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(
-                imageUrls.length,
-                (index) => AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  height: 8,
-                  width: _currentBannerIndex == index ? 24 : 8,
-                  decoration: BoxDecoration(
-                    color: _currentBannerIndex == index
-                        ? Colors.white
-                        : Colors.white54,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSliverCategories() {
-    if (_categories.isEmpty) {
-      return const SliverToBoxAdapter(
-        child: SizedBox(
-          height: 70,
-          child: Center(
-              child:
-                  Text("Cargando...", style: TextStyle(color: Colors.white54))),
-        ),
-      );
-    }
-    return SliverToBoxAdapter(
-      child: Container(
-        height: 70,
-        margin: const EdgeInsets.symmetric(vertical: 16),
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          itemCount: _categories.length,
-          itemBuilder: (context, index) {
-            final cat = _categories[index];
-            final isSelected = _selectedCategoryIndex == index;
-            String categoryName = cat['nombre'] ?? 'Categoría';
-            return GestureDetector(
-              onTap: () {
-                setState(() => _selectedCategoryIndex = index);
-                if (categoryName != 'Todos') {
-                  List<Map<String, dynamic>> catProducts = _allProducts
-                      .where((prod) =>
-                          prod['category'].toString().toLowerCase() ==
-                          categoryName.toLowerCase())
-                      .toList();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => CategoryViewPage(
-                        title: categoryName,
-                        products: catProducts,
-                        cartItemCount: _cartTotalUnits,
-                        cartItems: _cart,
-                        favorites: _favoriteIds,
-                        isDarkMode: _isDarkMode,
-                        allProducts: _allProducts,
-                        onAddToCart: _addToCartSilent,
-                        onToggleFavorite: _toggleFavorite,
-                        onWhatsAppTap: _openWhatsApp,
-                        onCartTap: _navigateToCart,
-                      ),
-                    ),
-                  );
-                }
-              },
-              child: Container(
-                width: 150,
-                height: 60,
-                margin: const EdgeInsets.only(right: 12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(99),
-                  border: isSelected
-                      ? Border.all(color: AppColors.logoCyan, width: 3)
-                      : null,
-                  gradient: const LinearGradient(
-                    colors: [AppColors.primary, AppColors.secondary],
-                  ),
-                ),
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(99),
-                    color: isSelected
-                        ? Colors.black.withValues(alpha: 0.3)
-                        : Colors.black.withValues(alpha: 0.5),
-                  ),
-                  alignment: Alignment.center,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(
-                    categoryName,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      shadows: [
-                        Shadow(
-                            blurRadius: 4,
-                            color: Colors.black,
-                            offset: Offset(1, 1))
-                      ],
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSliverHorizontalList(List<Map<String, dynamic>> productsList) {
-    return SliverToBoxAdapter(
-      child: SizedBox(
-        height: 240,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          itemCount: productsList.length,
-          itemBuilder: (context, index) {
-            final product = productsList[index];
-            final GlobalKey itemKey = GlobalKey();
-            final bool isFav = _isFavorite(product['id']);
-            return InkWell(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ProductDetailsPage(
-                    productData:
-                        convertToMapStringDynamic(product['rawRow'] ?? product),
-                    isDarkMode: _isDarkMode,
-                    allProducts: _allProducts,
-                    onAddToCart: _addToCartSilent,
-                    onToggleFavorite: _toggleFavorite,
-                    favoriteIds: _favoriteIds,
-                    onCartTap: _navigateToCart,
-                    cartItemCount: _cartTotalUnits,
-                    onCartChanged: _updateCartFromDetail,
-                  ),
-                ),
-              ),
-              child: Container(
-                key: itemKey,
-                width: 165,
-                margin: const EdgeInsets.only(right: 16, bottom: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.card(_isDarkMode),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                        color: AppColors.shadow(_isDarkMode),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2))
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: Stack(children: [
-                    Positioned.fill(
-                      child: ImagenProducto(
-                        imagenUrl: product['image']?.toString(),
-                        width: 165,
-                        height: 240,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    Positioned.fill(
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.transparent,
-                              Color(0xCC000000),
-                              Colors.black
-                            ],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            stops: [0.4, 0.8, 1.0],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 10,
-                      right: 10,
-                      child: Column(children: [
-                        GestureDetector(
-                          onTap: () => _toggleFavorite(product),
-                          child: Container(
-                            padding: const EdgeInsets.all(7),
-                            decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.3),
-                                shape: BoxShape.circle),
-                            child: Icon(
-                              isFav ? Icons.favorite : Icons.favorite_border,
-                              color: isFav ? AppColors.logoRed : Colors.white,
-                              size: 19,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        GestureDetector(
-                          onTap: () => _openWhatsApp(
-                              "Hola SINTHETIX, quiero info de ${product['name']}"),
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: const BoxDecoration(
-                                color: Color(0xFF25D366),
-                                shape: BoxShape.circle),
-                            child: const FaIcon(FontAwesomeIcons.whatsapp,
-                                color: Colors.white, size: 16),
-                          ),
-                        ),
-                      ]),
-                    ),
-                    Positioned(
-                      left: 12,
-                      right: 12,
-                      bottom: 14,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            product['name'] as String,
-                            style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            "\$${(product['price'] as double).toStringAsFixed(2)}",
-                            style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xB3FFFFFF)),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Positioned(
-                      right: 12,
-                      bottom: 12,
-                      child: GestureDetector(
-                        onTap: () => _executePurchase(itemKey, product),
-                        child: Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.4),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 3))
-                            ],
-                          ),
-                          child: const Center(
-                              child: Icon(Icons.add,
-                                  color: Colors.black, size: 18)),
-                        ),
-                      ),
-                    ),
-                  ]),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSliverMiddlePromoBanner() {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-          decoration: BoxDecoration(
-            color: AppColors.bannerBg(_isDarkMode),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildTrustItem(Icons.local_shipping_outlined, "Envío Exprés"),
-              Container(
-                  width: 1, height: 30, color: AppColors.divider(_isDarkMode)),
-              _buildTrustItem(Icons.verified_user_outlined, "Garantía"),
-              Container(
-                  width: 1, height: 30, color: AppColors.divider(_isDarkMode)),
-              _buildTrustItem(Icons.support_agent_rounded, "Soporte 24/7"),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTrustItem(IconData icon, String label) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 20, color: AppColors.text(_isDarkMode)),
-        const SizedBox(height: 6),
-        Text(label,
-            style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: AppColors.subtext(_isDarkMode))),
-      ],
-    );
-  }
-
-  Widget _buildDrawer() {
-    return Drawer(
-      backgroundColor: AppColors.drawerBg(_isDarkMode),
-      child: Column(children: [
-        DrawerHeader(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                AppColors.logoFuchsia.withValues(alpha: 0.3),
-                AppColors.logoCyan.withValues(alpha: 0.1)
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: Image.network(
-                    'https://i.postimg.cc/282g7rQf/Messenger-creation-5A84A1A2-42B1-48D1-BCC6-589895D739A9-removebg-preview.png',
-                    width: 110,
-                    height: 110,
-                    fit: BoxFit.contain,
-                    errorBuilder: (c, e, s) => const Icon(Icons.store_rounded,
-                        color: AppColors.logoCyan, size: 70),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text("SINTHETIX",
-                    style: TextStyle(
-                        color: AppColors.text(_isDarkMode),
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-        ),
-        Expanded(
-          child: ListView(
-            padding: EdgeInsets.zero,
-            children: [
-              _drawerTile(
-                  Icons.home_rounded, "Inicio", () => Navigator.pop(context)),
-              _drawerTile(Icons.shopping_cart_rounded, "Carrito", () {
-                Navigator.pop(context);
-                _navigateToCart();
-              }),
-              _drawerTile(Icons.favorite_rounded, "Favoritos", () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => FavoritesPage(
-                      favorites: _favorites,
-                      favoriteIds: _favoriteIds,
-                      cartItemCount: _cartTotalUnits,
-                      cartItems: _cart,
-                      isDarkMode: _isDarkMode,
-                      allProducts: _allProducts,
-                      onAddToCart: _addToCartSilent,
-                      onToggleFavorite: _toggleFavorite,
-                      onWhatsAppTap: _openWhatsApp,
-                      onCartTap: _navigateToCart,
-                    ),
-                  ),
-                );
-              }),
-              _drawerTile(Icons.search_rounded, "Todos los Productos", () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => SearchPage(
-                      allProducts: _allProducts,
-                      categories: _categories
-                          .where((c) => c['nombre'] != 'Todos')
-                          .toList(),
-                      cartItemCount: _cartTotalUnits,
-                      cartItems: _cart,
-                      favorites: _favoriteIds,
-                      isDarkMode: _isDarkMode,
-                      onAddToCart: _addToCartSilent,
-                      onToggleFavorite: _toggleFavorite,
-                      onWhatsAppTap: _openWhatsApp,
-                      onCartTap: _navigateToCart,
-                    ),
-                  ),
-                );
-              }),
-              const SizedBox(height: 90),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(children: [
-            Text("Síguenos",
-                style: TextStyle(
-                    color: AppColors.subtext(_isDarkMode),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildSocialCircle(FontAwesomeIcons.facebook,
-                    () => launchURL('https://www.facebook.com/')),
-                const SizedBox(width: 8),
-                _buildSocialCircle(FontAwesomeIcons.instagram,
-                    () => launchURL('https://www.instagram.com/')),
-                const SizedBox(width: 8),
-                _buildSocialCircle(FontAwesomeIcons.whatsapp, () {
-                  _openWhatsApp("Hola SINTHETIX, necesito información");
-                }),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text("© 2026 SINTHETIX",
-                style: TextStyle(
-                    color: AppColors.subtext(_isDarkMode), fontSize: 10)),
-          ]),
-        ),
-      ]),
-    );
-  }
-
-  Widget _drawerTile(IconData icon, String title, VoidCallback onTap) {
-    return Material(
-      color: Colors.transparent,
-      child: ListTile(
-        leading: Icon(icon, color: AppColors.text(_isDarkMode)),
-        title:
-            Text(title, style: TextStyle(color: AppColors.text(_isDarkMode))),
-        onTap: onTap,
-      ),
-    );
-  }
-
-  Widget _buildSliverHeader() {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            GestureDetector(
-              onTap: () => widget.onAbrirSidebar(),
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                    color: AppColors.iconBgHeader(_isDarkMode),
-                    borderRadius: BorderRadius.circular(12)),
-                child: Icon(Icons.menu_rounded,
-                    size: 20, color: AppColors.headerIcon(_isDarkMode)),
-              ),
-            ),
-            Text(
-              "SINTHETIX",
-              style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 2.0,
-                  color: AppColors.text(_isDarkMode)),
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                GestureDetector(
-                  onTap: _toggleDarkMode,
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                        color: AppColors.iconBgHeader(_isDarkMode),
-                        borderRadius: BorderRadius.circular(12)),
-                    child: Icon(
-                      _isDarkMode
-                          ? Icons.light_mode_rounded
-                          : Icons.dark_mode_rounded,
-                      size: 20,
-                      color: _isDarkMode
-                          ? Colors.amber
-                          : AppColors.headerIcon(_isDarkMode),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => SearchPage(
-                          allProducts: _allProducts,
-                          categories: _categories
-                              .where((c) => c['nombre'] != 'Todos')
-                              .toList(),
-                          cartItemCount: _cartTotalUnits,
-                          cartItems: _cart,
-                          favorites: _favoriteIds,
-                          isDarkMode: _isDarkMode,
-                          onAddToCart: _addToCartSilent,
-                          onToggleFavorite: _toggleFavorite,
-                          onWhatsAppTap: _openWhatsApp,
-                          onCartTap: _navigateToCart,
-                        ),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                        color: AppColors.iconBgHeader(_isDarkMode),
-                        borderRadius: BorderRadius.circular(12)),
-                    child: Icon(Icons.search,
-                        size: 20, color: AppColors.headerIcon(_isDarkMode)),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                _buildCartIcon(iconSize: 20),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSliverAnnouncementBar() {
-    return SliverToBoxAdapter(
-      child: Container(
-        width: double.infinity,
-        height: 40,
-        color: AppColors.announcementBg(_isDarkMode),
-        child: Row(children: [
-          const SizedBox(width: 16),
-          Expanded(
-            child: AnimatedBuilder(
-              animation: _marqueeController,
-              builder: (context, child) {
-                return FractionalTranslation(
-                  translation:
-                      Offset(1.0 - (_marqueeController.value * 2.0), 0.0),
-                  child: child,
-                );
-              },
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.store_rounded,
-                      color: AppColors.logoCyan, size: 14),
-                  SizedBox(width: 8),
-                  Text(
-                    "¡Bienvenido a SINTHETIX! • Catálogo Premium • Envíos a todo el país",
-                    style: TextStyle(
-                        color: Color(0xB3FFFFFF),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          GestureDetector(
-            onTap: () => setState(() => _showAnnouncementBar = false),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Icon(Icons.close_rounded, color: Colors.white60, size: 16),
-            ),
-          ),
-        ]),
-      ),
-    );
-  }
-
-  Widget _buildSliverFooter() {
-    return SliverToBoxAdapter(
-      child: Column(children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Divider(
-              color: AppColors.divider(_isDarkMode), thickness: 1, height: 40),
-        ),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Image.network(
-                  'https://i.postimg.cc/282g7rQf/Messenger-creation-5A84A1A2-42B1-48D1-BCC6-589895D739A9-removebg-preview.png',
-                  width: 100,
-                  height: 100,
-                  fit: BoxFit.contain,
-                  errorBuilder: (c, e, s) => const Icon(Icons.store_rounded,
-                      color: AppColors.logoCyan, size: 50),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                "SINTHETIX",
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 2.0,
-                    color: AppColors.text(_isDarkMode)),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                "Catálogo Premium",
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.subtext(_isDarkMode)),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildSocialCircle(FontAwesomeIcons.facebook,
-                      () => launchURL('https://www.facebook.com/')),
-                  const SizedBox(width: 12),
-                  _buildSocialCircle(FontAwesomeIcons.instagram,
-                      () => launchURL('https://www.instagram.com/')),
-                  const SizedBox(width: 12),
-                  _buildSocialCircle(FontAwesomeIcons.whatsapp, () {
-                    _openWhatsApp("Hola SINTHETIX, necesito información");
-                  }),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Container(
-                  width: double.infinity,
-                  height: 1,
-                  color: AppColors.divider(_isDarkMode)),
-              const SizedBox(height: 16),
-              Text(
-                "© 2026 SINTHETIX. Todos los derechos reservados.",
-                style: TextStyle(
-                    color: AppColors.subtext(_isDarkMode), fontSize: 10),
-              ),
-            ],
-          ),
-        ),
-      ]),
-    );
-  }
-
-  Widget _buildSocialCircle(dynamic icon, VoidCallback onTap) =>
-      GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: AppColors.iconBg(_isDarkMode),
-            border: Border.all(color: AppColors.divider(_isDarkMode), width: 1),
-          ),
-          child: Center(
-              child:
-                  FaIcon(icon, size: 18, color: AppColors.text(_isDarkMode))),
-        ),
-      );
-
-  Widget _buildDraggableCart(int totalUnits, double totalPrice) {
-    return NotificationListener<DraggableScrollableNotification>(
-      onNotification: (notification) {
-        _cartExtentNotifier.value = notification.extent;
-        return true;
-      },
-      child: DraggableScrollableSheet(
-        initialChildSize: 0.15,
-        minChildSize: 0.15,
-        maxChildSize: 0.85,
-        builder: (context, scrollController) {
-          return Container(
-            decoration: const BoxDecoration(
-              color: AppColors.cartBg,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-              boxShadow: [
-                BoxShadow(
-                    color: Color(0xAA000000),
-                    blurRadius: 25,
-                    offset: Offset(0, -8))
-              ],
-            ),
-            child: ListView(
-              controller: scrollController,
-              padding: EdgeInsets.zero,
-              children: [
-                const SizedBox(height: 14),
-                Center(
-                  child: Container(
-                    width: 44,
-                    height: 5,
-                    decoration: BoxDecoration(
-                        color: Colors.grey,
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-                ValueListenableBuilder<double>(
-                  valueListenable: _cartExtentNotifier,
-                  builder: (context, extent, child) =>
-                      _buildCartHeader(totalUnits),
-                ),
-                _buildCartList(),
-                _buildCheckoutSummary(totalPrice),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildCartHeader(int totalUnits) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            key: _cartTargetKey,
-            children: [
-              const Icon(Icons.shopping_cart_rounded,
-                  color: AppColors.blue, size: 22),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("CART",
-                      style: TextStyle(
-                          color: AppColors.textLight,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w900)),
-                  Text("$totalUnits Items",
-                      style: const TextStyle(
-                          color: AppColors.subtextLight, fontSize: 11)),
-                ],
-              ),
-            ],
-          ),
-          SizedBox(
-            height: 40,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              shrinkWrap: true,
-              reverse: true,
-              itemCount: _cartImages.length,
-              itemBuilder: (context, index) => Container(
-                margin: const EdgeInsets.only(right: -10),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.cartBg, width: 2),
-                ),
-                width: 40,
-                child: ClipOval(
-                  child: ImagenProducto(
-                    imagenUrl: _cartImages[index],
-                    width: 40,
-                    height: 40,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCartList() {
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _cart.length,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      itemBuilder: (context, index) {
-        final item = _cart[index];
-        final int qty = (item['quantity'] ?? 1) as int;
-        final double price = (item['price'] as double);
-        return Dismissible(
-          key: ValueKey(item['id']),
-          direction: DismissDirection.endToStart,
-          background: Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 20),
-            decoration: BoxDecoration(
-              color: AppColors.danger.withValues(alpha: 0.8),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(Icons.delete_outline_rounded,
-                color: Colors.white, size: 28),
-          ),
-          onDismissed: (direction) {
-            setState(() {
-              _cart.removeAt(index);
-              _cartImages.removeAt(index);
-            });
-            _saveCart();
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.cartCard,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: ImagenProducto(
-                  imagenUrl: item['image']?.toString(),
-                  width: 55,
-                  height: 55,
-                  fit: BoxFit.cover,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item['name'],
-                        style: const TextStyle(
-                            color: AppColors.textLight,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold),
-                        maxLines: 1),
-                    const SizedBox(height: 4),
-                    Text("\$${price.toStringAsFixed(2)}",
-                        style: const TextStyle(
-                            color: AppColors.subtextLight, fontSize: 13)),
-                  ],
-                ),
-              ),
-              Row(children: [
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      if (qty > 1) {
-                        _cart[index]['quantity'] = qty - 1;
-                      } else {
-                        _cart.removeAt(index);
-                        _cartImages.removeAt(index);
-                      }
-                    });
-                    _saveCart();
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: const BoxDecoration(
-                        color: Color(0xFFF0F0F0), shape: BoxShape.circle),
-                    child: const Icon(Icons.remove,
-                        color: AppColors.textLight, size: 14),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text("$qty",
-                      style: const TextStyle(
-                          color: AppColors.textLight,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold)),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    setState(() => _cart[index]['quantity'] = qty + 1);
-                    _saveCart();
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: const BoxDecoration(
-                        color: Color(0xFFF0F0F0), shape: BoxShape.circle),
-                    child: const Icon(Icons.add,
-                        color: AppColors.textLight, size: 14),
-                  ),
-                ),
-              ]),
-            ]),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildCheckoutSummary(double totalPrice) {
-    if (_cart.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
-      child: Column(children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text("TOTAL ESTIMADO",
-                style: TextStyle(
-                    color: AppColors.subtextLight,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold)),
-            Text("\$${totalPrice.toStringAsFixed(2)}",
-                style: const TextStyle(
-                    color: AppColors.textLight,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900)),
-          ],
-        ),
-        const SizedBox(height: 20),
-        GestureDetector(
-          onTap: _showCheckoutDialog,
-          child: Container(
-            width: double.infinity,
-            height: 54,
-            decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(18)),
-            child: const Center(
-              child: Text("FINALIZAR PEDIDO",
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900)),
-            ),
-          ),
-        ),
-      ]),
-    );
-  }
-}
-
-// ============================================
-// PÁGINAS DE BÚSQUEDA, CATEGORÍAS, FAVORITOS, CARRITO Y DETALLES
-// ============================================
-
-class SearchPage extends StatefulWidget {
-  final List<Map<String, dynamic>> allProducts;
-  final List<Map<String, dynamic>> categories;
-  final int cartItemCount;
-  final List<Map<String, dynamic>> cartItems;
-  final Set<String> favorites;
-  final bool isDarkMode;
-  final Function(GlobalKey, Map<String, dynamic>) onAddToCart;
-  final Function(Map<String, dynamic>) onToggleFavorite;
-  final Function(String) onWhatsAppTap;
-  final VoidCallback onCartTap;
-  const SearchPage({
-    super.key,
-    required this.allProducts,
-    required this.categories,
-    required this.cartItemCount,
-    required this.cartItems,
-    required this.favorites,
-    required this.isDarkMode,
-    required this.onAddToCart,
-    required this.onToggleFavorite,
-    required this.onWhatsAppTap,
-    required this.onCartTap,
-  });
-  @override
-  _SearchPageState createState() => _SearchPageState();
-}
-
-class _SearchPageState extends State<SearchPage> {
-  String _searchQuery = '';
-  String _selectedCategory = 'Todos';
-  List<Map<String, dynamic>> _filteredProducts = [];
-  Set<String> _localFavorites = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _localFavorites = Set<String>.from(widget.favorites);
-    _filteredProducts = widget.allProducts;
-  }
-
-  void _filterProducts() {
-    setState(() {
-      _filteredProducts = widget.allProducts.where((prod) {
-        final nameMatch = prod['name']
-                ?.toString()
-                .toLowerCase()
-                .contains(_searchQuery.toLowerCase()) ??
-            false;
-        final categoryMatch = _selectedCategory == 'Todos' ||
-            prod['category']?.toString() == _selectedCategory;
-        return nameMatch && categoryMatch;
-      }).toList();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background(widget.isDarkMode),
-      appBar: AppBar(
-        backgroundColor: AppColors.appBar(widget.isDarkMode),
-        elevation: 0,
-        title: Text("Buscar Productos",
-            style: TextStyle(
-                color: AppColors.text(widget.isDarkMode),
-                fontSize: 18,
-                fontWeight: FontWeight.bold)),
-        leading: IconButton(
-          icon:
-              Icon(Icons.arrow_back, color: AppColors.text(widget.isDarkMode)),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          GestureDetector(
-            onTap: widget.onCartTap,
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Stack(children: [
-                Icon(Icons.shopping_bag_outlined,
-                    color: AppColors.text(widget.isDarkMode), size: 24),
-                if (widget.cartItemCount > 0)
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                          color: AppColors.logoRed, shape: BoxShape.circle),
-                      constraints:
-                          const BoxConstraints(minWidth: 16, minHeight: 16),
-                      child: Text(
-                        "${widget.cartItemCount}",
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-              ]),
-            ),
-          ),
-        ],
-      ),
-      body: Column(children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(children: [
-            TextField(
-              style: TextStyle(color: AppColors.text(widget.isDarkMode)),
-              decoration: InputDecoration(
-                hintText: "Buscar por nombre...",
-                hintStyle:
-                    TextStyle(color: AppColors.subtext(widget.isDarkMode)),
-                prefixIcon: Icon(Icons.search,
-                    color: AppColors.subtext(widget.isDarkMode)),
-                filled: true,
-                fillColor: AppColors.card(widget.isDarkMode),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: Icon(Icons.close,
-                            color: AppColors.subtext(widget.isDarkMode),
-                            size: 18),
-                        onPressed: () {
-                          setState(() {
-                            _searchQuery = '';
-                            _filterProducts();
-                          });
-                        },
-                      )
-                    : null,
-              ),
-              onChanged: (v) {
-                setState(() => _searchQuery = v);
-                _filterProducts();
-              },
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 45,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: widget.categories.length + 1,
-                itemBuilder: (context, index) {
-                  String categoryName = index == 0
-                      ? 'Todos'
-                      : widget.categories[index - 1]['nombre'] ?? 'Categoría';
-                  bool isSelected = _selectedCategory == categoryName;
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedCategory = categoryName;
-                        _filterProducts();
-                      });
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppColors.logoCyan
-                            : AppColors.card(widget.isDarkMode),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                            color: isSelected
-                                ? AppColors.logoCyan
-                                : AppColors.divider(widget.isDarkMode)),
-                      ),
-                      child: Text(
-                        categoryName,
-                        style: TextStyle(
-                          color: isSelected
-                              ? Colors.white
-                              : AppColors.text(widget.isDarkMode),
-                          fontSize: 13,
-                          fontWeight:
-                              isSelected ? FontWeight.bold : FontWeight.normal,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ]),
-        ),
-        Expanded(
-          child: _filteredProducts.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.search_off,
-                          color: AppColors.subtext(widget.isDarkMode),
-                          size: 60),
-                      const SizedBox(height: 16),
-                      Text("Sin resultados",
-                          style: TextStyle(
-                              color: AppColors.subtext(widget.isDarkMode),
-                              fontSize: 16)),
-                    ],
-                  ),
-                )
-              : GridView.builder(
-                  padding: const EdgeInsets.all(16),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.72,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                  ),
-                  itemCount: _filteredProducts.length,
-                  itemBuilder: (context, index) {
-                    final product = _filteredProducts[index];
-                    final GlobalKey itemKey = GlobalKey();
-                    final bool isFav = _localFavorites.contains(product['id']);
-                    return GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ProductDetailsPage(
-                              productData: convertToMapStringDynamic(
-                                  product['rawRow'] ?? product),
-                              isDarkMode: widget.isDarkMode,
-                              allProducts: widget.allProducts,
-                              onAddToCart: widget.onAddToCart,
-                              onToggleFavorite: widget.onToggleFavorite,
-                              favoriteIds: _localFavorites,
-                              onCartTap: widget.onCartTap,
-                              cartItemCount: widget.cartItemCount,
-                            ),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        key: itemKey,
-                        decoration: BoxDecoration(
-                          color: AppColors.card(widget.isDarkMode),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                                color: AppColors.shadow(widget.isDarkMode),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4))
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: Stack(children: [
-                            Positioned.fill(
-                              child: ImagenProducto(
-                                imagenUrl: product['image']?.toString(),
-                                width: double.infinity,
-                                height: double.infinity,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            Positioned.fill(
-                              child: Container(
-                                decoration: const BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Colors.transparent,
-                                      Color(0xCC000000),
-                                      Colors.black
-                                    ],
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    stops: [0.4, 0.8, 1.0],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              top: 10,
-                              right: 10,
-                              child: Column(children: [
-                                GestureDetector(
-                                  onTap: () {
-                                    setState(() {
-                                      if (_localFavorites
-                                          .contains(product['id'])) {
-                                        _localFavorites.remove(product['id']);
-                                      } else {
-                                        _localFavorites.add(product['id']);
-                                      }
-                                    });
-                                    widget.onToggleFavorite(product);
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.all(7),
-                                    decoration: BoxDecoration(
-                                        color:
-                                            Colors.black.withValues(alpha: 0.3),
-                                        shape: BoxShape.circle),
-                                    child: Icon(
-                                      isFav
-                                          ? Icons.favorite
-                                          : Icons.favorite_border,
-                                      color: isFav
-                                          ? AppColors.logoRed
-                                          : Colors.white,
-                                      size: 19,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                GestureDetector(
-                                  onTap: () => widget.onWhatsAppTap(
-                                      "Hola SINTHETIX, quiero info de ${product['name']}"),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: const BoxDecoration(
-                                        color: Color(0xFF25D366),
-                                        shape: BoxShape.circle),
-                                    child: const FaIcon(
-                                        FontAwesomeIcons.whatsapp,
-                                        color: Colors.white,
-                                        size: 16),
-                                  ),
-                                ),
-                              ]),
-                            ),
-                            Positioned(
-                              left: 12,
-                              right: 12,
-                              bottom: 14,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    product['name'] as String,
-                                    style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    "\$${(product['price'] as double).toStringAsFixed(2)}",
-                                    style: const TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w800,
-                                        color: AppColors.logoCyan),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Positioned(
-                              right: 12,
-                              bottom: 12,
-                              child: GestureDetector(
-                                onTap: () {
-                                  widget.onAddToCart(itemKey, product);
-                                },
-                                child: Container(
-                                  width: 36,
-                                  height: 36,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.logoCyan,
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                          color: AppColors.logoCyan
-                                              .withValues(alpha: 0.4),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 3))
-                                    ],
-                                  ),
-                                  child: const Center(
-                                      child: Icon(Icons.add,
-                                          color: Colors.white, size: 20)),
-                                ),
-                              ),
-                            ),
-                          ]),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ]),
-    );
-  }
-}
-
-class CategoryViewPage extends StatefulWidget {
-  final String title;
-  final List<Map<String, dynamic>> products;
-  final int cartItemCount;
-  final List<Map<String, dynamic>> cartItems;
-  final Set<String> favorites;
-  final bool isDarkMode;
-  final List<Map<String, dynamic>> allProducts;
-  final Function(GlobalKey, Map<String, dynamic>) onAddToCart;
-  final Function(Map<String, dynamic>) onToggleFavorite;
-  final Function(String) onWhatsAppTap;
-  final VoidCallback onCartTap;
-  const CategoryViewPage({
-    super.key,
-    required this.title,
-    required this.products,
-    required this.cartItemCount,
-    required this.cartItems,
-    required this.favorites,
-    required this.isDarkMode,
-    required this.allProducts,
-    required this.onAddToCart,
-    required this.onToggleFavorite,
-    required this.onWhatsAppTap,
-    required this.onCartTap,
-  });
-  @override
-  _CategoryViewPageState createState() => _CategoryViewPageState();
-}
-
-class _CategoryViewPageState extends State<CategoryViewPage> {
-  Set<String> _localFavorites = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _localFavorites = Set<String>.from(widget.favorites);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background(widget.isDarkMode),
-      appBar: AppBar(
-        backgroundColor: AppColors.appBar(widget.isDarkMode),
-        elevation: 0,
-        title: Text(widget.title,
-            style: TextStyle(
-                color: AppColors.text(widget.isDarkMode),
-                fontSize: 18,
-                fontWeight: FontWeight.bold)),
-        leading: IconButton(
-          icon:
-              Icon(Icons.arrow_back, color: AppColors.text(widget.isDarkMode)),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          GestureDetector(
-            onTap: widget.onCartTap,
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Stack(children: [
-                Icon(Icons.shopping_bag_outlined,
-                    color: AppColors.text(widget.isDarkMode), size: 24),
-                if (widget.cartItemCount > 0)
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                          color: AppColors.logoRed, shape: BoxShape.circle),
-                      constraints:
-                          const BoxConstraints(minWidth: 16, minHeight: 16),
-                      child: Text(
-                        "${widget.cartItemCount}",
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-              ]),
-            ),
-          ),
-        ],
-      ),
-      body: GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 0.72,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-        ),
-        itemCount: widget.products.length,
-        itemBuilder: (context, index) {
-          final product = widget.products[index];
-          final GlobalKey itemKey = GlobalKey();
-          final bool isFav = _localFavorites.contains(product['id']);
-          return GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ProductDetailsPage(
-                    productData:
-                        convertToMapStringDynamic(product['rawRow'] ?? product),
-                    isDarkMode: widget.isDarkMode,
-                    allProducts: widget.allProducts,
-                    onAddToCart: widget.onAddToCart,
-                    onToggleFavorite: widget.onToggleFavorite,
-                    favoriteIds: _localFavorites,
-                    onCartTap: widget.onCartTap,
-                    cartItemCount: widget.cartItemCount,
-                  ),
-                ),
-              );
-            },
-            child: Container(
-              key: itemKey,
-              decoration: BoxDecoration(
-                color: AppColors.card(widget.isDarkMode),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                      color: AppColors.shadow(widget.isDarkMode),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4))
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Stack(children: [
-                  Positioned.fill(
-                    child: ImagenProducto(
-                      imagenUrl: product['image']?.toString(),
-                      width: double.infinity,
-                      height: double.infinity,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  Positioned.fill(
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.transparent,
-                            Color(0xCC000000),
-                            Colors.black
-                          ],
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          stops: [0.4, 0.8, 1.0],
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 10,
-                    right: 10,
-                    child: Column(children: [
-                      GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            if (_localFavorites.contains(product['id'])) {
-                              _localFavorites.remove(product['id']);
-                            } else {
-                              _localFavorites.add(product['id']);
-                            }
-                          });
-                          widget.onToggleFavorite(product);
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(7),
-                          decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.3),
-                              shape: BoxShape.circle),
-                          child: Icon(
-                            isFav ? Icons.favorite : Icons.favorite_border,
-                            color: isFav ? AppColors.logoRed : Colors.white,
-                            size: 19,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      GestureDetector(
-                        onTap: () => widget.onWhatsAppTap(
-                            "Hola SINTHETIX, quiero info de ${product['name']}"),
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: const BoxDecoration(
-                              color: Color(0xFF25D366), shape: BoxShape.circle),
-                          child: const FaIcon(FontAwesomeIcons.whatsapp,
-                              color: Colors.white, size: 16),
-                        ),
-                      ),
-                    ]),
-                  ),
-                  Positioned(
-                    left: 12,
-                    right: 12,
-                    bottom: 14,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          product['name'] as String,
-                          style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "\$${(product['price'] as double).toStringAsFixed(2)}",
-                          style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.logoCyan),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Positioned(
-                    right: 12,
-                    bottom: 12,
-                    child: GestureDetector(
-                      onTap: () {
-                        widget.onAddToCart(itemKey, product);
-                      },
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: AppColors.logoCyan,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                                color:
-                                    AppColors.logoCyan.withValues(alpha: 0.4),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3))
-                          ],
-                        ),
-                        child: const Center(
-                            child:
-                                Icon(Icons.add, color: Colors.white, size: 20)),
-                      ),
-                    ),
-                  ),
-                ]),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class FavoritesPage extends StatefulWidget {
-  final List<Map<String, dynamic>> favorites;
-  final Set<String> favoriteIds;
-  final int cartItemCount;
-  final List<Map<String, dynamic>> cartItems;
-  final bool isDarkMode;
-  final List<Map<String, dynamic>> allProducts;
-  final Function(GlobalKey, Map<String, dynamic>) onAddToCart;
-  final Function(Map<String, dynamic>) onToggleFavorite;
-  final Function(String) onWhatsAppTap;
-  final VoidCallback onCartTap;
-  const FavoritesPage({
-    super.key,
-    required this.favorites,
-    required this.favoriteIds,
-    required this.cartItemCount,
-    required this.cartItems,
-    required this.isDarkMode,
-    required this.allProducts,
-    required this.onAddToCart,
-    required this.onToggleFavorite,
-    required this.onWhatsAppTap,
-    required this.onCartTap,
-  });
-  @override
-  _FavoritesPageState createState() => _FavoritesPageState();
-}
-
-class _FavoritesPageState extends State<FavoritesPage> {
-  Set<String> _localFavorites = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _localFavorites = Set<String>.from(widget.favoriteIds);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background(widget.isDarkMode),
-      appBar: AppBar(
-        backgroundColor: AppColors.appBar(widget.isDarkMode),
-        elevation: 0,
-        title: Text("Favoritos",
-            style: TextStyle(
-                color: AppColors.text(widget.isDarkMode),
-                fontSize: 18,
-                fontWeight: FontWeight.bold)),
-        leading: IconButton(
-          icon:
-              Icon(Icons.arrow_back, color: AppColors.text(widget.isDarkMode)),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          GestureDetector(
-            onTap: widget.onCartTap,
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Stack(children: [
-                Icon(Icons.shopping_bag_outlined,
-                    color: AppColors.text(widget.isDarkMode), size: 24),
-                if (widget.cartItemCount > 0)
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                          color: AppColors.logoRed, shape: BoxShape.circle),
-                      constraints:
-                          const BoxConstraints(minWidth: 16, minHeight: 16),
-                      child: Text(
-                        "${widget.cartItemCount}",
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-              ]),
-            ),
-          ),
-        ],
-      ),
-      body: widget.favorites.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.favorite_border,
-                      color: AppColors.subtext(widget.isDarkMode), size: 60),
-                  const SizedBox(height: 16),
-                  Text("No tienes productos favoritos",
-                      style: TextStyle(
-                          color: AppColors.subtext(widget.isDarkMode),
-                          fontSize: 16)),
-                ],
-              ),
-            )
-          : GridView.builder(
-              padding: const EdgeInsets.all(16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                childAspectRatio: 0.72,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
-              itemCount: widget.favorites.length,
-              itemBuilder: (context, index) {
-                final product = widget.favorites[index];
-                final GlobalKey itemKey = GlobalKey();
-                final bool isFav = _localFavorites.contains(product['id']);
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ProductDetailsPage(
-                          productData: convertToMapStringDynamic(
-                              product['rawRow'] ?? product),
-                          isDarkMode: widget.isDarkMode,
-                          allProducts: widget.allProducts,
-                          onAddToCart: widget.onAddToCart,
-                          onToggleFavorite: widget.onToggleFavorite,
-                          favoriteIds: _localFavorites,
-                          onCartTap: widget.onCartTap,
-                          cartItemCount: widget.cartItemCount,
-                        ),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    key: itemKey,
-                    decoration: BoxDecoration(
-                      color: AppColors.card(widget.isDarkMode),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                            color: AppColors.shadow(widget.isDarkMode),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4))
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Stack(children: [
-                        Positioned.fill(
-                          child: ImagenProducto(
-                            imagenUrl: product['image']?.toString(),
-                            width: double.infinity,
-                            height: double.infinity,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        Positioned.fill(
-                          child: Container(
-                            decoration: const BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.transparent,
-                                  Color(0xCC000000),
-                                  Colors.black
-                                ],
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                stops: [0.4, 0.8, 1.0],
-                              ),
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          top: 10,
-                          right: 10,
-                          child: Column(children: [
-                            GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  if (_localFavorites.contains(product['id'])) {
-                                    _localFavorites.remove(product['id']);
-                                  } else {
-                                    _localFavorites.add(product['id']);
-                                  }
-                                });
-                                widget.onToggleFavorite(product);
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.all(7),
-                                decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.3),
-                                    shape: BoxShape.circle),
-                                child: Icon(
-                                  isFav
-                                      ? Icons.favorite
-                                      : Icons.favorite_border,
-                                  color:
-                                      isFav ? AppColors.logoRed : Colors.white,
-                                  size: 19,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            GestureDetector(
-                              onTap: () => widget.onWhatsAppTap(
-                                  "Hola SINTHETIX, quiero info de ${product['name']}"),
-                              child: Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: const BoxDecoration(
-                                    color: Color(0xFF25D366),
-                                    shape: BoxShape.circle),
-                                child: const FaIcon(FontAwesomeIcons.whatsapp,
-                                    color: Colors.white, size: 16),
-                              ),
-                            ),
-                          ]),
-                        ),
-                        Positioned(
-                          left: 12,
-                          right: 12,
-                          bottom: 14,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                product['name'] as String,
-                                style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                "\$${(product['price'] as double).toStringAsFixed(2)}",
-                                style: const TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.logoCyan),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Positioned(
-                          right: 12,
-                          bottom: 12,
-                          child: GestureDetector(
-                            onTap: () {
-                              widget.onAddToCart(itemKey, product);
-                            },
-                            child: Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: AppColors.logoCyan,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                      color: AppColors.logoCyan
-                                          .withValues(alpha: 0.4),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 3))
-                                ],
-                              ),
-                              child: const Center(
-                                  child: Icon(Icons.add,
-                                      color: Colors.white, size: 20)),
-                            ),
-                          ),
-                        ),
-                      ]),
-                    ),
-                  ),
-                );
-              },
-            ),
-    );
-  }
-}
-
-class FullCartPage extends StatefulWidget {
-  final List<Map<String, dynamic>> cart;
-  const FullCartPage({super.key, required this.cart});
-  @override
-  _FullCartPageState createState() => _FullCartPageState();
-}
-
-class _FullCartPageState extends State<FullCartPage> {
-  @override
-  Widget build(BuildContext context) {
-    double totalPrice = widget.cart.fold(
-        0.0,
-        (acc, item) =>
-            acc +
-            ((item['price'] as double) * ((item['quantity'] ?? 1) as int)));
-    return Scaffold(
-      backgroundColor: AppColors.backgroundLight,
+      backgroundColor: AppColors.background(isDark),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text("Carrito",
-            style: TextStyle(
-                color: AppColors.textLight, fontWeight: FontWeight.bold)),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textLight),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: widget.cart.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.shopping_cart_outlined,
-                      color: AppColors.subtextLight, size: 60),
-                  const SizedBox(height: 16),
-                  Text("El carrito está vacío",
-                      style: TextStyle(
-                          color: AppColors.subtextLight, fontSize: 16)),
-                ],
+        title: Row(children: [
+          GestureDetector(
+            onTap: widget.onAbrirSidebar,
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
               ),
-            )
-          : Column(children: [
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: widget.cart.length,
-                  itemBuilder: (context, index) {
-                    final item = widget.cart[index];
-                    final int qty = (item['quantity'] ?? 1) as int;
-                    final double price = (item['price'] as double);
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.04),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2))
-                        ],
-                      ),
-                      child: Row(children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: ImagenProducto(
-                            imagenUrl: item['image']?.toString(),
-                            width: 60,
-                            height: 60,
-                            fit: BoxFit.cover,
+              child: const Icon(Icons.menu_rounded,
+                  color: AppColors.primary, size: 22),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Text('TIENDA SINTHETIX',
+              style: TextStyle(
+                  color: AppColors.text(isDark),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5)),
+        ]),
+      ),
+      body: SafeArea(
+        child: _cargando
+            ? const Center(
+                child: CircularProgressIndicator(color: AppColors.primary))
+            : Column(children: [
+                SizedBox(
+                  height: 50,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _categorias.length + 1,
+                    itemBuilder: (_, i) {
+                      final nombre =
+                          i == 0 ? 'Todas' : _categorias[i - 1]['nombre'] ?? '';
+                      final sel = _categoriaSeleccionada == nombre;
+                      return GestureDetector(
+                        onTap: () =>
+                            setState(() => _categoriaSeleccionada = nombre),
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: sel
+                                ? AppColors.primary
+                                : AppColors.card(isDark),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: sel
+                                  ? AppColors.primary
+                                  : AppColors.divider(isDark),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            nombre,
+                            style: TextStyle(
+                              color:
+                                  sel ? Colors.white : AppColors.text(isDark),
+                              fontSize: 13,
+                              fontWeight:
+                                  sel ? FontWeight.w600 : FontWeight.w400,
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 14),
-                        Expanded(
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: productosFiltrados.isEmpty
+                      ? Center(
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text(item['name'],
-                                  style: const TextStyle(
-                                      color: AppColors.textLight,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
-                              const SizedBox(height: 4),
-                              Text("\$${price.toStringAsFixed(2)}",
-                                  style: const TextStyle(
-                                      color: AppColors.subtextLight,
-                                      fontSize: 13)),
+                              Icon(Icons.storefront,
+                                  size: 60, color: AppColors.subtext(isDark)),
+                              const SizedBox(height: 16),
+                              Text('No hay productos en esta categoría',
+                                  style: TextStyle(
+                                      color: AppColors.subtext(isDark))),
                             ],
                           ),
+                        )
+                      : GridView.builder(
+                          padding: const EdgeInsets.all(16),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            childAspectRatio: 0.75,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                          ),
+                          itemCount: productosFiltrados.length,
+                          itemBuilder: (_, i) {
+                            final prod = productosFiltrados[i];
+                            return Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.card(isDark),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.04),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                                border: Border.all(
+                                  color: AppColors.divider(isDark),
+                                  width: 1,
+                                ),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: ImagenProducto(
+                                        imagenUrl:
+                                            prod['imagen_url']?.toString(),
+                                        width: double.infinity,
+                                        height: double.infinity,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.all(8),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(prod['nombre'] ?? '',
+                                              style: TextStyle(
+                                                  color: AppColors.text(isDark),
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '\$${(prod['precio'] as num).toStringAsFixed(2)}',
+                                            style: const TextStyle(
+                                                color: AppColors.primary,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w700),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                        Text("x$qty",
-                            style: const TextStyle(
-                                color: AppColors.textLight,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold)),
-                        const SizedBox(width: 12),
-                        Text(
-                          "\$${(price * qty).toStringAsFixed(2)}",
-                          style: const TextStyle(
-                              color: AppColors.primary,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold),
-                        ),
-                      ]),
-                    );
-                  },
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  boxShadow: [
-                    BoxShadow(
-                        color: AppColors.primary.withValues(alpha: 0.04),
-                        blurRadius: 10,
-                        offset: const Offset(0, -4))
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text("TOTAL",
-                            style: TextStyle(
-                                color: AppColors.subtextLight, fontSize: 12)),
-                        Text("\$${totalPrice.toStringAsFixed(2)}",
-                            style: const TextStyle(
-                                color: AppColors.textLight,
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 32, vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: const Text("VOLVER",
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14)),
-                    ),
-                  ],
-                ),
-              ),
-            ]),
+              ]),
+      ),
     );
   }
 }
 
-class ProductDetailsPage extends StatefulWidget {
-  final Map<String, dynamic> productData;
-  final bool isDarkMode;
-  final List<Map<String, dynamic>> allProducts;
-  final Function(GlobalKey, Map<String, dynamic>) onAddToCart;
-  final Function(Map<String, dynamic>) onToggleFavorite;
-  final Set<String> favoriteIds;
-  final VoidCallback onCartTap;
-  final int cartItemCount;
-  final VoidCallback? onCartChanged;
-  const ProductDetailsPage({
-    super.key,
-    required this.productData,
-    required this.isDarkMode,
-    required this.allProducts,
-    required this.onAddToCart,
-    required this.onToggleFavorite,
-    required this.favoriteIds,
-    required this.onCartTap,
-    required this.cartItemCount,
-    this.onCartChanged,
-  });
+// ============================================
+// PANTALLA DE PROVEEDORES
+// ============================================
+class ProveedoresScreen extends StatefulWidget {
+  final VoidCallback onAbrirSidebar;
+  final bool modoOscuro;
+  const ProveedoresScreen(
+      {super.key, required this.onAbrirSidebar, this.modoOscuro = false});
   @override
-  _ProductDetailsPageState createState() => _ProductDetailsPageState();
+  State<ProveedoresScreen> createState() => _ProveedoresScreenState();
 }
 
-class _ProductDetailsPageState extends State<ProductDetailsPage> {
-  int _quantity = 1;
-  Set<String> _localFavorites = {};
-  int _localCartCount = 0;
+class _ProveedoresScreenState extends State<ProveedoresScreen> {
+  List<Map<String, dynamic>> _proveedores = [];
+  bool _cargando = true;
 
   @override
   void initState() {
     super.initState();
-    _localFavorites = Set<String>.from(widget.favoriteIds);
-    _localCartCount = widget.cartItemCount;
+    _cargarProveedores();
+  }
+
+  Future<void> _cargarProveedores() async {
+    setState(() => _cargando = true);
+    try {
+      final response = await Supabase.instance.client
+          .from('proveedores')
+          .select()
+          .order('nombre');
+      _proveedores = List<Map<String, dynamic>>.from(response as List);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('proveedores_local', jsonEncode(_proveedores));
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final data = prefs.getString('proveedores_local');
+      if (data != null) {
+        _proveedores = List<Map<String, dynamic>>.from(jsonDecode(data));
+      } else {
+        _proveedores = [];
+      }
+    }
+    setState(() => _cargando = false);
+  }
+
+  void _mostrarDialogo({Map<String, dynamic>? proveedor}) {
+    final isDark = widget.modoOscuro;
+    final nombreCtrl = TextEditingController(text: proveedor?['nombre'] ?? '');
+    final contactoCtrl =
+        TextEditingController(text: proveedor?['contacto'] ?? '');
+    final telefonoCtrl =
+        TextEditingController(text: proveedor?['telefono'] ?? '');
+    final emailCtrl = TextEditingController(text: proveedor?['email'] ?? '');
+    final direccionCtrl =
+        TextEditingController(text: proveedor?['direccion'] ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.card(isDark),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          proveedor != null ? 'Editar Proveedor' : 'Nuevo Proveedor',
+          style: TextStyle(
+              color: AppColors.text(isDark), fontWeight: FontWeight.w700),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nombreCtrl,
+                style: TextStyle(color: AppColors.text(isDark)),
+                decoration: InputDecoration(
+                  labelText: 'Nombre *',
+                  labelStyle: TextStyle(color: AppColors.subtext(isDark)),
+                  filled: true,
+                  fillColor: AppColors.background(isDark),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: contactoCtrl,
+                style: TextStyle(color: AppColors.text(isDark)),
+                decoration: InputDecoration(
+                  labelText: 'Contacto',
+                  labelStyle: TextStyle(color: AppColors.subtext(isDark)),
+                  filled: true,
+                  fillColor: AppColors.background(isDark),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: telefonoCtrl,
+                style: TextStyle(color: AppColors.text(isDark)),
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(
+                  labelText: 'Teléfono',
+                  labelStyle: TextStyle(color: AppColors.subtext(isDark)),
+                  filled: true,
+                  fillColor: AppColors.background(isDark),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: emailCtrl,
+                style: TextStyle(color: AppColors.text(isDark)),
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  labelStyle: TextStyle(color: AppColors.subtext(isDark)),
+                  filled: true,
+                  fillColor: AppColors.background(isDark),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: direccionCtrl,
+                style: TextStyle(color: AppColors.text(isDark)),
+                decoration: InputDecoration(
+                  labelText: 'Dirección',
+                  labelStyle: TextStyle(color: AppColors.subtext(isDark)),
+                  filled: true,
+                  fillColor: AppColors.background(isDark),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancelar',
+                style: TextStyle(color: AppColors.subtext(isDark))),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (nombreCtrl.text.isEmpty) return;
+              final data = {
+                'nombre': nombreCtrl.text,
+                'contacto': contactoCtrl.text,
+                'telefono': telefonoCtrl.text,
+                'email': emailCtrl.text,
+                'direccion': direccionCtrl.text,
+              };
+              try {
+                if (proveedor != null) {
+                  await Supabase.instance.client
+                      .from('proveedores')
+                      .update(data)
+                      .eq('id', proveedor['id']);
+                } else {
+                  await Supabase.instance.client
+                      .from('proveedores')
+                      .insert(data);
+                }
+              } catch (e) {
+                final prefs = await SharedPreferences.getInstance();
+                final proveedores = _proveedores;
+                if (proveedor != null) {
+                  final index = proveedores.indexWhere(
+                      (p) => p['id'].toString() == proveedor['id'].toString());
+                  if (index >= 0) {
+                    proveedores[index] = {...proveedores[index], ...data};
+                  }
+                } else {
+                  data['id'] = DateTime.now().millisecondsSinceEpoch.toString();
+                  proveedores.add(data);
+                }
+                await prefs.setString(
+                    'proveedores_local', jsonEncode(proveedores));
+              }
+              Navigator.pop(ctx);
+              _cargarProveedores();
+            },
+            child: const Text('Guardar',
+                style: TextStyle(
+                    color: AppColors.primary, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final prod = widget.productData;
-    final String name = prod['nombre']?.toString() ?? 'Producto';
-    final double price = (prod['precio'] ?? 0).toDouble();
-    final String description =
-        prod['descripcion']?.toString() ?? 'Sin descripción';
-    final String image = prod['imagen_url']?.toString() ?? '';
-    final String? productId = prod['id']?.toString();
-    final bool isFav = productId != null && _localFavorites.contains(productId);
-
+    final isDark = widget.modoOscuro;
     return Scaffold(
-      backgroundColor: AppColors.background(widget.isDarkMode),
+      backgroundColor: AppColors.background(isDark),
       appBar: AppBar(
-        backgroundColor: AppColors.appBar(widget.isDarkMode),
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon:
-              Icon(Icons.arrow_back, color: AppColors.text(widget.isDarkMode)),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          name,
-          style: TextStyle(
-              color: AppColors.text(widget.isDarkMode),
-              fontSize: 16,
-              fontWeight: FontWeight.bold),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        actions: [
+        title: Row(children: [
           GestureDetector(
-            onTap: () {
-              if (productId != null) {
-                widget.onToggleFavorite(prod);
-                setState(() {
-                  if (_localFavorites.contains(productId)) {
-                    _localFavorites.remove(productId);
-                  } else {
-                    _localFavorites.add(productId);
-                  }
-                });
-              }
-            },
+            onTap: widget.onAbrirSidebar,
             child: Container(
-              padding: const EdgeInsets.all(8),
-              child: Icon(
-                isFav ? Icons.favorite : Icons.favorite_border,
-                color: isFav
-                    ? AppColors.logoRed
-                    : AppColors.text(widget.isDarkMode),
-                size: 24,
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
               ),
+              child: const Icon(Icons.menu_rounded,
+                  color: AppColors.primary, size: 22),
             ),
           ),
-          GestureDetector(
-            onTap: widget.onCartTap,
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Stack(children: [
-                Icon(Icons.shopping_bag_outlined,
-                    color: AppColors.text(widget.isDarkMode), size: 24),
-                if (_localCartCount > 0)
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                          color: AppColors.logoRed, shape: BoxShape.circle),
-                      constraints:
-                          const BoxConstraints(minWidth: 16, minHeight: 16),
-                      child: Text(
-                        "$_localCartCount",
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold),
-                      ),
+          const SizedBox(width: 14),
+          Text('PROVEEDORES',
+              style: TextStyle(
+                  color: AppColors.text(isDark),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5)),
+        ]),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_cargando)
+                const Expanded(
+                    child: Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.primary)))
+              else if (_proveedores.isEmpty)
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.local_shipping_outlined,
+                            size: 60, color: AppColors.subtext(isDark)),
+                        const SizedBox(height: 16),
+                        Text('No hay proveedores registrados',
+                            style: TextStyle(
+                                color: AppColors.subtext(isDark),
+                                fontSize: 14)),
+                      ],
                     ),
                   ),
-              ]),
-            ),
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              height: 300,
-              width: double.infinity,
-              child: ImagenProducto(
-                imagenUrl: image.isEmpty ? null : image,
+                )
+              else
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: _proveedores.length,
+                    itemBuilder: (_, i) {
+                      final proveedor = _proveedores[i];
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.card(isDark),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.local_shipping,
+                                color: Colors.white, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(proveedor['nombre'] ?? '',
+                                    style: TextStyle(
+                                        color: AppColors.text(isDark),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600)),
+                                if (proveedor['telefono'] != null &&
+                                    proveedor['telefono'].toString().isNotEmpty)
+                                  Text(proveedor['telefono'].toString(),
+                                      style: TextStyle(
+                                          color: AppColors.subtext(isDark),
+                                          fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.edit_rounded,
+                                color: AppColors.subtext(isDark), size: 18),
+                            onPressed: () =>
+                                _mostrarDialogo(proveedor: proveedor),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.delete_outline_rounded,
+                                color: AppColors.danger.withValues(alpha: 0.7),
+                                size: 18),
+                            onPressed: () async {
+                              try {
+                                await Supabase.instance.client
+                                    .from('proveedores')
+                                    .delete()
+                                    .eq('id', proveedor['id']);
+                              } catch (e) {
+                                final prefs =
+                                    await SharedPreferences.getInstance();
+                                _proveedores.removeWhere((p) =>
+                                    p['id'].toString() ==
+                                    proveedor['id'].toString());
+                                await prefs.setString('proveedores_local',
+                                    jsonEncode(_proveedores));
+                              }
+                              _cargarProveedores();
+                            },
+                          ),
+                        ]),
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 12),
+              SizedBox(
                 width: double.infinity,
-                height: 300,
-                fit: BoxFit.cover,
-                icono: Icons.image_not_supported,
+                child: ElevatedButton.icon(
+                  onPressed: () => _mostrarDialogo(),
+                  icon: const Icon(Icons.add_rounded, color: Colors.white),
+                  label: const Text('AGREGAR PROVEEDOR',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(name,
-                      style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.text(widget.isDarkMode))),
-                  const SizedBox(height: 8),
-                  Text("\$${price.toStringAsFixed(2)}",
-                      style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.logoCyan)),
-                  const SizedBox(height: 16),
-                  Text("Descripción",
-                      style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.text(widget.isDarkMode))),
-                  const SizedBox(height: 8),
-                  Text(description,
-                      style: TextStyle(
-                          fontSize: 14,
-                          color: AppColors.subtext(widget.isDarkMode))),
-                  const SizedBox(height: 24),
-                  Row(children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.card(widget.isDarkMode),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(children: [
-                        GestureDetector(
-                          onTap: () => setState(() {
-                            if (_quantity > 1) _quantity--;
-                          }),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
-                            child: Icon(Icons.remove,
-                                color: AppColors.text(widget.isDarkMode),
-                                size: 20),
-                          ),
-                        ),
-                        Text(
-                          "$_quantity",
-                          style: TextStyle(
-                              color: AppColors.text(widget.isDarkMode),
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold),
-                        ),
-                        GestureDetector(
-                          onTap: () => setState(() => _quantity++),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
-                            child: Icon(Icons.add,
-                                color: AppColors.text(widget.isDarkMode),
-                                size: 20),
-                          ),
-                        ),
-                      ]),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () {
-                          final GlobalKey key = GlobalKey();
-                          widget.onAddToCart(
-                              key, {...prod, 'quantity': _quantity});
-                          setState(() => _localCartCount += _quantity);
-                          if (widget.onCartChanged != null) {
-                            widget.onCartChanged!();
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.logoCyan,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: const Text(
-                          "Agregar al Carrito",
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14),
-                        ),
-                      ),
-                    ),
-                  ]),
-                ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================
+// PANTALLA DE PROMOCIONES
+// ============================================
+class PromocionesScreen extends StatefulWidget {
+  final VoidCallback onAbrirSidebar;
+  final bool modoOscuro;
+  const PromocionesScreen(
+      {super.key, required this.onAbrirSidebar, this.modoOscuro = false});
+  @override
+  State<PromocionesScreen> createState() => _PromocionesScreenState();
+}
+
+class _PromocionesScreenState extends State<PromocionesScreen> {
+  List<Map<String, dynamic>> _promociones = [];
+  bool _cargando = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarPromociones();
+  }
+
+  Future<void> _cargarPromociones() async {
+    setState(() => _cargando = true);
+    try {
+      final response = await Supabase.instance.client
+          .from('promociones')
+          .select()
+          .order('nombre');
+      _promociones = List<Map<String, dynamic>>.from(response as List);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('promociones_local', jsonEncode(_promociones));
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final data = prefs.getString('promociones_local');
+      if (data != null) {
+        _promociones = List<Map<String, dynamic>>.from(jsonDecode(data));
+      } else {
+        _promociones = [];
+      }
+    }
+    setState(() => _cargando = false);
+  }
+
+  void _mostrarDialogo({Map<String, dynamic>? promocion}) {
+    final isDark = widget.modoOscuro;
+    final nombreCtrl = TextEditingController(text: promocion?['nombre'] ?? '');
+    final valorCtrl =
+        TextEditingController(text: promocion?['valor']?.toString() ?? '');
+    String tipo = promocion?['tipo'] ?? 'porcentaje';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.card(isDark),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            promocion != null ? 'Editar Promoción' : 'Nueva Promoción',
+            style: TextStyle(
+                color: AppColors.text(isDark), fontWeight: FontWeight.w700),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nombreCtrl,
+                style: TextStyle(color: AppColors.text(isDark)),
+                decoration: InputDecoration(
+                  labelText: 'Nombre *',
+                  labelStyle: TextStyle(color: AppColors.subtext(isDark)),
+                  filled: true,
+                  fillColor: AppColors.background(isDark),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none),
+                ),
               ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.background(isDark),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.divider(isDark),
+                    width: 1,
+                  ),
+                ),
+                child: Row(children: [
+                  Text('Tipo: ',
+                      style: TextStyle(color: AppColors.text(isDark))),
+                  const Spacer(),
+                  DropdownButton<String>(
+                    value: tipo,
+                    dropdownColor: AppColors.card(isDark),
+                    style: TextStyle(color: AppColors.text(isDark)),
+                    underline: const SizedBox(),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'porcentaje', child: Text('Porcentaje')),
+                      DropdownMenuItem(
+                          value: 'monto_fijo', child: Text('Monto Fijo')),
+                      DropdownMenuItem(value: '2x1', child: Text('2x1')),
+                    ],
+                    onChanged: (v) =>
+                        setDialogState(() => tipo = v ?? 'porcentaje'),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: valorCtrl,
+                style: TextStyle(color: AppColors.text(isDark)),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: tipo == '2x1' ? 'Valor (opcional)' : 'Valor *',
+                  labelStyle: TextStyle(color: AppColors.subtext(isDark)),
+                  filled: true,
+                  fillColor: AppColors.background(isDark),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('Cancelar',
+                    style: TextStyle(color: AppColors.subtext(isDark)))),
+            TextButton(
+              onPressed: () async {
+                if (nombreCtrl.text.isEmpty) return;
+                final data = {
+                  'nombre': nombreCtrl.text,
+                  'tipo': tipo,
+                  'valor': double.tryParse(valorCtrl.text) ?? 0,
+                  'activo': true,
+                };
+                try {
+                  if (promocion != null) {
+                    await Supabase.instance.client
+                        .from('promociones')
+                        .update(data)
+                        .eq('id', promocion['id']);
+                  } else {
+                    await Supabase.instance.client
+                        .from('promociones')
+                        .insert(data);
+                  }
+                } catch (e) {
+                  final prefs = await SharedPreferences.getInstance();
+                  final promociones = _promociones;
+                  if (promocion != null) {
+                    final index = promociones.indexWhere((p) =>
+                        p['id'].toString() == promocion['id'].toString());
+                    if (index >= 0) {
+                      promociones[index] = {...promociones[index], ...data};
+                    }
+                  } else {
+                    data['id'] =
+                        DateTime.now().millisecondsSinceEpoch.toString();
+                    promociones.add(data);
+                  }
+                  await prefs.setString(
+                      'promociones_local', jsonEncode(promociones));
+                }
+                Navigator.pop(ctx);
+                _cargarPromociones();
+              },
+              child: const Text('Guardar',
+                  style: TextStyle(
+                      color: AppColors.primary, fontWeight: FontWeight.w600)),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.modoOscuro;
+    return Scaffold(
+      backgroundColor: AppColors.background(isDark),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Row(children: [
+          GestureDetector(
+            onTap: widget.onAbrirSidebar,
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.menu_rounded,
+                  color: AppColors.primary, size: 22),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Text('PROMOCIONES',
+              style: TextStyle(
+                  color: AppColors.text(isDark),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5)),
+        ]),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_cargando)
+                const Expanded(
+                    child: Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.primary)))
+              else if (_promociones.isEmpty)
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.local_offer_outlined,
+                            size: 60, color: AppColors.subtext(isDark)),
+                        const SizedBox(height: 16),
+                        Text('No hay promociones activas',
+                            style: TextStyle(
+                                color: AppColors.subtext(isDark),
+                                fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: _promociones.length,
+                    itemBuilder: (_, i) {
+                      final promo = _promociones[i];
+                      final tipoIcono = promo['tipo'] == 'porcentaje'
+                          ? Icons.percent
+                          : promo['tipo'] == 'monto_fijo'
+                              ? Icons.attach_money
+                              : Icons.card_giftcard;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.card(isDark),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child:
+                                Icon(tipoIcono, color: Colors.white, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(promo['nombre'] ?? '',
+                                    style: TextStyle(
+                                        color: AppColors.text(isDark),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600)),
+                                Text(
+                                  '${promo['tipo']} - ${promo['valor'] ?? ''}',
+                                  style: TextStyle(
+                                      color: AppColors.subtext(isDark),
+                                      fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch(
+                            value: promo['activo'] == true,
+                            onChanged: (val) async {
+                              try {
+                                await Supabase.instance.client
+                                    .from('promociones')
+                                    .update({'activo': val}).eq(
+                                        'id', promo['id']);
+                              } catch (e) {
+                                final prefs =
+                                    await SharedPreferences.getInstance();
+                                final index = _promociones.indexWhere((p) =>
+                                    p['id'].toString() ==
+                                    promo['id'].toString());
+                                if (index >= 0) {
+                                  _promociones[index]['activo'] = val;
+                                }
+                                await prefs.setString('promociones_local',
+                                    jsonEncode(_promociones));
+                              }
+                              _cargarPromociones();
+                            },
+                            activeThumbColor: AppColors.primary,
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.delete_outline_rounded,
+                                color: AppColors.danger.withValues(alpha: 0.7),
+                                size: 18),
+                            onPressed: () async {
+                              try {
+                                await Supabase.instance.client
+                                    .from('promociones')
+                                    .delete()
+                                    .eq('id', promo['id']);
+                              } catch (e) {
+                                final prefs =
+                                    await SharedPreferences.getInstance();
+                                _promociones.removeWhere((p) =>
+                                    p['id'].toString() ==
+                                    promo['id'].toString());
+                                await prefs.setString('promociones_local',
+                                    jsonEncode(_promociones));
+                              }
+                              _cargarPromociones();
+                            },
+                          ),
+                        ]),
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _mostrarDialogo(),
+                  icon: const Icon(Icons.add_rounded, color: Colors.white),
+                  label: const Text('AGREGAR PROMOCIÓN',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================
+// PANTALLA DE COMPRAS
+// ============================================
+class ComprasScreen extends StatefulWidget {
+  final VoidCallback onAbrirSidebar;
+  final bool modoOscuro;
+  const ComprasScreen(
+      {super.key, required this.onAbrirSidebar, this.modoOscuro = false});
+  @override
+  State<ComprasScreen> createState() => _ComprasScreenState();
+}
+
+class _ComprasScreenState extends State<ComprasScreen> {
+  List<Map<String, dynamic>> _compras = [];
+  List<Map<String, dynamic>> _proveedores = [];
+  List<Map<String, dynamic>> _productos = [];
+  bool _cargando = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarDatos();
+  }
+
+  Future<void> _cargarDatos() async {
+    setState(() => _cargando = true);
+    try {
+      final comprasResponse = await Supabase.instance.client
+          .from('compras')
+          .select()
+          .order('fecha', ascending: false);
+      _compras = List<Map<String, dynamic>>.from(comprasResponse as List);
+
+      final proveedoresResponse = await Supabase.instance.client
+          .from('proveedores')
+          .select()
+          .order('nombre');
+      _proveedores =
+          List<Map<String, dynamic>>.from(proveedoresResponse as List);
+
+      final productosResponse = await Supabase.instance.client
+          .from('productos')
+          .select()
+          .order('nombre');
+      _productos = List<Map<String, dynamic>>.from(productosResponse as List);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('compras_local', jsonEncode(_compras));
+      await prefs.setString('proveedores_local', jsonEncode(_proveedores));
+      await prefs.setString('productos_local', jsonEncode(_productos));
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final comprasData = prefs.getString('compras_local');
+      final proveedoresData = prefs.getString('proveedores_local');
+      final productosData = prefs.getString('productos_local');
+
+      if (comprasData != null) {
+        _compras = List<Map<String, dynamic>>.from(jsonDecode(comprasData));
+      } else {
+        _compras = [];
+      }
+      if (proveedoresData != null) {
+        _proveedores =
+            List<Map<String, dynamic>>.from(jsonDecode(proveedoresData));
+      } else {
+        _proveedores = [];
+      }
+      if (productosData != null) {
+        _productos = List<Map<String, dynamic>>.from(jsonDecode(productosData));
+      } else {
+        _productos = [];
+      }
+    }
+    setState(() => _cargando = false);
+  }
+
+  void _mostrarNuevaCompra() {
+    final isDark = widget.modoOscuro;
+    String? proveedorSeleccionado;
+    final numeroFacturaCtrl = TextEditingController();
+    List<Map<String, dynamic>> detalles = [];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.card(isDark),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('Nueva Compra',
+              style: TextStyle(
+                  color: AppColors.text(isDark), fontWeight: FontWeight.w700)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: proveedorSeleccionado,
+                  decoration: InputDecoration(
+                    labelText: 'Proveedor *',
+                    labelStyle: TextStyle(color: AppColors.subtext(isDark)),
+                    filled: true,
+                    fillColor: AppColors.background(isDark),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none),
+                  ),
+                  items: _proveedores
+                      .map((p) => DropdownMenuItem(
+                            value: p['id'].toString(),
+                            child: Text(p['nombre'] ?? '',
+                                style:
+                                    TextStyle(color: AppColors.text(isDark))),
+                          ))
+                      .toList(),
+                  onChanged: (v) =>
+                      setDialogState(() => proveedorSeleccionado = v),
+                  dropdownColor: AppColors.card(isDark),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: numeroFacturaCtrl,
+                  style: TextStyle(color: AppColors.text(isDark)),
+                  decoration: InputDecoration(
+                    labelText: 'Número de Factura',
+                    labelStyle: TextStyle(color: AppColors.subtext(isDark)),
+                    filled: true,
+                    fillColor: AppColors.background(isDark),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text('AGREGAR PRODUCTOS',
+                    style: TextStyle(
+                        color: AppColors.subtext(isDark),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.5)),
+                const SizedBox(height: 8),
+                ...detalles.map((d) => Container(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.background(isDark),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(children: [
+                        Expanded(
+                          child: Text(d['nombre'] ?? '',
+                              style: TextStyle(
+                                  color: AppColors.text(isDark), fontSize: 12)),
+                        ),
+                        Text('x${d['cantidad']}',
+                            style: TextStyle(
+                                color: AppColors.subtext(isDark),
+                                fontSize: 12)),
+                        const SizedBox(width: 8),
+                        Text(
+                            '\$${((d['costo_unitario'] ?? 0) as num).toStringAsFixed(2)}',
+                            style: const TextStyle(
+                                color: AppColors.primary, fontSize: 12)),
+                        IconButton(
+                          icon: Icon(Icons.close,
+                              color: AppColors.danger.withValues(alpha: 0.7),
+                              size: 16),
+                          onPressed: () {
+                            setDialogState(() => detalles.remove(d));
+                          },
+                        ),
+                      ]),
+                    )),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final resultado = await showDialog<Map<String, dynamic>>(
+                      context: context,
+                      builder: (dialogCtx) => _SelectorProductoCompra(
+                        productos: _productos,
+                        isDark: isDark,
+                      ),
+                    );
+                    if (resultado != null) {
+                      setDialogState(() {
+                        detalles.add(resultado);
+                      });
+                    }
+                  },
+                  icon: const Icon(Icons.add, color: AppColors.primary),
+                  label: const Text('Agregar Producto',
+                      style: TextStyle(color: AppColors.primary)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.primary),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('Cancelar',
+                    style: TextStyle(color: AppColors.subtext(isDark)))),
+            TextButton(
+              onPressed: () async {
+                if (proveedorSeleccionado == null || detalles.isEmpty) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(
+                        content:
+                            Text('Selecciona proveedor y agrega productos'),
+                        backgroundColor: AppColors.warning),
+                  );
+                  return;
+                }
+                final total = detalles.fold<double>(
+                    0,
+                    (sum, d) =>
+                        sum +
+                        ((d['costo_unitario'] as num).toDouble() *
+                            (d['cantidad'] as int)));
+                final compra = {
+                  'proveedor_id': int.tryParse(proveedorSeleccionado!),
+                  'numero_factura': numeroFacturaCtrl.text,
+                  'total': total,
+                  'subtotal': total,
+                  'impuesto': 0,
+                  'estado': 'recibida',
+                  'fecha': DateTime.now().toIso8601String(),
+                };
+                try {
+                  final response = await Supabase.instance.client
+                      .from('compras')
+                      .insert(compra)
+                      .select()
+                      .single();
+                  final compraId = (response as Map<String, dynamic>)['id'];
+                  for (final d in detalles) {
+                    await Supabase.instance.client
+                        .from('detalle_compra')
+                        .insert({
+                      'compra_id': compraId,
+                      'producto_id': d['producto_id'],
+                      'codigo_barras': d['codigo_barras'],
+                      'nombre': d['nombre'],
+                      'cantidad': d['cantidad'],
+                      'costo_unitario': d['costo_unitario'],
+                      'subtotal': (d['costo_unitario'] as num).toDouble() *
+                          (d['cantidad'] as int),
+                    });
+                    final producto = _productos.firstWhere((p) =>
+                        p['id'].toString() == d['producto_id'].toString());
+                    final nuevoStock =
+                        (producto['stock'] ?? 0) + (d['cantidad'] as int);
+                    await Supabase.instance.client.from('productos').update(
+                        {'stock': nuevoStock}).eq('id', d['producto_id']);
+                  }
+                } catch (e) {
+                  final prefs = await SharedPreferences.getInstance();
+                  compra['id'] =
+                      DateTime.now().millisecondsSinceEpoch.toString();
+                  _compras.insert(0, compra);
+                  await prefs.setString('compras_local', jsonEncode(_compras));
+
+                  for (final d in detalles) {
+                    final producto = _productos.firstWhere((p) =>
+                        p['id'].toString() == d['producto_id'].toString());
+                    final nuevoStock =
+                        (producto['stock'] ?? 0) + (d['cantidad'] as int);
+                    producto['stock'] = nuevoStock;
+                  }
+                  await prefs.setString(
+                      'productos_local', jsonEncode(_productos));
+                }
+                Navigator.pop(ctx);
+                _cargarDatos();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text('Compra registrada con éxito'),
+                      backgroundColor: AppColors.success),
+                );
+              },
+              child: const Text('Guardar',
+                  style: TextStyle(
+                      color: AppColors.primary, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.modoOscuro;
+    return Scaffold(
+      backgroundColor: AppColors.background(isDark),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Row(children: [
+          GestureDetector(
+            onTap: widget.onAbrirSidebar,
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.menu_rounded,
+                  color: AppColors.primary, size: 22),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Text('COMPRAS',
+              style: TextStyle(
+                  color: AppColors.text(isDark),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5)),
+        ]),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_cargando)
+                const Expanded(
+                    child: Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.primary)))
+              else if (_compras.isEmpty)
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.shopping_cart_checkout,
+                            size: 60, color: AppColors.subtext(isDark)),
+                        const SizedBox(height: 16),
+                        Text('No hay compras registradas',
+                            style: TextStyle(
+                                color: AppColors.subtext(isDark),
+                                fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: _compras.length,
+                    itemBuilder: (_, i) {
+                      final compra = _compras[i];
+                      final proveedor = _proveedores.firstWhere(
+                        (p) =>
+                            p['id'].toString() ==
+                            compra['proveedor_id']?.toString(),
+                        orElse: () => {'nombre': 'Proveedor desconocido'},
+                      );
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.card(isDark),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: AppColors.success,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.shopping_cart_checkout,
+                                color: Colors.white, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(proveedor['nombre'] ?? 'Proveedor',
+                                    style: TextStyle(
+                                        color: AppColors.text(isDark),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600)),
+                                Text(
+                                  compra['fecha']
+                                          ?.toString()
+                                          .substring(0, 10) ??
+                                      '',
+                                  style: TextStyle(
+                                      color: AppColors.subtext(isDark),
+                                      fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            '\$${((compra['total'] ?? 0) as num).toStringAsFixed(2)}',
+                            style: const TextStyle(
+                                color: AppColors.success,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700),
+                          ),
+                        ]),
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _mostrarNuevaCompra,
+                  icon: const Icon(Icons.add_rounded, color: Colors.white),
+                  label: const Text('REGISTRAR COMPRA',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.success,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Selector de producto para compras
+class _SelectorProductoCompra extends StatefulWidget {
+  final List<Map<String, dynamic>> productos;
+  final bool isDark;
+  const _SelectorProductoCompra(
+      {required this.productos, required this.isDark});
+
+  @override
+  State<_SelectorProductoCompra> createState() =>
+      _SelectorProductoCompraState();
+}
+
+class _SelectorProductoCompraState extends State<_SelectorProductoCompra> {
+  String _busqueda = '';
+  int _cantidad = 1;
+  double _costo = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final filtrados = widget.productos.where((p) {
+      final nombre = (p['nombre'] ?? '').toString().toLowerCase();
+      final codigo = (p['codigo_barras'] ?? '').toString().toLowerCase();
+      return nombre.contains(_busqueda.toLowerCase()) ||
+          codigo.contains(_busqueda.toLowerCase());
+    }).toList();
+
+    return AlertDialog(
+      backgroundColor: AppColors.card(widget.isDark),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: Text('Seleccionar Producto',
+          style: TextStyle(
+              color: AppColors.text(widget.isDark),
+              fontWeight: FontWeight.w700)),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 400,
+        child: Column(children: [
+          TextField(
+            style: TextStyle(color: AppColors.text(widget.isDark)),
+            onChanged: (v) => setState(() => _busqueda = v),
+            decoration: InputDecoration(
+              hintText: 'Buscar...',
+              hintStyle: TextStyle(color: AppColors.subtext(widget.isDark)),
+              prefixIcon:
+                  Icon(Icons.search, color: AppColors.subtext(widget.isDark)),
+              filled: true,
+              fillColor: AppColors.background(widget.isDark),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: ListView.builder(
+              itemCount: filtrados.length,
+              itemBuilder: (_, i) {
+                final prod = filtrados[i];
+                return ListTile(
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.inventory_2,
+                        color: AppColors.primary, size: 20),
+                  ),
+                  title: Text(prod['nombre'] ?? '',
+                      style: TextStyle(
+                          color: AppColors.text(widget.isDark),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600)),
+                  subtitle: Text(
+                      'Stock: ${prod['stock'] ?? 0} | Costo: \$${prod['costo'] ?? 0}',
+                      style: TextStyle(
+                          color: AppColors.subtext(widget.isDark),
+                          fontSize: 11)),
+                  onTap: () {
+                    setState(() {
+                      _costo = (prod['costo'] as num?)?.toDouble() ?? 0;
+                    });
+                    Navigator.pop(context, {
+                      'producto_id': prod['id'],
+                      'codigo_barras': prod['codigo_barras'],
+                      'nombre': prod['nombre'],
+                      'cantidad': _cantidad,
+                      'costo_unitario': _costo,
+                    });
+                  },
+                );
+              },
+            ),
+          ),
+        ]),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancelar',
+                style: TextStyle(color: AppColors.subtext(widget.isDark)))),
+      ],
+    );
+  }
+}
+
+// ============================================
+// PANTALLA DE USUARIOS Y ROLES
+// ============================================
+class RolesScreen extends StatefulWidget {
+  final VoidCallback onAbrirSidebar;
+  final bool modoOscuro;
+  const RolesScreen(
+      {super.key, required this.onAbrirSidebar, this.modoOscuro = false});
+  @override
+  State<RolesScreen> createState() => _RolesScreenState();
+}
+
+class _RolesScreenState extends State<RolesScreen> {
+  List<Map<String, dynamic>> _usuarios = [];
+  bool _cargando = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarUsuarios();
+  }
+
+  Future<void> _cargarUsuarios() async {
+    setState(() => _cargando = true);
+    try {
+      final response = await Supabase.instance.client
+          .from('usuarios')
+          .select()
+          .order('nombre');
+      _usuarios = List<Map<String, dynamic>>.from(response as List);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('usuarios_local', jsonEncode(_usuarios));
+    } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      final data = prefs.getString('usuarios_local');
+      if (data != null) {
+        _usuarios = List<Map<String, dynamic>>.from(jsonDecode(data));
+      } else {
+        _usuarios = [];
+      }
+    }
+    setState(() => _cargando = false);
+  }
+
+  void _mostrarDialogo({Map<String, dynamic>? usuario}) {
+    final isDark = widget.modoOscuro;
+    final nombreCtrl = TextEditingController(text: usuario?['nombre'] ?? '');
+    final emailCtrl = TextEditingController(text: usuario?['email'] ?? '');
+    final passwordCtrl = TextEditingController();
+    String rol = usuario?['rol'] ?? 'vendedor';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.card(isDark),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            usuario != null ? 'Editar Usuario' : 'Nuevo Usuario',
+            style: TextStyle(
+                color: AppColors.text(isDark), fontWeight: FontWeight.w700),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nombreCtrl,
+                style: TextStyle(color: AppColors.text(isDark)),
+                decoration: InputDecoration(
+                  labelText: 'Nombre *',
+                  labelStyle: TextStyle(color: AppColors.subtext(isDark)),
+                  filled: true,
+                  fillColor: AppColors.background(isDark),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: emailCtrl,
+                style: TextStyle(color: AppColors.text(isDark)),
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  labelText: 'Email *',
+                  labelStyle: TextStyle(color: AppColors.subtext(isDark)),
+                  filled: true,
+                  fillColor: AppColors.background(isDark),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: passwordCtrl,
+                style: TextStyle(color: AppColors.text(isDark)),
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText:
+                      usuario != null ? 'Nueva Contraseña' : 'Contraseña *',
+                  labelStyle: TextStyle(color: AppColors.subtext(isDark)),
+                  filled: true,
+                  fillColor: AppColors.background(isDark),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.background(isDark),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.divider(isDark),
+                    width: 1,
+                  ),
+                ),
+                child: Row(children: [
+                  Text('Rol: ',
+                      style: TextStyle(color: AppColors.text(isDark))),
+                  const Spacer(),
+                  DropdownButton<String>(
+                    value: rol,
+                    dropdownColor: AppColors.card(isDark),
+                    style: TextStyle(color: AppColors.text(isDark)),
+                    underline: const SizedBox(),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'admin', child: Text('Administrador')),
+                      DropdownMenuItem(
+                          value: 'vendedor', child: Text('Vendedor')),
+                      DropdownMenuItem(value: 'cajero', child: Text('Cajero')),
+                    ],
+                    onChanged: (v) =>
+                        setDialogState(() => rol = v ?? 'vendedor'),
+                  ),
+                ]),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('Cancelar',
+                    style: TextStyle(color: AppColors.subtext(isDark)))),
+            TextButton(
+              onPressed: () async {
+                if (nombreCtrl.text.isEmpty || emailCtrl.text.isEmpty) return;
+                if (usuario == null && passwordCtrl.text.isEmpty) return;
+
+                final data = {
+                  'nombre': nombreCtrl.text,
+                  'email': emailCtrl.text,
+                  'rol': rol,
+                  'activo': true,
+                };
+
+                if (passwordCtrl.text.isNotEmpty) {
+                  data['password_hash'] = passwordCtrl.text;
+                }
+
+                try {
+                  if (usuario != null) {
+                    await Supabase.instance.client
+                        .from('usuarios')
+                        .update(data)
+                        .eq('id', usuario['id']);
+                  } else {
+                    await Supabase.instance.client
+                        .from('usuarios')
+                        .insert(data);
+                  }
+                } catch (e) {
+                  final prefs = await SharedPreferences.getInstance();
+                  if (usuario != null) {
+                    final index = _usuarios.indexWhere(
+                        (u) => u['id'].toString() == usuario['id'].toString());
+                    if (index >= 0) {
+                      _usuarios[index] = {..._usuarios[index], ...data};
+                    }
+                  } else {
+                    data['id'] =
+                        DateTime.now().millisecondsSinceEpoch.toString();
+                    _usuarios.add(data);
+                  }
+                  await prefs.setString(
+                      'usuarios_local', jsonEncode(_usuarios));
+                }
+                Navigator.pop(ctx);
+                _cargarUsuarios();
+              },
+              child: const Text('Guardar',
+                  style: TextStyle(
+                      color: AppColors.primary, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.modoOscuro;
+    return Scaffold(
+      backgroundColor: AppColors.background(isDark),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Row(children: [
+          GestureDetector(
+            onTap: widget.onAbrirSidebar,
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.menu_rounded,
+                  color: AppColors.primary, size: 22),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Text('USUARIOS Y ROLES',
+              style: TextStyle(
+                  color: AppColors.text(isDark),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5)),
+        ]),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_cargando)
+                const Expanded(
+                    child: Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.primary)))
+              else if (_usuarios.isEmpty)
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.people_outline,
+                            size: 60, color: AppColors.subtext(isDark)),
+                        const SizedBox(height: 16),
+                        Text('No hay usuarios registrados',
+                            style: TextStyle(
+                                color: AppColors.subtext(isDark),
+                                fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: _usuarios.length,
+                    itemBuilder: (_, i) {
+                      final usuario = _usuarios[i];
+                      final rolColor = usuario['rol'] == 'admin'
+                          ? AppColors.danger
+                          : usuario['rol'] == 'vendedor'
+                              ? AppColors.primary
+                              : AppColors.warning;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.card(isDark),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Row(children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: rolColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              usuario['rol'] == 'admin'
+                                  ? Icons.admin_panel_settings
+                                  : usuario['rol'] == 'vendedor'
+                                      ? Icons.person
+                                      : Icons.point_of_sale,
+                              color: rolColor,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(usuario['nombre'] ?? '',
+                                    style: TextStyle(
+                                        color: AppColors.text(isDark),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600)),
+                                Text(usuario['email'] ?? '',
+                                    style: TextStyle(
+                                        color: AppColors.subtext(isDark),
+                                        fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: rolColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              (usuario['rol'] ?? 'vendedor')
+                                  .toString()
+                                  .toUpperCase(),
+                              style: TextStyle(
+                                  color: rolColor,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.edit_rounded,
+                                color: AppColors.subtext(isDark), size: 18),
+                            onPressed: () => _mostrarDialogo(usuario: usuario),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.delete_outline_rounded,
+                                color: AppColors.danger.withValues(alpha: 0.7),
+                                size: 18),
+                            onPressed: () async {
+                              try {
+                                await Supabase.instance.client
+                                    .from('usuarios')
+                                    .delete()
+                                    .eq('id', usuario['id']);
+                              } catch (e) {
+                                final prefs =
+                                    await SharedPreferences.getInstance();
+                                _usuarios.removeWhere((u) =>
+                                    u['id'].toString() ==
+                                    usuario['id'].toString());
+                                await prefs.setString(
+                                    'usuarios_local', jsonEncode(_usuarios));
+                              }
+                              _cargarUsuarios();
+                            },
+                          ),
+                        ]),
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _mostrarDialogo(),
+                  icon:
+                      const Icon(Icons.person_add_rounded, color: Colors.white),
+                  label: const Text('AGREGAR USUARIO',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
