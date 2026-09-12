@@ -1,62 +1,58 @@
-name: tu_app
-description: SINTHETIX PRO
+name: sinthetix_pro
+description: SINTHETIX PRO - Sistema de Punto de Venta Offline
+publish_to: "none"
 
-publish_to: 'none'
-
-version: 1.0.0+1
+version: 7.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  
-  # ============ UTILIDADES BÁSICAS ============
-  share_plus: ^13.3.0
-  shared_preferences: ^2.5.5
-  font_awesome_flutter: ^11.0.0
-  supabase_flutter: ^2.16.0
-  curved_labeled_navigation_bar: ^2.0.6
-  audioplayers: ^6.8.1
-  url_launcher: ^6.3.2
-  connectivity_plus: ^7.3.1
-  permission_handler: ^13.0.1
-  
-  # ============ IMPRESIÓN TÉRMICA ============
-  blue_thermal_printer: ^1.2.3
-  esc_pos_utils: ^1.1.0
-  flutter_esc_pos_network: ^0.0.1
-  
-  # ============ GRÁFICOS Y QR ============
+
+  # ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ BASE DE DATOS SQLITE ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
+  sqflite: ^2.3.0
+  sqflite_common_ffi_web: 1.1.2
+  path: ^1.9.0
+  path_provider: ^2.1.4
+
+  # ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ INTERFAZ / NAVEGACIÃƒÆ’Ã¢â‚¬Å“N ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
+  cupertino_icons: ^1.0.8
+  curved_labeled_navigation_bar: ^2.0.3
+
+  # ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ ESCÃƒÆ’Ã‚ÂNER / IMÃƒÆ’Ã‚ÂGENES ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
+  image_picker: ^1.1.2
+
+  # ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ IMPRESIÃƒÆ’Ã¢â‚¬Å“N / PDF ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
+  printing: ^5.13.2
+  pdf: ^3.11.1
+
+  # ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ GRÃƒÆ’Ã‚ÂFICOS / QR / CÃƒÆ’Ã¢â‚¬Å“DIGOS ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
   fl_chart: ^0.66.0
   qr_flutter: ^4.1.0
-  
-  # ============ EXPORTACIÓN ============
-  # SOLO pdf, SIN printing (para evitar conflicto con esc_pos_utils)
-  pdf: ^3.8.4
-  
-  # ============ VOZ ============
-  speech_to_text: ^6.6.0
-  
-  # ============ ESCÁNER ============
-  mobile_scanner: ^5.0.0
-  image_picker: ^1.0.0
-  
-  # ============ OTROS ============
-  intl: ^0.19.0
-  http: ^1.2.0
-  cupertino_icons: ^1.0.8
-  path_provider: ^2.1.2
+  barcode: ^2.2.6
 
+  # ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ VOZ ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
+  speech_to_text: ^6.6.0
+
+  # ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ ARCHIVOS / COMPARTIR ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
+  file_picker: ^8.1.2
+  share_plus: ^10.0.2
+
+  # ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ UTILIDADES ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
+  intl: ^0.19.0
+  url_launcher: ^6.3.0
+  shared_preferences: ^2.3.2
+  mobile_scanner: 7.4.1
+  audioplayers: 6.8.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.1
+  flutter_lints: ^4.0.0
 
 flutter:
   uses-material-design: true
   assets:
-    - assets/sounds/
-    - assets/icons/
-    - assets/imagen/
+    - assets/bit.mp3
+    - assets/sounds/bit.mp3
