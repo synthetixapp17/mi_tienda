@@ -2205,18 +2205,7 @@ class _MiAppState extends State<MiApp> {
                 ],
               );
 
-return Stack(
-                fit: StackFit.expand,
-                children: [
-                  content,
-                  if (_currentIndex != 0)
-                    Positioned(
-                      top: MediaQuery.paddingOf(context).top + 12,
-                      right: 14,
-                      child: _buildGlobalMenuButton(),
-                    ),
-                ],
-              );
+return content;
             },
           ),
           bottomNavigationBar: LayoutBuilder(
@@ -2431,7 +2420,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
                   children: [
                     _sectionLabel('PRINCIPAL', muted),
                     _menuItem('pos', Icons.point_of_sale_rounded, 'Punto de venta', 'Vender y cobrar', text, muted, border, violet, dark),
-                    _menuItem('dashboard', Icons.grid_view_rounded, 'Inicio', 'Resumen del negocio', text, muted, border, violet, dark),
+                    _menuItem('dashboard', Icons.grid_view_rounded, 'Dashboard', 'Resumen del negocio', text, muted, border, violet, dark),
                     const SizedBox(height: 12),
                     _sectionLabel('OPERACIÓN', muted),
                     _menuItem('inventario', Icons.inventory_2_outlined, 'Inventario', 'Productos y existencias', text, muted, border, violet, dark),
