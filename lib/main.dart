@@ -1,6 +1,6 @@
 // ============================================
-// SINTHETIX PRO - V19 POS PROFESIONAL + DRAWER PREMIUM
-// Rediseño visual del POS, drawer flotante y checkout profesional
+// SINTHETIX PRO - V25 ESTADISTICAS + ETIQUETAS COMPACTAS
+// V25: métricas profesionales + impresión térmica compacta + diseño sincronizado
 // ============================================
 
 import 'dart:async';
@@ -15,6 +15,7 @@ import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -32,6 +33,8 @@ import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'package:path/path.dart' as path;
 import 'package:file_picker/file_picker.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ============================================
 // VARIABLES GLOBALES
@@ -46,35 +49,35 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 // ============================================
 class AppColors {
   static Color background(bool isDark) =>
-      isDark ? const Color(0xFF0D1117) : const Color(0xFFF8F7FC);
+      isDark ? const Color(0xFF0B0E11) : const Color(0xFFF7F7F8);
   static Color card(bool isDark) =>
-      isDark ? const Color(0xFF161B22) : Colors.white;
+      isDark ? const Color(0xFF181A20) : Colors.white;
   static Color text(bool isDark) =>
-      isDark ? Colors.white : const Color(0xFF1A1D26);
+      isDark ? const Color(0xFFEAECEF) : const Color(0xFF181A20);
   static Color subtext(bool isDark) =>
-      isDark ? const Color(0xFF8B949E) : const Color(0xFF64748B);
+      isDark ? const Color(0xFF848E9C) : const Color(0xFF707A8A);
   static Color drawerBg(bool isDark) =>
-      isDark ? const Color(0xFF0D1117) : Colors.white;
+      isDark ? const Color(0xFF0B0E11) : Colors.white;
   static Color divider(bool isDark) =>
       isDark ? Colors.white10 : const Color(0xFFE2E8F0);
   static Color shadow(bool isDark) =>
-      isDark ? Colors.black : const Color(0xFF6D3DF5).withValues(alpha: 0.05);
+      isDark ? Colors.black : const Color(0xFFF0B90B).withValues(alpha: 0.05);
 
   // Paleta profesional
-  static const Color primary = Color(0xFF6D3DF5);
-  static const Color primaryDark = Color(0xFF5B2AE6);
-  static const Color secondary = Color(0xFF8B5CF6);
-  static const Color success = Color(0xFF10B981);
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color danger = Color(0xFFEF4444);
-  static const Color info = Color(0xFF06B6D4);
+  static const Color primary = Color(0xFFF0B90B);
+  static const Color primaryDark = Color(0xFFD99F00);
+  static const Color secondary = Color(0xFFF8D33A);
+  static const Color success = Color(0xFF0ECB81);
+  static const Color warning = Color(0xFFF0B90B);
+  static const Color danger = Color(0xFFF6465D);
+  static const Color info = Color(0xFF3861FB);
   static const Color whatsapp = Color(0xFF25D366);
-  static const Color dark = Color(0xFF111827);
-  static const Color darkSecondary = Color(0xFF1F2937);
+  static const Color dark = Color(0xFF181A20);
+  static const Color darkSecondary = Color(0xFF2B3139);
 
   // Gradientes profesionales
   static const LinearGradient gradientPrimary = LinearGradient(
-    colors: [Color(0xFF6D3DF5), Color(0xFF1D4ED8)],
+    colors: [Color(0xFFF0B90B), Color(0xFFF8D33A)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -104,7 +107,7 @@ class AppColors {
   );
 
   static const LinearGradient gradientVioleta = LinearGradient(
-    colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+    colors: [Color(0xFFF8D33A), Color(0xFFD99F00)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -194,10 +197,17 @@ class LocalDatabase {
       return await databaseFactory.openDatabase(
         'sinthetix_pro_web.db',
         options: OpenDatabaseOptions(
-          version: 2,
+          version: 3,
           onCreate: _createTables,
           onUpgrade: (db, oldVersion, newVersion) async {
-            // Mantener datos existentes.
+            if (oldVersion < 3) {
+              for (final sql in [
+                'ALTER TABLE productos ADD COLUMN imagen_url TEXT',
+                'ALTER TABLE productos ADD COLUMN marca TEXT',
+                "ALTER TABLE productos ADD COLUMN sync_estado TEXT DEFAULT 'pendiente'",
+                'ALTER TABLE productos ADD COLUMN sync_error TEXT',
+              ]) { try { await db.execute(sql); } catch (_) {} }
+            }
           },
         ),
       );
@@ -209,10 +219,17 @@ class LocalDatabase {
 
     return await openDatabase(
       dbPath,
-      version: 2,
+      version: 3,
       onCreate: _createTables,
       onUpgrade: (db, oldVersion, newVersion) async {
-        // Mantener datos existentes.
+        if (oldVersion < 3) {
+          for (final sql in [
+            'ALTER TABLE productos ADD COLUMN imagen_url TEXT',
+            'ALTER TABLE productos ADD COLUMN marca TEXT',
+            "ALTER TABLE productos ADD COLUMN sync_estado TEXT DEFAULT 'pendiente'",
+            'ALTER TABLE productos ADD COLUMN sync_error TEXT',
+          ]) { try { await db.execute(sql); } catch (_) {} }
+        }
       },
     );
   }
@@ -230,6 +247,10 @@ class LocalDatabase {
         categoria TEXT DEFAULT 'General',
         descripcion TEXT,
         imagen_base64 TEXT,
+        imagen_url TEXT,
+        marca TEXT,
+        sync_estado TEXT DEFAULT 'pendiente',
+        sync_error TEXT,
         activo INTEGER DEFAULT 1,
         destacado INTEGER DEFAULT 0,
         unidad_medida TEXT DEFAULT 'pieza',
@@ -250,6 +271,9 @@ class LocalDatabase {
         nombre TEXT NOT NULL,
         descripcion TEXT,
         imagen_base64 TEXT,
+        imagen_url TEXT,
+        sync_estado TEXT DEFAULT 'pendiente',
+        sync_error TEXT,
         activo INTEGER DEFAULT 1,
         creado_en TEXT
       )
@@ -622,6 +646,26 @@ class DatabaseService {
 
   final LocalDatabase _db = LocalDatabase();
 
+  // Consulta SQL publica para reportes y metricas.
+  Future<List<Map<String, dynamic>>> query(String sql, [List<dynamic>? args]) async {
+    try {
+      return await _db.query(sql, args);
+    } catch (e) {
+      debugPrint('Error DatabaseService.query: $e');
+      return [];
+    }
+  }
+
+  Future<int> update(String table, Map<String, dynamic> data, String where,
+      List<dynamic> whereArgs) async {
+    try {
+      return await _db.update(table, data, where, whereArgs);
+    } catch (e) {
+      debugPrint('Error DatabaseService.update: $e');
+      return 0;
+    }
+  }
+
   String _generateId() =>
       DateTime.now().millisecondsSinceEpoch.toString() +
       Random().nextInt(9999).toString();
@@ -656,6 +700,11 @@ class DatabaseService {
           'Producto insertado con ID: ${prod['id']}, resultado: $result');
       if (result > 0) {
         productosVersion.value++;
+        final okOnline = await SupabaseSyncService.upsertProduct(prod);
+        await _db.update('productos', {
+          'sync_estado': okOnline ? 'sincronizado' : 'pendiente',
+          'sync_error': okOnline ? null : 'sin conexion o Supabase no disponible',
+        }, 'id = ?', [prod['id']]);
         return prod;
       }
       return null;
@@ -665,11 +714,27 @@ class DatabaseService {
     }
   }
 
+  Future<void> marcarProductoSincronizado(String id, bool ok, [String? error]) async {
+    await _db.update('productos', {
+      'sync_estado': ok ? 'sincronizado' : 'pendiente',
+      'sync_error': ok ? null : error,
+    }, 'id = ?', [id]);
+  }
+
   Future<bool> actualizarProducto(String id, Map<String, dynamic> prod) async {
     try {
       prod['actualizado_en'] = DateTime.now().toIso8601String();
+      prod['sync_estado'] = 'pendiente';
+      prod['sync_error'] = null;
       final result = await _db.update('productos', prod, 'id = ?', [id]);
       debugPrint('Producto actualizado: $id, filas: $result');
+      if (result > 0) {
+        final local = await _db.query('SELECT * FROM productos WHERE id = ?', [id]);
+        if (local.isNotEmpty) {
+          final okOnline = await SupabaseSyncService.upsertProduct(local.first);
+          await marcarProductoSincronizado(id, okOnline, okOnline ? null : 'Sin conexión');
+        }
+      }
       return result > 0;
     } catch (e) {
       debugPrint('Error actualizando producto: $e');
@@ -1434,6 +1499,7 @@ class DatosPrueba {
 // ============================================
 class ImagenProducto extends StatelessWidget {
   final String? imagenBase64;
+  final String? imagenUrl;
   final double width;
   final double height;
   final BoxFit fit;
@@ -1442,6 +1508,7 @@ class ImagenProducto extends StatelessWidget {
   const ImagenProducto({
     super.key,
     this.imagenBase64,
+    this.imagenUrl,
     this.width = 60,
     this.height = 60,
     this.fit = BoxFit.cover,
@@ -1450,6 +1517,9 @@ class ImagenProducto extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (imagenUrl != null && imagenUrl!.startsWith('http')) {
+      return Image.network(imagenUrl!, width: width, height: height, fit: fit, errorBuilder: (_, __, ___) => _placeholder());
+    }
     if (imagenBase64 != null && imagenBase64!.isNotEmpty) {
       try {
         final bytes = base64Decode(imagenBase64!);
@@ -1724,50 +1794,44 @@ class ScannerRapido extends StatefulWidget {
   State<ScannerRapido> createState() => _ScannerRapidoState();
 }
 
-class _ScannerRapidoState extends State<ScannerRapido> {
-  MobileScannerController? _controller;
+class _ScannerRapidoState extends State<ScannerRapido> with SingleTickerProviderStateMixin {
+  late final MobileScannerController _controller;
   bool _linternaEncendida = false;
   bool _procesando = false;
   String? _ultimoCodigo;
   DateTime? _ultimoEscaneo;
-  final Duration _tiempoDebounce = const Duration(milliseconds: 220);
+  final Duration _tiempoDebounce = const Duration(milliseconds: 900);
+  late final AnimationController _scanAnimation;
 
   @override
   void initState() {
     super.initState();
-    _inicializarCamara();
-  }
-
-  Future<void> _inicializarCamara() async {
-    try {
-      _controller = MobileScannerController(
-        formats: [
-          BarcodeFormat.ean13,
-          BarcodeFormat.ean8,
-          BarcodeFormat.code128,
-          BarcodeFormat.qrCode,
-          BarcodeFormat.code39,
-          BarcodeFormat.upcA,
-          BarcodeFormat.upcE,
-        ],
-        detectionSpeed: DetectionSpeed.unrestricted,
-        facing: CameraFacing.back,
-        torchEnabled: false,
-      );
-    } catch (e) {
-      debugPrint('Error inicializando cámara: $e');
-    }
+    _scanAnimation = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat(reverse: true);
+    _controller = MobileScannerController(
+      formats: const [
+        BarcodeFormat.ean13,
+        BarcodeFormat.ean8,
+        BarcodeFormat.code128,
+        BarcodeFormat.qrCode,
+        BarcodeFormat.code39,
+        BarcodeFormat.upcA,
+        BarcodeFormat.upcE,
+      ],
+      detectionSpeed: DetectionSpeed.normal,
+      facing: CameraFacing.back,
+      autoZoom: true,
+      detectionTimeoutMs: 250,
+      torchEnabled: false,
+    );
   }
 
   void _toggleLinterna() {
-    if (_controller == null) return;
     setState(() => _linternaEncendida = !_linternaEncendida);
-    _controller!.toggleTorch();
+    _controller.toggleTorch();
   }
 
   void _cambiarCamara() {
-    if (_controller == null) return;
-    _controller!.switchCamera();
+    _controller.switchCamera();
   }
 
   Future<void> _procesarCodigo(String codigo) async {
@@ -1787,17 +1851,17 @@ class _ScannerRapidoState extends State<ScannerRapido> {
     HapticFeedback.heavyImpact();
     SystemSound.play(SystemSoundType.click);
 
-    widget.onCodigoDetectado(codigo);
-
-    
+    await widget.onCodigoDetectado(codigo);
     if (mounted) {
-      setState(() => _procesando = false);
+      await Future<void>.delayed(const Duration(milliseconds: 140));
+      if (mounted) setState(() => _procesando = false);
     }
   }
 
   @override
   void dispose() {
-    _controller?.dispose();
+    _scanAnimation.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -1824,35 +1888,35 @@ class _ScannerRapidoState extends State<ScannerRapido> {
         borderRadius: BorderRadius.circular(22),
         child: Stack(
           children: [
-            if (_controller != null)
-              MobileScanner(
-                controller: _controller,
-                onDetect: (capture) {
-                  final barcodes = capture.barcodes;
-                  if (barcodes.isEmpty) return;
-                  final rawValue = barcodes.first.rawValue;
+            MobileScanner(
+              controller: _controller,
+              onDetect: (capture) {
+                for (final barcode in capture.barcodes) {
+                  final rawValue = barcode.rawValue?.trim();
                   if (rawValue != null && rawValue.isNotEmpty) {
                     _procesarCodigo(rawValue);
+                    break;
                   }
-                },
+                }
+              },
+            ),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedBuilder(
+                  animation: _scanAnimation,
+                  builder: (_, __) => CustomPaint(
+                    painter: _ScannerOverlayPainter(_scanAnimation.value, _procesando),
+                  ),
+                ),
               ),
+            ),
             Center(
               child: Container(
-                width: 220,
-                height: 110,
+                width: 250,
+                height: 145,
                 decoration: BoxDecoration(
-                  border: Border.all(
-                    color: _procesando ? AppColors.success : AppColors.primary,
-                    width: 3,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.3),
-                      blurRadius: 20,
-                      spreadRadius: 5,
-                    ),
-                  ],
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.white.withValues(alpha: .10), width: 1),
                 ),
               ),
             ),
@@ -1959,6 +2023,217 @@ class _ScannerRapidoState extends State<ScannerRapido> {
   }
 }
 
+
+class _ScannerOverlayPainter extends CustomPainter {
+  final double progress;
+  final bool processing;
+  _ScannerOverlayPainter(this.progress, this.processing);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final frameW = size.width.clamp(220.0, 420.0);
+    final frameH = size.height.clamp(130.0, 230.0);
+    final frame = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(size.width / 2, size.height / 2), width: frameW, height: frameH),
+      const Radius.circular(18),
+    );
+    final shade = Paint()..color = Colors.black.withValues(alpha: .40);
+    final outside = Path()..addRect(Offset.zero & size);
+    final hole = Path()..addRRect(frame);
+    canvas.drawPath(Path.combine(PathOperation.difference, outside, hole), shade);
+
+    final accent = processing ? AppColors.success : AppColors.primary;
+    final stroke = Paint()..color = accent..style = PaintingStyle.stroke..strokeWidth = 3.2..strokeCap = StrokeCap.round;
+    const corner = 24.0;
+    final l = frame.left, r = frame.right, t = frame.top, b = frame.bottom;
+    final p = Path()
+      ..moveTo(l + corner, t)..lineTo(l, t)..lineTo(l, t + corner)
+      ..moveTo(r - corner, t)..lineTo(r, t)..lineTo(r, t + corner)
+      ..moveTo(l + corner, b)..lineTo(l, b)..lineTo(l, b - corner)
+      ..moveTo(r - corner, b)..lineTo(r, b)..lineTo(r, b - corner);
+    canvas.drawPath(p, stroke);
+
+    final y = t + 12 + (frameH - 24) * progress;
+    final line = Paint()..shader = LinearGradient(colors: [accent.withValues(alpha: 0), accent, accent.withValues(alpha: 0)]).createShader(Rect.fromLTWH(l, y, frameW, 2));
+    canvas.drawRect(Rect.fromLTWH(l + 14, y, frameW - 28, 2), line);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScannerOverlayPainter oldDelegate) => oldDelegate.progress != progress || oldDelegate.processing != processing;
+}
+
+// ============================================
+// SINCRONIZACIÓN ONLINE: SUPABASE + CLOUDINARY
+// ============================================
+class CloudinaryService {
+  static const String cloudName = 'jn';
+  static const String uploadPreset = 'mi_tienda_preset';
+
+  static Future<String?> upload(XFile file, {String folder = 'sinthetix/productos'}) async {
+    try {
+      final bytes = await file.readAsBytes();
+      final uri = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/auto/upload');
+      final request = http.MultipartRequest('POST', uri)
+        ..fields['upload_preset'] = uploadPreset
+        ..fields['folder'] = folder
+        ..files.add(http.MultipartFile.fromBytes('file', bytes,
+            filename: file.name.isEmpty ? 'imagen.jpg' : file.name));
+      final response = await request.send();
+      final body = await response.stream.bytesToString();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        debugPrint('Cloudinary error ${response.statusCode}: $body');
+        return null;
+      }
+      final data = jsonDecode(body);
+      return data['secure_url']?.toString();
+    } catch (e) {
+      debugPrint('Cloudinary offline/error: $e');
+      return null;
+    }
+  }
+}
+
+class SupabaseSyncService {
+  static const String url = 'https://euujrzmhhzikwwwmxgep.supabase.co';
+  static const String anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV1d2pyem1oaHppa3d3d214Z2VwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0ODIxOTcsImV4cCI6MjEwNTA1ODE5N30.VWMnbhdcmoO6g_QkY019essMUlrYbhJP0TPjKznTJ4A';
+  static bool ready = false;
+
+  static Future<void> initialize() async {
+    try {
+      await Supabase.initialize(url: url, anonKey: anonKey);
+      ready = true;
+      try {
+        if (Supabase.instance.client.auth.currentSession == null) {
+          await Supabase.instance.client.auth.signInAnonymously();
+        }
+      } catch (authError) {
+        debugPrint('Supabase Auth anónimo no disponible: $authError');
+      }
+      debugPrint('Supabase inicializado');
+    } catch (e) {
+      // Puede ocurrir si ya fue inicializado en hot reload.
+      try {
+        final _ = Supabase.instance.client;
+        ready = true;
+      } catch (_) {
+        ready = false;
+      }
+      debugPrint('Supabase no disponible: $e');
+    }
+  }
+
+  static SupabaseClient? get client {
+    if (!ready) return null;
+    try { return Supabase.instance.client; } catch (_) { return null; }
+  }
+
+  static Future<String?> uploadBase64(String encoded, {String folder = 'sinthetix/productos'}) async {
+    try {
+      if (encoded.isEmpty) return null;
+      final bytes = base64Decode(encoded);
+      final uri = Uri.parse('https://api.cloudinary.com/v1_1/${CloudinaryService.cloudName}/auto/upload');
+      final request = http.MultipartRequest('POST', uri)
+        ..fields['upload_preset'] = CloudinaryService.uploadPreset
+        ..fields['folder'] = folder
+        ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'producto_${DateTime.now().millisecondsSinceEpoch}.jpg'));
+      final response = await request.send();
+      final body = await response.stream.bytesToString();
+      if (response.statusCode < 200 || response.statusCode >= 300) return null;
+      return jsonDecode(body)['secure_url']?.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<bool> upsertProduct(Map<String, dynamic> p) async {
+    final c = client;
+    if (c == null) return false;
+    try {
+      final localId = p['id']?.toString();
+      if (localId == null || localId.isEmpty) return false;
+      String? categoryId;
+      final categoryName = p['categoria']?.toString().trim();
+      if (categoryName != null && categoryName.isNotEmpty) {
+        final existing = await c.from('store_categories').select('id').eq('name', categoryName).maybeSingle();
+        if (existing != null) {
+          categoryId = existing['id']?.toString();
+        } else {
+          final created = await c.from('store_categories').insert({
+            'name': categoryName,
+            'active': true,
+          }).select('id').single();
+          categoryId = created['id']?.toString();
+        }
+      }
+      final payload = <String, dynamic>{
+        'local_id': localId,
+        'name': p['nombre']?.toString() ?? '',
+        'description': p['descripcion']?.toString(),
+        'sku': p['sku']?.toString(),
+        'barcode': p['codigo_barras']?.toString(),
+        'price': (p['precio'] as num?)?.toDouble() ?? double.tryParse('${p['precio']}') ?? 0,
+        'stock': (p['stock'] as num?)?.toDouble() ?? double.tryParse('${p['stock']}') ?? 0,
+        'category_id': categoryId,
+        'brand': p['marca']?.toString(),
+        'color': p['color']?.toString(),
+        'size': p['talla']?.toString(),
+        'image_url': p['imagen_url']?.toString(),
+        'active': p['activo'] == 1 || p['activo'] == true,
+        'featured': p['destacado'] == 1 || p['destacado'] == true,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      };
+      await c.from('store_products').upsert(payload, onConflict: 'local_id');
+      return true;
+    } catch (e) {
+      debugPrint('Supabase producto pendiente: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> upsertCategory(Map<String, dynamic> cat) async {
+    final c = client;
+    if (c == null) return false;
+    try {
+      final name = cat['nombre']?.toString().trim();
+      if (name == null || name.isEmpty) return false;
+      final existing = await c.from('store_categories').select('id').eq('name', name).maybeSingle();
+      final data = {
+        'name': name,
+        'description': cat['descripcion']?.toString(),
+        'active': cat['activo'] == 1 || cat['activo'] == true,
+      };
+      if (existing == null) {
+        await c.from('store_categories').insert(data);
+      } else {
+        await c.from('store_categories').update(data).eq('id', existing['id']);
+      }
+      return true;
+    } catch (e) {
+      debugPrint('Supabase categoría pendiente: $e');
+      return false;
+    }
+  }
+
+  static Future<void> syncPendingProducts() async {
+    final db = DatabaseService();
+    final products = await db.query("SELECT * FROM productos WHERE sync_estado IS NULL OR sync_estado != 'sincronizado'");
+    for (final original in products) {
+      final p = Map<String, dynamic>.from(original);
+      if ((p['imagen_url']?.toString() ?? '').isEmpty && (p['imagen_base64']?.toString() ?? '').isNotEmpty) {
+        final url = await uploadBase64(p['imagen_base64'].toString());
+        if (url != null) {
+          p['imagen_url'] = url;
+          await db.update('productos', {'imagen_url': url}, 'id = ?', [p['id']]);
+        }
+      }
+      final ok = await upsertProduct(p);
+      if (ok) {
+        await db.marcarProductoSincronizado(p['id'].toString(), true);
+      }
+    }
+  }
+}
+
 // ============================================
 // APP PRINCIPAL
 // ============================================
@@ -1974,7 +2249,7 @@ class MiApp extends StatefulWidget {
 }
 
 class _MiAppState extends State<MiApp> {
-  bool _modoOscuro = false;
+  bool _modoOscuro = true;
   int _currentIndex = 0;
 
   void _abrirSidebar() {
@@ -2047,7 +2322,7 @@ class _MiAppState extends State<MiApp> {
 
   String _rutaActual() {
     const rutas = [
-      'pos','dashboard','configuracion','categorias','metodos_pago','vendedores','clientes','reportes','impresora','configurar_ticket','variantes','codigos_barras','backup','caja','perfil','inventario','tienda','proveedores','promociones','compras','roles','estadisticas'
+      'pos','dashboard','configuracion','categorias','metodos_pago','vendedores','clientes','reportes','impresora','configurar_ticket','variantes','codigos_barras','backup','caja','perfil','inventario','tienda','tienda_admin','proveedores','promociones','compras','roles','estadisticas'
     ];
     return (_currentIndex >= 0 && _currentIndex < rutas.length) ? rutas[_currentIndex] : '';
   }
@@ -2071,11 +2346,12 @@ class _MiAppState extends State<MiApp> {
       'perfil': 14,
       'inventario': 15,
       'tienda': 16,
-      'proveedores': 17,
-      'promociones': 18,
-      'compras': 19,
-      'roles': 20,
-      'estadisticas': 21,
+      'tienda_admin': 17,
+      'proveedores': 18,
+      'promociones': 19,
+      'compras': 20,
+      'roles': 21,
+      'estadisticas': 22,
     };
     if (m.containsKey(ruta)) {
       setState(() => _currentIndex = m[ruta]!);
@@ -2135,7 +2411,7 @@ class _MiAppState extends State<MiApp> {
         colorScheme: const ColorScheme.dark(
           primary: AppColors.primary,
           secondary: AppColors.secondary,
-          surface: Color(0xFF161B22),
+          surface: Color(0xFF181A20),
         ),
         useMaterial3: true,
         elevatedButtonTheme: ElevatedButtonThemeData(
@@ -2179,6 +2455,9 @@ class _MiAppState extends State<MiApp> {
                   DashboardScreen(
                     onAbrirSidebar: _abrirSidebar,
                     onNavigateToPOS: () => setState(() => _currentIndex = 0),
+                    onNavigateToInventario: () => setState(() => _currentIndex = 15),
+                    onNavigateToClientes: () => setState(() => _currentIndex = 6),
+                    onNavigateToCaja: () => setState(() => _currentIndex = 13),
                     modoOscuro: _modoOscuro,
                     onToggleModoOscuro: _toggleModoOscuro,
                   ),
@@ -2197,6 +2476,7 @@ class _MiAppState extends State<MiApp> {
                   PerfilScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
                   InventarioScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
                   UniversalFlyCartStore(onAbrirSidebar: _abrirSidebar),
+                  TiendaAdminScreen(onAbrirSidebar: _abrirSidebar),
                   ProveedoresScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
                   PromocionesScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
                   ComprasScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
@@ -2306,8 +2586,8 @@ class _SidebarMenuState extends State<SidebarMenu> {
     final text = dark ? Colors.white : const Color(0xFF20212A);
     final muted = dark ? const Color(0xFF9EA3B4) : const Color(0xFF747887);
     final border = dark ? Colors.white.withValues(alpha: .07) : const Color(0xFFE9E7F0);
-    const violet = Color(0xFF6D3DF5);
-    const violet2 = Color(0xFF8B5CF6);
+    const violet = AppColors.primary;
+    const violet2 = AppColors.secondary;
 
     return Material(
       color: bg,
@@ -2325,8 +2605,8 @@ class _SidebarMenuState extends State<SidebarMenu> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: dark
-                      ? const [Color(0xFF1B1740), Color(0xFF25145A)]
-                      : const [Color(0xFFF1ECFF), Color(0xFFEAE2FF)],
+                      ? const [Color(0xFF181A20), Color(0xFF2B3139)]
+                      : const [Color(0xFFFFF8DB), Color(0xFFFFF3B8)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -2434,6 +2714,17 @@ class _SidebarMenuState extends State<SidebarMenu> {
                     _menuItem('reportes', Icons.bar_chart_rounded, 'Reportes', 'Ventas y rendimiento', text, muted, border, violet, dark),
                     _menuItem('estadisticas', Icons.insights_rounded, 'Estadísticas', 'Indicadores del negocio', text, muted, border, violet, dark),
                     const SizedBox(height: 12),
+                    const SizedBox(height: 12),
+                    _sectionLabel('TIENDA ONLINE', muted),
+                    _menuItem('tienda', Icons.storefront_rounded, 'Tienda virtual', 'Vista de la tienda para clientes', text, muted, border, violet, dark),
+                    _menuItem('tienda_admin', Icons.dashboard_customize_rounded, 'Administrar tienda', 'Banners, destacados y portada', text, muted, border, violet, dark),
+                    _sectionLabel('CONFIGURACIÓN POS', muted),
+                    _menuItem('impresora', Icons.print_outlined, 'Impresora', 'Prueba y conexión de impresión', text, muted, border, violet, dark),
+                    _menuItem('configurar_ticket', Icons.receipt_long_outlined, 'Configurar ticket', 'Empresa, impuestos y diseño', text, muted, border, violet, dark),
+                    _menuItem('codigos_barras', Icons.qr_code_2_rounded, 'Códigos de barras', 'Escanear, generar e imprimir etiquetas', text, muted, border, violet, dark),
+                    _menuItem('variantes', Icons.tune_rounded, 'Variantes', 'Tallas, colores y opciones', text, muted, border, violet, dark),
+                    _menuItem('metodos_pago', Icons.credit_card_rounded, 'Métodos de pago', 'Efectivo, tarjeta y transferencias', text, muted, border, violet, dark),
+                    const SizedBox(height: 12),
                     _sectionLabel('SISTEMA', muted),
                     _menuItem('configuracion', Icons.settings_outlined, 'Configuración', 'Preferencias del sistema', text, muted, border, violet, dark),
                     _menuItem('perfil', Icons.manage_accounts_outlined, 'Perfil', 'Cuenta y datos', text, muted, border, violet, dark),
@@ -2466,7 +2757,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
                 children: [
                   Icon(Icons.offline_bolt_rounded, color: violet, size: 17),
                   const SizedBox(width: 8),
-                  Expanded(child: Text('Funcionamiento local · SINTHETIX PRO', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w600))),
+                  Expanded(child: Text('Offline + nube · SINTHETIX PRO', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w600))),
                   Text('7.0', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w800)),
                 ],
               ),
@@ -2495,7 +2786,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
           curve: Curves.easeOut,
           decoration: BoxDecoration(
             gradient: selected
-                ? const LinearGradient(colors: [Color(0xFF6D3DF5), Color(0xFF8B5CF6)], begin: Alignment.centerLeft, end: Alignment.centerRight)
+                ? const LinearGradient(colors: [AppColors.primary, AppColors.secondary], begin: Alignment.centerLeft, end: Alignment.centerRight)
                 : null,
             color: selected ? null : (hover ? (dark ? Colors.white.withValues(alpha: .055) : const Color(0xFFF6F3FB)) : Colors.transparent),
             borderRadius: BorderRadius.circular(15),
@@ -2539,7 +2830,7 @@ class EscanerVentas extends StatefulWidget {
 }
 
 class _EscanerVentasState extends State<EscanerVentas> {
-  MobileScannerController? cameraController;
+  late final MobileScannerController cameraController;
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _escuchando = false;
   String _textoVoz = '';
@@ -2548,6 +2839,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
   final _cajaService = CajaService();
   final _ticketService = TicketService();
   final SoundService _soundService = SoundService();
+  Uint8List? _logoNegocio;
   List<Map<String, dynamic>> carrito = [];
   final ValueNotifier<int> _carritoVersion=ValueNotifier<int>(0);
   List<Map<String, dynamic>> listaProductos = [];
@@ -2566,7 +2858,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
   double? _precioMaxPOS;
   String? _ultimoCodigoEscaneado;
   DateTime? _ultimoEscaneo;
-  final Duration _tiempoDebounce = const Duration(milliseconds: 220);
+  final Duration _tiempoDebounce = const Duration(milliseconds: 900);
+  late final AnimationController _scanAnimation;
 
   bool get _isTablet => MediaQuery.of(context).size.width >= 600;
   bool get _isDesktop => MediaQuery.of(context).size.width >= 1024;
@@ -2592,39 +2885,15 @@ class _EscanerVentasState extends State<EscanerVentas> {
     return t;
   }
 
-  Future<void> _inicializarCamara() async {
-    try {
-      cameraController = MobileScannerController(
-        formats: [
-          BarcodeFormat.ean13,
-          BarcodeFormat.ean8,
-          BarcodeFormat.code128,
-          BarcodeFormat.qrCode,
-          BarcodeFormat.code39,
-          BarcodeFormat.upcA,
-          BarcodeFormat.upcE,
-        ],
-        detectionSpeed: DetectionSpeed.unrestricted,
-        facing: CameraFacing.back,
-        autoZoom: true,
-        detectionTimeoutMs: 80,
-        cameraResolution: const Size(1920, 1080),
-        torchEnabled: false,
-      );
-    } catch (e) {
-      debugPrint('Error inicializando cámara: $e');
-    }
-  }
+  Future<void> _inicializarCamara() async {}
 
   void _toggleLinterna() {
-    if (cameraController == null) return;
     setState(() => _linternaEncendida = !_linternaEncendida);
-    cameraController!.toggleTorch();
+    cameraController.toggleTorch();
   }
 
   void _cambiarCamara() {
-    if (cameraController == null) return;
-    cameraController!.switchCamera();
+    cameraController.switchCamera();
   }
 
   void _agregar(Map<String, dynamic> prod) {
@@ -3000,11 +3269,43 @@ class _EscanerVentasState extends State<EscanerVentas> {
     _cargar(silencioso: true);
   }
 
+  Future<void> _cargarLogoNegocio() async {
+    try {
+      final config = await _db.getConfiguracion();
+      String? raw = config?['logo_base64']?.toString();
+      if (raw == null || raw.isEmpty) {
+        final ticket = await _db.getConfiguracionTicket();
+        raw = ticket?['logo_base64']?.toString();
+      }
+      if (raw != null && raw.isNotEmpty && mounted) {
+        setState(() => _logoNegocio = base64Decode(raw!));
+      }
+    } catch (e) {
+      debugPrint('Error cargando logo del negocio en POS: $e');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    cameraController = MobileScannerController(
+      formats: const [
+        BarcodeFormat.ean13,
+        BarcodeFormat.ean8,
+        BarcodeFormat.code128,
+        BarcodeFormat.qrCode,
+        BarcodeFormat.code39,
+        BarcodeFormat.upcA,
+        BarcodeFormat.upcE,
+      ],
+      detectionSpeed: DetectionSpeed.normal,
+      facing: CameraFacing.back,
+      autoZoom: true,
+      detectionTimeoutMs: 180,
+      torchEnabled: false,
+    );
+    _cargarLogoNegocio();
     productosVersion.addListener(_sincronizarProductosAutomaticamente);
-    _inicializarCamara();
     _cargar();
   }
 
@@ -3012,7 +3313,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
   void dispose() {
     productosVersion.removeListener(_sincronizarProductosAutomaticamente);
     _buscador.dispose();
-    cameraController?.dispose();
+    cameraController.dispose();
     _speech.stop();
     _carritoVersion.dispose();
     _soundService.dispose();
@@ -3551,12 +3852,24 @@ class _EscanerVentasState extends State<EscanerVentas> {
       ),
       title: Row(
         children: [
-          Container(
+          if (_logoNegocio != null)
+            Container(
+              width: 38,
+              height: 38,
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: dark ? const Color(0xFF171D26) : const Color(0xFFF4F6F9),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Image.memory(_logoNegocio!, fit: BoxFit.contain),
+            )
+          else
+            Container(
             width: 38,
             height: 38,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF6D3DF5), Color(0xFF9B7BFF)],
+                colors: [Color(0xFFF0B90B), Color(0xFFF8D33A)],
               ),
               borderRadius: BorderRadius.circular(12),
             ),
@@ -3642,7 +3955,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
     bool dark,
     VoidCallback onTap,
   ) {
-    final accent = const Color(0xFF6D3DF5);
+    final accent = const Color(0xFFF0B90B);
     final muted = dark ? const Color(0xFF7D8795) : const Color(0xFF8A93A0);
 
     return Padding(
@@ -3805,23 +4118,24 @@ class _EscanerVentasState extends State<EscanerVentas> {
                 ],
               ),
             ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(14, mobile ? 10 : 12, 14, 8),
-            child: Row(
-              children: [
-                Expanded(child: _buildSearchField(dark)),
-                const SizedBox(width: 8),
-                _squareAction(Icons.tune_rounded, _filtrosActivos, () => _mostrarFiltrosPOS(dark), dark),
-                const SizedBox(width: 7),
-                _squareAction(
-                  Icons.qr_code_scanner_rounded,
-                  _camara,
-                  () => setState(() => _camara = !_camara),
-                  dark,
-                ),
-              ],
+          if (!mobile)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+              child: Row(
+                children: [
+                  Expanded(child: _buildSearchField(dark)),
+                  const SizedBox(width: 8),
+                  _squareAction(Icons.tune_rounded, _filtrosActivos, () => _mostrarFiltrosPOS(dark), dark),
+                  const SizedBox(width: 7),
+                  _squareAction(
+                    Icons.qr_code_scanner_rounded,
+                    _camara,
+                    () => setState(() => _camara = !_camara),
+                    dark,
+                  ),
+                ],
+              ),
             ),
-          ),
           SizedBox(
             height: 42,
             child: ListView.separated(
@@ -3842,9 +4156,9 @@ class _EscanerVentasState extends State<EscanerVentas> {
                     ),
                   ),
                   selected: selected,
-                  selectedColor: const Color(0xFF6D3DF5),
+                  selectedColor: const Color(0xFFF0B90B),
                   backgroundColor: dark ? const Color(0xFF171D26) : const Color(0xFFF4F6F9),
-                  side: BorderSide(color: selected ? const Color(0xFF6D3DF5) : border),
+                  side: BorderSide(color: selected ? const Color(0xFFF0B90B) : border),
                   onSelected: (_) => setState(() => _filtroCategoriaPOS = c),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 );
@@ -3912,7 +4226,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
   Widget _squareAction(IconData icon, bool active, VoidCallback onTap, bool dark) {
     return Material(
       color: active
-          ? const Color(0xFF6D3DF5).withValues(alpha: .13)
+          ? const Color(0xFFF0B90B).withValues(alpha: .13)
           : (dark ? const Color(0xFF171D26) : const Color(0xFFF5F7F9)),
       borderRadius: BorderRadius.circular(13),
       child: InkWell(
@@ -3923,7 +4237,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
           height: 48,
           child: Icon(
             icon,
-            color: active ? const Color(0xFF6D3DF5) : (dark ? Colors.white70 : const Color(0xFF697382)),
+            color: active ? const Color(0xFFF0B90B) : (dark ? Colors.white70 : const Color(0xFF697382)),
             size: 20,
           ),
         ),
@@ -4031,7 +4345,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                           width: 38,
                           height: 38,
                           decoration: const BoxDecoration(
-                            color: Color(0xFF6D3DF5),
+                            color: Color(0xFFF0B90B),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
@@ -4058,7 +4372,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                           child: Text(
                             _precio(finalPrice),
                             style: const TextStyle(
-                              color: Color(0xFF6D3DF5),
+                              color: Color(0xFFF0B90B),
                               fontSize: 15,
                               fontWeight: FontWeight.w900,
                             ),
@@ -4148,10 +4462,10 @@ class _EscanerVentasState extends State<EscanerVentas> {
                               width: 72,
                               height: 72,
                               decoration: BoxDecoration(
-                                color: const Color(0xFF6D3DF5).withValues(alpha: .09),
+                                color: const Color(0xFFF0B90B).withValues(alpha: .09),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.shopping_cart_outlined, color: Color(0xFF6D3DF5), size: 32),
+                              child: const Icon(Icons.shopping_cart_outlined, color: Color(0xFFF0B90B), size: 32),
                             ),
                             const SizedBox(height: 14),
                             Text(
@@ -4190,7 +4504,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                         const Spacer(),
                         Text(
                           _precio(total),
-                          style: const TextStyle(color: Color(0xFF6D3DF5), fontSize: 27, fontWeight: FontWeight.w900),
+                          style: const TextStyle(color: Color(0xFFF0B90B), fontSize: 27, fontWeight: FontWeight.w900),
                         ),
                       ],
                     ),
@@ -4206,7 +4520,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                           style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: .2),
                         ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF6D3DF5),
+                          backgroundColor: const Color(0xFFF0B90B),
                           disabledBackgroundColor: dark ? const Color(0xFF252C36) : const Color(0xFFDCE1E7),
                           foregroundColor: Colors.white,
                           elevation: 0,
@@ -4281,7 +4595,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                 const SizedBox(height: 4),
                 Text(
                   _precio(amount),
-                  style: const TextStyle(color: Color(0xFF6D3DF5), fontSize: 13, fontWeight: FontWeight.w900),
+                  style: const TextStyle(color: Color(0xFFF0B90B), fontSize: 13, fontWeight: FontWeight.w900),
                 ),
               ],
             ),
@@ -4331,7 +4645,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
         child: SizedBox(
           width: 30,
           height: 34,
-          child: Icon(icon, size: 16, color: const Color(0xFF6D3DF5)),
+          child: Icon(icon, size: 16, color: const Color(0xFFF0B90B)),
         ),
       ),
     );
@@ -4382,10 +4696,10 @@ class _EscanerVentasState extends State<EscanerVentas> {
                       width: 42,
                       height: 42,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF6D3DF5).withValues(alpha: .12),
+                        color: const Color(0xFFF0B90B).withValues(alpha: .12),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.shopping_cart_rounded, color: Color(0xFF6D3DF5), size: 21),
+                      child: const Icon(Icons.shopping_cart_rounded, color: Color(0xFFF0B90B), size: 21),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -4407,7 +4721,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                         ],
                       ),
                     ),
-                    const Icon(Icons.arrow_forward_rounded, color: Color(0xFF6D3DF5), size: 21),
+                    const Icon(Icons.arrow_forward_rounded, color: Color(0xFFF0B90B), size: 21),
                   ],
                 ),
               ),
@@ -4554,8 +4868,8 @@ class _PantallaCobroState extends State<PantallaCobro> {
 
   bool get _isTablet => MediaQuery.of(context).size.width >= 600;
   bool get _isDesktop => MediaQuery.of(context).size.width >= 1000;
-  static const violet = Color(0xFF6D3DF5);
-  static const violet2 = Color(0xFF8B5CF6);
+  static const violet = Color(0xFFF0B90B);
+  static const violet2 = Color(0xFFF8D33A);
 
   @override
   void initState() { super.initState(); _cargarDatos(); }
@@ -4828,12 +5142,18 @@ class _PantallaCobroState extends State<PantallaCobro> {
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
   final VoidCallback onNavigateToPOS;
+  final VoidCallback onNavigateToInventario;
+  final VoidCallback onNavigateToClientes;
+  final VoidCallback onNavigateToCaja;
   final bool modoOscuro;
   final VoidCallback onToggleModoOscuro;
   const DashboardScreen({
     super.key,
     required this.onAbrirSidebar,
     required this.onNavigateToPOS,
+    required this.onNavigateToInventario,
+    required this.onNavigateToClientes,
+    required this.onNavigateToCaja,
     this.modoOscuro = false,
     required this.onToggleModoOscuro,
   });
@@ -4866,6 +5186,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _valorInventarioVenta = 0;
   double _margenPorcentaje = 0;
   Map<String, double> _ventasPorMetodo = {};
+  String? _logoDashboard;
 
   bool cargando = true;
   String searchQuery = '';
@@ -4897,6 +5218,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> cargarDatos({bool silencioso = false}) async {
     if (!silencioso) setState(() => cargando = true);
     try {
+      final configNegocio = await _db.getConfiguracion();
+      _logoDashboard = configNegocio?['logo_base64']?.toString();
+      if (_logoDashboard == null || _logoDashboard!.isEmpty) {
+        final configTicket = await _db.getConfiguracionTicket();
+        _logoDashboard = configTicket?['logo_base64']?.toString();
+      }
       productos = await _db.getProductos();
       ventasHoy = await _db.getVentasHoy();
       totalVentasHoy = await _db.getTotalVentasHoy();
@@ -5372,9 +5699,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         final twoColumns = c.maxWidth >= 680;
                         final items = [
                           _quickAction('Nueva venta', Icons.point_of_sale_rounded, AppColors.primary, widget.onNavigateToPOS),
-                          _quickAction('Inventario', Icons.inventory_2_rounded, AppColors.info, widget.onAbrirSidebar),
-                          _quickAction('Clientes', Icons.groups_rounded, AppColors.secondary, widget.onAbrirSidebar),
-                          _quickAction('Caja', Icons.account_balance_wallet_rounded, AppColors.success, widget.onAbrirSidebar),
+                          _quickAction('Inventario', Icons.inventory_2_rounded, AppColors.info, widget.onNavigateToInventario),
+                          _quickAction('Clientes', Icons.groups_rounded, AppColors.secondary, widget.onNavigateToClientes),
+                          _quickAction('Caja', Icons.account_balance_wallet_rounded, AppColors.success, widget.onNavigateToCaja),
                         ];
                         if (!twoColumns) {
                           return Column(children: items.map((e) => Padding(padding: const EdgeInsets.only(bottom: 8), child: SizedBox(width: double.infinity, child: e))).toList());
@@ -6038,451 +6365,237 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _productosWidget(bool isDark) {
     final filtrados = productosFiltrados;
-    return Column(children: [
-      Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.card(isDark),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.shadow(isDark),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+    final ink = AppColors.text(isDark);
+    final muted = AppColors.subtext(isDark);
+    final surface = AppColors.card(isDark);
+    final bg = AppColors.background(isDark);
+    final border = AppColors.divider(isDark);
+    final total = productos.length;
+    final disponibles = productos.where((p) => ((p['stock'] as num?)?.toInt() ?? 0) > 0).length;
+    final agotados = productos.where((p) => ((p['stock'] as num?)?.toInt() ?? 0) <= 0).length;
+    final stockBajo = productos.where((p) {
+      final stock = (p['stock'] as num?)?.toInt() ?? 0;
+      final min = (p['stock_minimo'] as num?)?.toInt() ?? 5;
+      return stock > 0 && stock <= min;
+    }).length;
+
+    Widget stat(String label, String value, IconData icon, Color color) {
+      return Expanded(
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: border),
+          ),
+          child: Row(children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(color: color.withValues(alpha: .11), borderRadius: BorderRadius.circular(11)),
+              child: Icon(icon, color: color, size: 19),
             ),
-          ],
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: .7)),
+              const SizedBox(height: 3),
+              Text(value, style: TextStyle(color: ink, fontSize: 19, fontWeight: FontWeight.w900)),
+            ])),
+          ]),
         ),
-        child: Column(children: [
-          Row(children: [
-            Expanded(
-              child: Container(
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.background(isDark),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(children: [
-                  const SizedBox(width: 12),
-                  Icon(Icons.search_rounded,
-                      color: AppColors.subtext(isDark), size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      style: TextStyle(
-                          color: AppColors.text(isDark), fontSize: 14),
-                      decoration: InputDecoration(
-                        hintText: 'Buscar producto...',
-                        hintStyle: TextStyle(
-                            color: AppColors.subtext(isDark), fontSize: 13),
-                        border: InputBorder.none,
-                      ),
-                      onChanged: (v) => setState(() => searchQuery = v),
-                    ),
-                  ),
+      );
+    }
+
+    Widget productCard(Map<String, dynamic> prod) {
+      final stock = (prod['stock'] as num?)?.toInt() ?? 0;
+      final min = (prod['stock_minimo'] as num?)?.toInt() ?? 5;
+      final price = (prod['precio'] as num?)?.toDouble() ?? 0;
+      final cost = (prod['costo'] as num?)?.toDouble() ?? 0;
+      final margin = cost > 0 ? ((price - cost) / cost * 100) : 0;
+      final category = (prod['categoria'] ?? 'General').toString();
+      final statusColor = stock <= 0 ? AppColors.danger : stock <= min ? AppColors.warning : AppColors.success;
+      final statusText = stock <= 0 ? 'AGOTADO' : stock <= min ? 'STOCK BAJO' : 'DISPONIBLE';
+      return Material(
+        color: surface,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => mostrarDialogoProducto(productoEditar: prod),
+          child: Container(
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: border)),
+            clipBehavior: Clip.antiAlias,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                flex: 6,
+                child: Stack(children: [
+                  Positioned.fill(child: Container(color: isDark ? const Color(0xFF171D26) : const Color(0xFFF3F5F7), child: ImagenProducto(imagenBase64: prod['imagen_base64']?.toString(), width: double.infinity, height: double.infinity, fit: BoxFit.cover))),
+                  Positioned(top: 9, left: 9, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: isDark ? const Color(0xCC0F131A) : const Color(0xEFFFFFFF), borderRadius: BorderRadius.circular(8)), child: Text(category, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: isDark ? Colors.white : const Color(0xFF4B5563), fontSize: 8, fontWeight: FontWeight.w900)))),
+                  Positioned(top: 9, right: 9, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: statusColor, borderRadius: BorderRadius.circular(8)), child: Text(statusText, style: const TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w900)))),
                 ]),
               ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                gradient: AppColors.gradientPrimary,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.3),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.add_rounded,
-                    color: Colors.white, size: 22),
-                onPressed: () => mostrarDialogoProducto(),
-                padding: EdgeInsets.zero,
-                tooltip: 'Agregar producto',
-              ),
-            ),
-          ]),
-          const SizedBox(height: 8),
-          Row(children: [
-            Expanded(
-              child: _buildFiltroDropdown(
-                _filtroCategoria,
-                ['Todas', ..._categorias.map((c) => c['nombre'].toString())],
-                (v) => setState(() => _filtroCategoria = v ?? 'Todas'),
-                isDark,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _buildFiltroDropdown(
-                _filtroStock,
-                ['Todos', 'Con Stock', 'Stock Bajo', 'Agotados'],
-                (v) => setState(() => _filtroStock = v ?? 'Todos'),
-                isDark,
-              ),
-            ),
-          ]),
-        ]),
-      ),
-      const SizedBox(height: 12),
-      Expanded(
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: AppColors.card(isDark),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.shadow(isDark),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: filtrados.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.inventory_2_outlined,
-                          size: 48, color: AppColors.subtext(isDark)),
-                      const SizedBox(height: 12),
-                      Text('No hay productos',
-                          style: TextStyle(
-                              color: AppColors.subtext(isDark), fontSize: 16)),
-                      const SizedBox(height: 4),
-                      Text('Toca el botón + para agregar',
-                          style: TextStyle(
-                              color: AppColors.subtext(isDark), fontSize: 12)),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: filtrados.length,
-                  itemBuilder: (_, i) {
-                    final prod = filtrados[i];
-                    final stock = prod['stock'] ?? 0;
-                    final stockMin = prod['stock_minimo'] ?? 5;
-                    final sc = stock == 0
-                        ? AppColors.danger
-                        : stock < stockMin
-                            ? AppColors.warning
-                            : AppColors.success;
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppColors.background(isDark),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                            color: AppColors.divider(isDark), width: 1),
-                      ),
-                      child: Row(children: [
-                        Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(11),
-                            child: ImagenProducto(
-                              imagenBase64: prod['imagen_base64']?.toString(),
-                              width: 50,
-                              height: 50,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(prod['nombre'] ?? '',
-                                  style: TextStyle(
-                                      color: AppColors.text(isDark),
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
-                              const SizedBox(height: 4),
-                              Row(children: [
-                                Text(
-                                    '\$${(prod['precio'] as num).toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                        color: AppColors.primary,
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w700)),
-                                const SizedBox(width: 10),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: sc.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text('Stock: $stock',
-                                      style: TextStyle(
-                                          color: sc,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600)),
-                                ),
-                              ]),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.edit_rounded,
-                              color: AppColors.subtext(isDark), size: 18),
-                          onPressed: () =>
-                              mostrarDialogoProducto(productoEditar: prod),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.delete_outline_rounded,
-                              color: AppColors.danger.withValues(alpha: 0.7),
-                              size: 18),
-                          onPressed: () =>
-                              eliminarProducto(prod['id'].toString()),
-                        ),
-                      ]),
-                    );
-                  },
+              Expanded(
+                flex: 4,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(11, 10, 8, 9),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(prod['nombre']?.toString() ?? 'Sin nombre', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: ink, fontSize: 11, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 4),
+                    Text('${prod['codigo_barras'] ?? 'Sin código'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 8, fontWeight: FontWeight.w600)),
+                    const Spacer(),
+                    Row(children: [
+                      Expanded(child: Text(_precioDashboard(price), style: TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w900))),
+                      if (cost > 0) Text('Margen ${margin.toStringAsFixed(0)}%', style: TextStyle(color: AppColors.success, fontSize: 7.5, fontWeight: FontWeight.w800)),
+                    ]),
+                    const SizedBox(height: 4),
+                    Row(children: [
+                      Icon(Icons.inventory_2_outlined, size: 12, color: statusColor),
+                      const SizedBox(width: 4),
+                      Text('$stock unidades', style: TextStyle(color: statusColor, fontSize: 8.5, fontWeight: FontWeight.w800)),
+                      const Spacer(),
+                      IconButton(padding: EdgeInsets.zero, constraints: const BoxConstraints.tightFor(width: 28, height: 28), tooltip: 'Editar producto', onPressed: () => mostrarDialogoProducto(productoEditar: prod), icon: Icon(Icons.edit_rounded, color: muted, size: 16)),
+                      IconButton(padding: EdgeInsets.zero, constraints: const BoxConstraints.tightFor(width: 28, height: 28), tooltip: 'Eliminar producto', onPressed: () => eliminarProducto(prod['id'].toString()), icon: Icon(Icons.delete_outline_rounded, color: AppColors.danger.withValues(alpha: .75), size: 16)),
+                    ]),
+                  ]),
                 ),
-        ),
-      ),
-      const SizedBox(height: 12),
-      Container(
-        decoration: BoxDecoration(
-          gradient: AppColors.gradientPrimary,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ElevatedButton.icon(
-          onPressed: () => mostrarDialogoProducto(),
-          icon: const Icon(Icons.add_rounded, color: Colors.white, size: 24),
-          label: const Text('AGREGAR NUEVO PRODUCTO',
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.transparent,
-            shadowColor: Colors.transparent,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ]),
           ),
         ),
-      ),
-    ]);
+      );
+    }
+
+    return LayoutBuilder(builder: (context, constraints) {
+      final desktop = constraints.maxWidth >= 1050;
+      final wide = constraints.maxWidth >= 760;
+      final cols = desktop ? 4 : wide ? 3 : 2;
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
+        children: [
+          Row(children: [
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Productos', style: TextStyle(color: ink, fontSize: desktop ? 24 : 20, fontWeight: FontWeight.w900, letterSpacing: -.6)),
+              const SizedBox(height: 3),
+              Text('Catálogo, existencias y rentabilidad en una sola vista.', style: TextStyle(color: muted, fontSize: 10.5)),
+            ])),
+            Material(color: AppColors.primary, borderRadius: BorderRadius.circular(13), child: InkWell(borderRadius: BorderRadius.circular(13), onTap: () => mostrarDialogoProducto(), child: const Padding(padding: EdgeInsets.symmetric(horizontal: 13, vertical: 11), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.add_rounded, color: Colors.white, size: 18), SizedBox(width: 6), Text('Nuevo producto', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900))])))),
+          ]),
+          const SizedBox(height: 14),
+          Row(children: [
+            stat('Total', '$total', Icons.inventory_2_rounded, AppColors.primary),
+            const SizedBox(width: 8),
+            stat('Disponibles', '$disponibles', Icons.check_circle_outline_rounded, AppColors.success),
+            const SizedBox(width: 8),
+            stat('Stock bajo', '$stockBajo', Icons.warning_amber_rounded, AppColors.warning),
+            const SizedBox(width: 8),
+            stat('Agotados', '$agotados', Icons.remove_shopping_cart_outlined, AppColors.danger),
+          ]),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(11),
+            decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: border)),
+            child: Column(children: [
+              Row(children: [
+                Expanded(child: Container(height: 44, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)), child: TextField(onChanged: (v) => setState(() => searchQuery = v), style: TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w600), decoration: InputDecoration(border: InputBorder.none, prefixIcon: Icon(Icons.search_rounded, color: muted, size: 19), hintText: 'Buscar por nombre, código o marca...', hintStyle: TextStyle(color: muted, fontSize: 10), contentPadding: const EdgeInsets.symmetric(vertical: 13))))),
+                const SizedBox(width: 8),
+                SizedBox(width: 155, child: _buildFiltroDropdown(_filtroCategoria, ['Todas', ..._categorias.map((c) => c['nombre'].toString())], (v) => setState(() => _filtroCategoria = v ?? 'Todas'), isDark)),
+                const SizedBox(width: 8),
+                SizedBox(width: 145, child: _buildFiltroDropdown(_filtroStock, ['Todos', 'Con Stock', 'Stock Bajo', 'Agotados'], (v) => setState(() => _filtroStock = v ?? 'Todos'), isDark)),
+              ]),
+              const SizedBox(height: 8),
+              Row(children: [Icon(Icons.tune_rounded, size: 13, color: AppColors.primary), const SizedBox(width: 5), Text('${filtrados.length} resultados', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w800)), const Spacer(), Text('Vista catálogo', style: TextStyle(color: muted, fontSize: 8.5, fontWeight: FontWeight.w700))]),
+            ]),
+          ),
+          const SizedBox(height: 12),
+          if (filtrados.isEmpty)
+            Container(padding: const EdgeInsets.symmetric(vertical: 65), decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: border)), child: Column(children: [Icon(Icons.inventory_2_outlined, size: 46, color: muted), const SizedBox(height: 12), Text('No hay productos', style: TextStyle(color: ink, fontSize: 15, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text('Prueba otro filtro o crea un producto nuevo.', style: TextStyle(color: muted, fontSize: 10))]))
+          else
+            GridView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: filtrados.length, gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: cols, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: desktop ? .83 : .76), itemBuilder: (_, i) => productCard(filtrados[i])),
+        ],
+      );
+    });
   }
 
-  Widget _buildFiltroDropdown(String value, List<String> options,
-      Function(String?) onChanged, bool isDark) {
+  Widget _buildFiltroDropdown(String value, List<String> items, ValueChanged<String?> onChanged, bool isDark) {
+    final safeItems = <String>[];
+    for (final item in items) {
+      if (item.isEmpty || safeItems.contains(item)) continue;
+      safeItems.add(item);
+    }
+    if (safeItems.isEmpty) safeItems.add(value.isEmpty ? 'Todas' : value);
+    final selected = safeItems.contains(value) ? value : safeItems.first;
     return Container(
-      height: 38,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: AppColors.background(isDark),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider(isDark)),
       ),
-      child: DropdownButton<String>(
-        value: value,
-        isExpanded: true,
-        underline: const SizedBox(),
-        dropdownColor: AppColors.card(isDark),
-        style: TextStyle(color: AppColors.text(isDark), fontSize: 11),
-        items: options
-            .map((op) => DropdownMenuItem(
-                  value: op,
-                  child: Text(op, style: const TextStyle(fontSize: 11)),
-                ))
-            .toList(),
-        onChanged: onChanged,
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: selected,
+          isExpanded: true,
+          isDense: true,
+          dropdownColor: AppColors.card(isDark),
+          icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.subtext(isDark), size: 18),
+          style: TextStyle(
+            color: AppColors.text(isDark),
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+          ),
+          items: safeItems.map((item) => DropdownMenuItem<String>(
+            value: item,
+            child: Text(item, maxLines: 1, overflow: TextOverflow.ellipsis),
+          )).toList(),
+          onChanged: onChanged,
+        ),
       ),
     );
   }
 
+  String _precioDashboard(double value) => '\$${value.toStringAsFixed(2)}';
+
+  Widget _buildSalesKpi(String label, String value, String sub, IconData icon, Color color, bool isDark) {
+    return Expanded(child: Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: AppColors.card(isDark), borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.divider(isDark))), child: Row(children: [Container(width: 38, height: 38, decoration: BoxDecoration(color: color.withValues(alpha: .11), borderRadius: BorderRadius.circular(11)), child: Icon(icon, color: color, size: 19)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label.toUpperCase(), style: TextStyle(color: AppColors.subtext(isDark), fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: .7)), const SizedBox(height: 3), Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.text(isDark), fontSize: 17, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.subtext(isDark), fontSize: 8))]))])));
+  }
+
   Widget _ventasWidget(bool isDark) {
-    return Column(children: [
-      Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: AppColors.gradientPrimary,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('VENTAS',
-                    style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600)),
-                const SizedBox(height: 6),
-                Text('\$${totalVentasHoy.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 32,
-                        fontWeight: FontWeight.w700)),
-                const SizedBox(height: 4),
-                Text('$cantidadVentasHoy transacciones',
-                    style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontSize: 13)),
-              ],
-            ),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.receipt_long_rounded,
-                  color: Colors.white, size: 36),
-            ),
-          ],
-        ),
-      ),
-      const SizedBox(height: 12),
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(children: [
-          Expanded(
-            child: _buildFiltroDropdown(
-              _filtroFechaVentas,
-              ['Hoy', 'Ayer', 'Esta Semana', 'Este Mes', 'Todo'],
-              (v) {
-                setState(() => _filtroFechaVentas = v ?? 'Hoy');
-                _aplicarFiltroVentas();
-              },
-              isDark,
-            ),
-          ),
+    final ink = AppColors.text(isDark);
+    final muted = AppColors.subtext(isDark);
+    final surface = AppColors.card(isDark);
+    final bg = AppColors.background(isDark);
+    final border = AppColors.divider(isDark);
+    return LayoutBuilder(builder: (context, constraints) {
+      final desktop = constraints.maxWidth >= 1000;
+      return ListView(padding: const EdgeInsets.fromLTRB(14, 4, 14, 24), children: [
+        Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Ventas', style: TextStyle(color: ink, fontSize: desktop ? 24 : 20, fontWeight: FontWeight.w900, letterSpacing: -.6)), const SizedBox(height: 3), Text('Control de operaciones, tickets y clientes.', style: TextStyle(color: muted, fontSize: 10.5))])), Material(color: AppColors.primary, borderRadius: BorderRadius.circular(13), child: InkWell(borderRadius: BorderRadius.circular(13), onTap: widget.onNavigateToPOS, child: const Padding(padding: EdgeInsets.symmetric(horizontal: 13, vertical: 11), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.point_of_sale_rounded, color: Colors.white, size: 17), SizedBox(width: 6), Text('Nueva venta', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900))]))))]),
+        const SizedBox(height: 14),
+        Row(children: [
+          _buildSalesKpi('Ventas hoy', '\$${totalVentasHoy.toStringAsFixed(2)}', '$cantidadVentasHoy operaciones', Icons.trending_up_rounded, AppColors.success, isDark),
+          const SizedBox(width: 8),
+          _buildSalesKpi('Este mes', '\$${totalVentasMes.toStringAsFixed(2)}', 'Acumulado mensual', Icons.calendar_month_rounded, AppColors.primary, isDark),
+          const SizedBox(width: 8),
+          _buildSalesKpi('Ticket medio', '\$${_ticketPromedio.toStringAsFixed(2)}', 'Por operación', Icons.receipt_long_rounded, AppColors.info, isDark),
+          const SizedBox(width: 8),
+          _buildSalesKpi('Margen', '${_margenPorcentaje.toStringAsFixed(1)}%', 'Rentabilidad estimada', Icons.savings_rounded, AppColors.secondary, isDark),
         ]),
-      ),
-      const SizedBox(height: 12),
-      Expanded(
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: AppColors.card(isDark),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.shadow(isDark),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: ventasFiltradas.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.receipt_long_outlined,
-                          size: 48, color: AppColors.subtext(isDark)),
-                      const SizedBox(height: 12),
-                      Text('No hay ventas',
-                          style: TextStyle(color: AppColors.subtext(isDark))),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: ventasFiltradas.length,
-                  itemBuilder: (_, i) {
-                    final v = ventasFiltradas[i];
-                    final fecha = v['fecha'] != null
-                        ? DateTime.parse(v['fecha'].toString())
-                        : DateTime.now();
-                    return GestureDetector(
-                      onTap: () => _mostrarDetalleVenta(v),
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.background(isDark),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                              color: AppColors.divider(isDark), width: 1),
-                        ),
-                        child: Row(children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(Icons.receipt_rounded,
-                                color: AppColors.primary, size: 18),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(v['numero_factura'] ?? 'Venta #${v['id']}',
-                                    style: TextStyle(
-                                        color: AppColors.text(isDark),
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600)),
-                                Text(
-                                    DateFormat('dd/MM/yyyy HH:mm')
-                                        .format(fecha),
-                                    style: TextStyle(
-                                        color: AppColors.subtext(isDark),
-                                        fontSize: 11)),
-                                if (v['cliente_nombre'] != null)
-                                  Text(v['cliente_nombre'],
-                                      style: TextStyle(
-                                          color: AppColors.subtext(isDark),
-                                          fontSize: 11)),
-                              ],
-                            ),
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                  '\$${(v['total'] as num).toStringAsFixed(2)}',
-                                  style: const TextStyle(
-                                      color: AppColors.primary,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700)),
-                              Icon(Icons.chevron_right,
-                                  color: AppColors.subtext(isDark), size: 20),
-                            ],
-                          ),
-                        ]),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ),
-    ]);
+        const SizedBox(height: 12),
+        Container(padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: border)), child: Row(children: [Expanded(child: _buildFiltroDropdown(_filtroFechaVentas, ['Hoy', 'Ayer', 'Esta Semana', 'Este Mes', 'Todo'], (v) { setState(() => _filtroFechaVentas = v ?? 'Hoy'); _aplicarFiltroVentas(); }, isDark)), const SizedBox(width: 8), Material(color: bg, borderRadius: BorderRadius.circular(10), child: InkWell(borderRadius: BorderRadius.circular(10), onTap: () { cargarDatos(); mostrarSnackBar('Ventas actualizadas', AppColors.primary); }, child: const SizedBox(width: 42, height: 38, child: Icon(Icons.refresh_rounded, color: AppColors.primary, size: 19))))])),
+        const SizedBox(height: 12),
+        Container(decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: border)), clipBehavior: Clip.antiAlias, child: Column(children: [
+          Container(padding: const EdgeInsets.fromLTRB(15, 13, 15, 12), color: isDark ? Colors.white.withValues(alpha: .025) : const Color(0xFFF7F9FB), child: Row(children: [Expanded(child: Text('Historial de operaciones', style: TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w900))), Text('${ventasFiltradas.length} registros', style: TextStyle(color: muted, fontSize: 8.5, fontWeight: FontWeight.w800))])),
+          if (ventasFiltradas.isEmpty) Padding(padding: const EdgeInsets.symmetric(vertical: 65), child: Column(children: [Icon(Icons.receipt_long_outlined, size: 44, color: muted), const SizedBox(height: 12), Text('No hay ventas', style: TextStyle(color: ink, fontSize: 14, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text('Las operaciones aparecerán aquí.', style: TextStyle(color: muted, fontSize: 10))]))
+          else ...ventasFiltradas.asMap().entries.map((entry) {
+            final i = entry.key; final v = entry.value;
+            final fecha = v['fecha'] != null ? DateTime.tryParse(v['fecha'].toString()) ?? DateTime.now() : DateTime.now();
+            final totalVenta = (v['total'] as num?)?.toDouble() ?? 0;
+            final cliente = (v['cliente_nombre'] ?? 'Público General').toString();
+            final factura = (v['numero_factura'] ?? 'Venta #${v['id']}').toString();
+            return Material(color: Colors.transparent, child: InkWell(onTap: () => _mostrarDetalleVenta(v), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11), child: Column(children: [Row(children: [Container(width: 42, height: 42, decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: .10), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.receipt_long_rounded, color: AppColors.primary, size: 19)), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(factura, style: TextStyle(color: ink, fontSize: 11, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(cliente, style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w700)), const SizedBox(height: 2), Text(DateFormat('dd/MM/yyyy · HH:mm').format(fecha), style: TextStyle(color: muted, fontSize: 8))])), Column(crossAxisAlignment: CrossAxisAlignment.end, children: [Text('\$${totalVenta.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Icon(Icons.chevron_right_rounded, color: muted, size: 17)])]), if (i < ventasFiltradas.length - 1) Padding(padding: const EdgeInsets.only(top: 11), child: Divider(height: 1, color: border))]))));
+          }),
+        ])),
+      ]);
+    });
   }
 
   Future<void> _mostrarDetalleVenta(Map<String, dynamic> venta) async {
@@ -6741,15 +6854,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            String? imagenUrl = productoEditar?['imagen_url']?.toString();
             Future<void> subirImagen(XFile imagen) async {
               setDialogState(() => subiendo = true);
               try {
                 final bytes = await imagen.readAsBytes();
-                final base64 = base64Encode(bytes);
+                final localBase64 = base64Encode(bytes);
+                final cloudUrl = await CloudinaryService.upload(imagen);
                 setDialogState(() {
-                  imagenNotifier.value = base64;
+                  imagenNotifier.value = localBase64;
+                  imagenUrl = cloudUrl ?? imagenUrl;
                   subiendo = false;
                 });
+                if (cloudUrl == null) {
+                  mostrarSnackBar('Imagen guardada localmente. Se subirá cuando haya conexión.', AppColors.warning);
+                }
               } catch (e) {
                 setDialogState(() => subiendo = false);
               }
@@ -7235,8 +7354,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   int.tryParse(stockMinCtrl.text) ?? 5,
                               'categoria': categoriaSeleccionada,
                               'descripcion': descCtrl.text,
+                              'marca': productoEditar?['marca'],
                               'imagen_base64':
                                   imagenFinal.isEmpty ? null : imagenFinal,
+                              'imagen_url': imagenUrl,
                               'activo': activo ? 1 : 0,
                               'destacado': destacado ? 1 : 0,
                               'unidad_medida': unidadMedida,
@@ -7337,10 +7458,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: AppColors.background(isDark),
         elevation: 0,
         scrolledUnderElevation: 0,
-        titleSpacing: 14,
+        titleSpacing: 8,
+        leading: IconButton(
+          tooltip: 'Abrir menú',
+          onPressed: widget.onAbrirSidebar,
+          icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
+        ),
         title: Row(
           children: [
-const SizedBox(width: 12),
+            if (_logoDashboard != null && _logoDashboard!.isNotEmpty)
+              Container(
+                width: 34,
+                height: 34,
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: AppColors.card(isDark),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Image.memory(base64Decode(_logoDashboard!), fit: BoxFit.contain),
+              ),
+            const SizedBox(width: 6),
+            const SizedBox(width: 4),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -7423,6 +7561,9 @@ const SizedBox(width: 12),
 // ============================================
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Inicializa los datos locales antes de cualquier DateFormat con 'es'.
+  await initializeDateFormatting('es');
+  await SupabaseSyncService.initialize();
 
   try {
     final prefs = await SharedPreferences.getInstance();
@@ -7433,6 +7574,8 @@ void main() async {
   }
 
   runApp(const MiApp());
+  unawaited(SupabaseSyncService.syncPendingProducts());
+  Timer.periodic(const Duration(minutes: 2), (_) => unawaited(SupabaseSyncService.syncPendingProducts()));
 }
 
 // ============================================
@@ -7563,6 +7706,11 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          tooltip: 'Abrir menu',
+          onPressed: widget.onAbrirSidebar,
+          icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
+        ),
         title: Row(children: [
 const SizedBox(width: 14),
           Text('MI NEGOCIO',
@@ -7728,6 +7876,7 @@ const SizedBox(width: 14),
       {int maxLines = 1, TextInputType? keyboardType}) {
     return TextField(
       controller: controller,
+      onChanged: (_) => setState(() {}),
       style: TextStyle(color: AppColors.text(isDark)),
       maxLines: maxLines,
       keyboardType: keyboardType,
@@ -7936,6 +8085,11 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          tooltip: 'Abrir menu',
+          onPressed: widget.onAbrirSidebar,
+          icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
+        ),
         title: Row(children: [
 const SizedBox(width: 14),
           Text('CATEGORÍAS',
@@ -8330,6 +8484,11 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          tooltip: 'Abrir menu',
+          onPressed: widget.onAbrirSidebar,
+          icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
+        ),
         title: Row(children: [
 const SizedBox(width: 14),
           Text('MÉTODOS DE PAGO',
@@ -8714,6 +8873,11 @@ class _VendedoresScreenState extends State<VendedoresScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          tooltip: 'Abrir menu',
+          onPressed: widget.onAbrirSidebar,
+          icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
+        ),
         title: Row(children: [
 const SizedBox(width: 14),
           Text('VENDEDORES',
@@ -9103,6 +9267,11 @@ class _ClientesScreenState extends State<ClientesScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          tooltip: 'Abrir menu',
+          onPressed: widget.onAbrirSidebar,
+          icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
+        ),
         title: Row(children: [
 const SizedBox(width: 14),
           Text('CLIENTES',
@@ -9491,6 +9660,11 @@ class _ConfigurarTicketScreenState extends State<ConfigurarTicketScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          tooltip: 'Abrir menu',
+          onPressed: widget.onAbrirSidebar,
+          icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
+        ),
         title: Row(children: [
 const SizedBox(width: 14),
           Text('CONFIGURAR TICKET',
@@ -10514,6 +10688,11 @@ class _ConfiguracionVariantesScreenState
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          tooltip: 'Abrir menu',
+          onPressed: widget.onAbrirSidebar,
+          icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
+        ),
         title: Row(children: [
 const SizedBox(width: 14),
           Text('TALLAS Y COLORES',
@@ -10668,33 +10847,120 @@ class CodigosBarrasScreen extends StatefulWidget {
   State<CodigosBarrasScreen> createState() => _CodigosBarrasScreenState();
 }
 
-class _CodigosBarrasScreenState extends State<CodigosBarrasScreen> {
+class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
+    with SingleTickerProviderStateMixin {
   final _db = DatabaseService();
   final _barcodeService = BarcodeService();
+  late final TabController _tabs;
 
   List<Map<String, dynamic>> _productos = [];
-  List<Map<String, dynamic>> _productosFiltrados = [];
+  List<Map<String, dynamic>> _categorias = [];
+  List<Map<String, dynamic>> _filtrados = [];
+  final Set<String> _seleccionados = {};
   bool _cargando = true;
   bool _imprimiendo = false;
+  bool _mostrarLogo = true;
+  bool _mostrarNombre = true;
+  bool _mostrarCodigo = true;
+  bool _mostrarPrecio = true;
+  bool _mostrarMarca = true;
+  bool _mostrarColor = true;
+  bool _mostrarTalla = true;
+  int _etiquetasPorHoja = 4;
+  int _copias = 1;
   String _busqueda = '';
-  String _filtro = 'Todos';
-  int _cantidadEtiquetas = 1;
+  String _categoria = 'Todas';
+  String _tipoCodigo = 'Code 128';
+  String _tamano = 'Mediana';
+  String _tipoDiseno = 'Tradicional';
+  Uint8List? _logo;
+  String? _logoNombre;
+  Map<String, Map<String, String>> _etiquetaOverrides = {};
 
   @override
   void initState() {
     super.initState();
+    _tabs = TabController(length: 3, vsync: this);
+    _cargarConfiguracion();
     _cargarDatos();
+  }
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
+
+  Future<void> _cargarConfiguracion() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final b64 = prefs.getString('etiquetas_logo_b64');
+      final overridesRaw = prefs.getString('etiquetas_overrides');
+      if (overridesRaw != null && overridesRaw.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(overridesRaw);
+          if (decoded is Map) {
+            final restored = <String, Map<String, String>>{};
+            decoded.forEach((k, v) {
+              if (v is Map) {
+                restored['$k'] = v.map((a, b) => MapEntry('$a', '$b')).cast<String, String>();
+              }
+            });
+            _etiquetaOverrides = restored;
+          }
+        } catch (_) {}
+      }
+      if (!mounted) return;
+      setState(() {
+        _mostrarLogo = prefs.getBool('etiquetas_logo') ?? true;
+        _mostrarNombre = prefs.getBool('etiquetas_nombre') ?? true;
+        _mostrarCodigo = prefs.getBool('etiquetas_codigo') ?? true;
+        _mostrarPrecio = prefs.getBool('etiquetas_precio') ?? true;
+        _mostrarMarca = prefs.getBool('etiquetas_marca') ?? true;
+        _mostrarColor = prefs.getBool('etiquetas_color') ?? true;
+        _mostrarTalla = prefs.getBool('etiquetas_talla') ?? true;
+        _etiquetasPorHoja = prefs.getInt('etiquetas_por_hoja') ?? 4;
+        _copias = prefs.getInt('etiquetas_copias') ?? 1;
+        _tipoCodigo = prefs.getString('etiquetas_tipo_codigo') ?? 'Code 128';
+        _tamano = prefs.getString('etiquetas_tamano') ?? 'Mediana';
+        _tipoDiseno = prefs.getString('etiquetas_tipo_diseno') ?? 'Tradicional';
+        if (b64 != null && b64.isNotEmpty) {
+          _logo = base64Decode(b64);
+          _logoNombre = prefs.getString('etiquetas_logo_nombre');
+        }
+      });
+    } catch (e) {
+      debugPrint('Error cargando diseño de etiquetas: $e');
+    }
+  }
+
+  Future<void> _guardarConfiguracion() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('etiquetas_logo', _mostrarLogo);
+    await prefs.setBool('etiquetas_nombre', _mostrarNombre);
+    await prefs.setBool('etiquetas_codigo', _mostrarCodigo);
+    await prefs.setBool('etiquetas_precio', _mostrarPrecio);
+    await prefs.setBool('etiquetas_marca', _mostrarMarca);
+    await prefs.setBool('etiquetas_color', _mostrarColor);
+    await prefs.setBool('etiquetas_talla', _mostrarTalla);
+    await prefs.setInt('etiquetas_por_hoja', _etiquetasPorHoja);
+    await prefs.setInt('etiquetas_copias', _copias);
+    await prefs.setString('etiquetas_tipo_codigo', _tipoCodigo);
+    await prefs.setString('etiquetas_tamano', _tamano);
+    await prefs.setString('etiquetas_tipo_diseno', _tipoDiseno);
   }
 
   Future<void> _cargarDatos() async {
     if (mounted) setState(() => _cargando = true);
     try {
       _productos = await _db.getProductos();
+      _categorias = await _db.getCategorias();
       _aplicarFiltros();
     } catch (e) {
-      debugPrint('Error cargando productos: $e');
       _productos = [];
-      _productosFiltrados = [];
+      _categorias = [];
+      _filtrados = [];
+      debugPrint('Error cargando productos para etiquetas: $e');
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -10702,520 +10968,667 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen> {
 
   void _aplicarFiltros() {
     final q = _busqueda.trim().toLowerCase();
-    _productosFiltrados = _productos.where((p) {
-      final nombre = (p['nombre'] ?? '').toString().toLowerCase();
-      final codigo = (p['codigo_barras'] ?? '').toString().toLowerCase();
-      final tieneCodigo = codigo.trim().isNotEmpty;
-      final coincide = q.isEmpty || nombre.contains(q) || codigo.contains(q);
-      final estado = _filtro == 'Todos' ||
-          (_filtro == 'Con código' && tieneCodigo) ||
-          (_filtro == 'Sin código' && !tieneCodigo);
-      return coincide && estado;
+    _filtrados = _productos.where((p) {
+      final nombre = '${p['nombre'] ?? ''}'.toLowerCase();
+      final codigo = '${p['codigo_barras'] ?? ''}'.toLowerCase();
+      final cat = '${p['categoria'] ?? ''}';
+      return (q.isEmpty || nombre.contains(q) || codigo.contains(q)) &&
+          (_categoria == 'Todas' || cat == _categoria);
     }).toList();
   }
 
-  Future<void> _generarCodigo(String productoId) async {
+  Future<void> _generarCodigo(Map<String, dynamic> p) async {
     try {
-      final nuevoCodigo = await _barcodeService.generarCodigoEAN13();
-      await _db.actualizarProducto(productoId, {'codigo_barras': nuevoCodigo});
+      final codigo = await _barcodeService.generarCodigoEAN13();
+      await _db.actualizarProducto('${p['id']}', {'codigo_barras': codigo});
       await _cargarDatos();
-      _mostrarSnackbar('Código generado correctamente', AppColors.success);
+      _snack('Código generado: $codigo', AppColors.success);
     } catch (e) {
-      _mostrarSnackbar('No se pudo generar el código: $e', AppColors.danger);
+      _snack('No se pudo generar el código: $e', AppColors.danger);
     }
   }
 
-  Future<void> _generarCodigosMasivos() async {
-    final faltantes = _productos.where((p) {
-      final c = (p['codigo_barras'] ?? '').toString().trim();
-      return c.isEmpty;
-    }).toList();
-
+  Future<void> _generarFaltantes() async {
+    final faltantes = _productos.where((p) => '${p['codigo_barras'] ?? ''}'.trim().isEmpty).toList();
     if (faltantes.isEmpty) {
-      _mostrarSnackbar('Todos los productos ya tienen código', AppColors.warning);
+      _snack('Todos los productos ya tienen código', AppColors.warning);
       return;
     }
+    for (final p in faltantes) {
+      final codigo = await _barcodeService.generarCodigoEAN13();
+      await _db.actualizarProducto('${p['id']}', {'codigo_barras': codigo});
+    }
+    await _cargarDatos();
+    _snack('${faltantes.length} códigos generados', AppColors.success);
+  }
 
+  Future<void> _seleccionarLogo() async {
     try {
-      for (final prod in faltantes) {
-        final nuevoCodigo = await _barcodeService.generarCodigoEAN13();
-        await _db.actualizarProducto(prod['id'].toString(), {
-          'codigo_barras': nuevoCodigo,
-        });
-      }
-      await _cargarDatos();
-      _mostrarSnackbar(
-        '${faltantes.length} códigos generados',
-        AppColors.success,
-      );
+      final file = await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('etiquetas_logo_b64', base64Encode(bytes));
+      await prefs.setString('etiquetas_logo_nombre', file.name);
+      if (!mounted) return;
+      setState(() {
+        _logo = bytes;
+        _logoNombre = file.name;
+        _mostrarLogo = true;
+      });
+      await _guardarConfiguracion();
+      _snack('Logo guardado para las etiquetas', AppColors.success);
     } catch (e) {
-      _mostrarSnackbar('Error generando códigos: $e', AppColors.danger);
+      _snack('No se pudo cargar el logo: $e', AppColors.danger);
     }
   }
 
-  List<Map<String, dynamic>> _conCodigo(List<Map<String, dynamic>> source) {
-    return source.where((p) {
-      return (p['codigo_barras'] ?? '').toString().trim().isNotEmpty;
-    }).toList();
+  Future<void> _editarProducto(Map<String, dynamic> p) async {
+    final id = '${p['id']}';
+    final current = _etiquetaOverrides[id] ?? <String, String>{};
+    final nombre = TextEditingController(text: '${p['nombre'] ?? ''}');
+    final codigo = TextEditingController(text: '${p['codigo_barras'] ?? ''}');
+    final precio = TextEditingController(text: '${p['precio_venta'] ?? p['precio'] ?? ''}');
+    final marca = TextEditingController(text: current['marca'] ?? '${p['marca'] ?? ''}');
+    final color = TextEditingController(text: current['color'] ?? '${p['color'] ?? ''}');
+    final talla = TextEditingController(text: current['talla'] ?? '${p['talla'] ?? p['talla_nombre'] ?? ''}');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Diseño de etiqueta del producto'),
+        content: SingleChildScrollView(
+          child: Column(children: [
+            _dialogField(nombre, 'Nombre'),
+            _dialogField(codigo, 'Código de barras'),
+            _dialogField(precio, 'Precio'),
+            _dialogField(marca, 'Marca / fabricante'),
+            _dialogField(color, 'Color'),
+            _dialogField(talla, 'Talla / tamaño'),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Guardar')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      // Solo se actualizan columnas que ya existen en el catálogo. Marca/color/talla
+      // se guardan como datos propios de la etiqueta para no romper bases antiguas.
+      await _db.actualizarProducto(id, {
+        'nombre': nombre.text.trim(),
+        'codigo_barras': codigo.text.trim(),
+        'precio_venta': double.tryParse(precio.text.replaceAll(',', '.')) ?? 0,
+      });
+      _etiquetaOverrides[id] = {
+        'marca': marca.text.trim(),
+        'color': color.text.trim(),
+        'talla': talla.text.trim(),
+      };
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('etiquetas_overrides', jsonEncode(_etiquetaOverrides));
+      await _cargarDatos();
+      _snack('Diseño del producto guardado', AppColors.success);
+    } catch (e) {
+      _snack('No se pudo guardar: $e', AppColors.danger);
+    }
   }
 
-  Future<Uint8List> _crearPdfEtiquetas(
-    List<Map<String, dynamic>> productos,
-    int copias,
-  ) async {
+  InputDecoration _field(String label) => InputDecoration(
+    labelText: label,
+    filled: true,
+    fillColor: AppColors.background(widget.modoOscuro),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+  );
+
+  Widget _dialogField(TextEditingController c, String label) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: TextField(controller: c, decoration: _field(label)),
+  );
+
+  pw.Barcode _barcode() {
+    switch (_tipoCodigo) {
+      case 'EAN-13': return pw.Barcode.ean13();
+      case 'Code 39': return pw.Barcode.code39();
+      case 'QR': return pw.Barcode.qrCode();
+      default: return pw.Barcode.code128();
+    }
+  }
+
+  String _codigoValido(Map<String, dynamic> p) {
+    final c = '${p['codigo_barras'] ?? ''}'.trim();
+    return c.isEmpty ? 'SIN-CODIGO' : c;
+  }
+
+  String _valor(Map<String, dynamic> p, List<String> keys) {
+    final override = _etiquetaOverrides['${p['id']}'];
+    for (final k in keys) {
+      final ov = override?[k];
+      if (ov != null && ov.trim().isNotEmpty) return ov;
+      final v = p[k];
+      if (v != null && '$v'.trim().isNotEmpty) return '$v';
+    }
+    return '';
+  }
+
+  Future<Uint8List> _crearPdfEtiquetas(List<Map<String, dynamic>> productos) async {
     final doc = pw.Document();
     final items = <Map<String, dynamic>>[];
-
     for (final p in productos) {
-      for (var i = 0; i < copias; i++) {
-        items.add(p);
-      }
+      for (var i = 0; i < _copias; i++) items.add(p);
     }
 
-    for (final p in items) {
-      final nombre = (p['nombre'] ?? 'Producto').toString();
-      final codigo = (p['codigo_barras'] ?? '').toString().trim();
-      final precio = (p['precio_venta'] ?? p['precio'] ?? 0).toString();
+    final logo = _logo == null ? null : pw.MemoryImage(_logo!);
+    final dims = <String, List<double>>{
+      'Pequeña': [50, 30],
+      'Mediana': [70, 40],
+      'Grande': [90, 50],
+    }[_tamano] ?? [70, 40];
+    final labelW = dims[0];
+    final labelH = dims[1];
+    final perSheet = _etiquetasPorHoja.clamp(1, 8).toInt();
+    final cols = perSheet <= 1 ? 1 : 2;
+    final rows = perSheet <= 2 ? 1 : (perSheet <= 4 ? 2 : 4);
+    const gap = 1.2;
+    final pageW = perSheet == 1 ? labelW : (labelW * cols) + gap * (cols - 1);
+    final pageH = perSheet == 1 ? labelH : (labelH * rows) + gap * (rows - 1);
+    final pageFormat = PdfPageFormat(pageW * PdfPageFormat.mm, pageH * PdfPageFormat.mm, marginAll: 0);
 
-      doc.addPage(
-        pw.Page(
-          pageFormat: const PdfPageFormat(
-            80 * PdfPageFormat.mm,
-            45 * PdfPageFormat.mm,
-            marginAll: 4 * PdfPageFormat.mm,
-          ),
-          build: (context) {
-            return pw.Container(
-              alignment: pw.Alignment.center,
-              child: pw.Column(
+    pw.Widget etiqueta(Map<String, dynamic> p) {
+      final nombre = '${p['nombre'] ?? 'Producto'}';
+      final codigo = _codigoValido(p);
+      final precio = _valor(p, ['precio_venta', 'precio']);
+      final marca = _valor(p, ['marca', 'brand']);
+      final color = _valor(p, ['color', 'color_nombre']);
+      final talla = _valor(p, ['talla', 'talla_nombre', 'size']);
+      final compacta = _tipoDiseno == 'Compacta' || _tamano == 'Pequeña';
+      final logoLayout = _tipoDiseno == 'Logo';
+      final usaQR = _tipoCodigo == 'QR' || _tipoDiseno == 'QR';
+      final barcodeW = (labelW - 7).clamp(28.0, 86.0);
+      final barcodeH = compacta ? 7.0 : (labelH <= 30 ? 8.0 : 10.0);
+
+      pw.Widget codigoWidget = usaQR
+          ? pw.BarcodeWidget(
+              barcode: pw.Barcode.qrCode(),
+              data: codigo,
+              width: compacta ? 12 * PdfPageFormat.mm : 16 * PdfPageFormat.mm,
+              height: compacta ? 12 * PdfPageFormat.mm : 16 * PdfPageFormat.mm,
+            )
+          : pw.BarcodeWidget(
+              barcode: _barcode(),
+              data: codigo,
+              width: barcodeW * PdfPageFormat.mm,
+              height: barcodeH * PdfPageFormat.mm,
+              drawText: true,
+              textStyle: pw.TextStyle(fontSize: compacta ? 4.5 : 5.4),
+            );
+
+      final dataLine = [
+        if (_mostrarMarca && marca.isNotEmpty) marca,
+        if (_mostrarColor && color.isNotEmpty) color,
+        if (_mostrarTalla && talla.isNotEmpty) 'Talla $talla',
+      ].join(' · ');
+
+      final info = pw.Column(
+        mainAxisAlignment: pw.MainAxisAlignment.center,
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        mainAxisSize: pw.MainAxisSize.min,
+        children: [
+          if (_mostrarNombre)
+            pw.Text(
+              nombre,
+              maxLines: 1,
+              overflow: pw.TextOverflow.clip,
+              textAlign: pw.TextAlign.center,
+              style: pw.TextStyle(fontSize: compacta ? 5.8 : 6.6, fontWeight: pw.FontWeight.bold),
+            ),
+          if (dataLine.isNotEmpty)
+            pw.Text(dataLine, maxLines: 1, overflow: pw.TextOverflow.clip, style: pw.TextStyle(fontSize: compacta ? 4.2 : 4.8)),
+          if (_mostrarCodigo) pw.SizedBox(height: 0.8 * PdfPageFormat.mm, child: codigoWidget),
+          if (_mostrarPrecio && precio.isNotEmpty)
+            pw.Text('\$$precio', style: pw.TextStyle(fontSize: compacta ? 6.5 : 7.5, fontWeight: pw.FontWeight.bold)),
+        ],
+      );
+
+      return pw.Container(
+        width: labelW * PdfPageFormat.mm,
+        height: labelH * PdfPageFormat.mm,
+        padding: pw.EdgeInsets.symmetric(horizontal: 1.4 * PdfPageFormat.mm, vertical: 1.0 * PdfPageFormat.mm),
+        decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey500, width: .28)),
+        child: logoLayout
+            ? pw.Row(children: [
+                if (logo != null)
+                  pw.Container(width: 10 * PdfPageFormat.mm, height: 12 * PdfPageFormat.mm, child: pw.Image(logo, fit: pw.BoxFit.contain)),
+                pw.SizedBox(width: 1 * PdfPageFormat.mm),
+                pw.Expanded(child: info),
+              ])
+            : pw.Column(
                 mainAxisAlignment: pw.MainAxisAlignment.center,
-                crossAxisAlignment: pw.CrossAxisAlignment.center,
                 children: [
-                  pw.Text(
-                    nombre,
-                    maxLines: 2,
-                    textAlign: pw.TextAlign.center,
-                    style: pw.TextStyle(
-                      fontSize: 9,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                  pw.SizedBox(height: 3),
-                  pw.BarcodeWidget(
-                    barcode: pw.Barcode.code128(),
-                    data: codigo,
-                    width: 68 * PdfPageFormat.mm,
-                    height: 20 * PdfPageFormat.mm,
-                    drawText: true,
-                  ),
-                  pw.SizedBox(height: 2),
-                  pw.Text(
-                    '\$$precio',
-                    style: pw.TextStyle(
-                      fontSize: 11,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
+                  if (_mostrarLogo && logo != null)
+                    pw.Container(height: compacta ? 5.5 : 7.0, width: labelW * PdfPageFormat.mm - 4 * PdfPageFormat.mm, child: pw.Image(logo, fit: pw.BoxFit.contain)),
+                  info,
                 ],
               ),
-            );
-          },
-        ),
       );
     }
 
+    for (var offset = 0; offset < items.length; offset += perSheet) {
+      final groupEnd = (offset + perSheet).clamp(0, items.length).toInt();
+      final group = items.sublist(offset, groupEnd);
+      final cells = <pw.Widget>[];
+      for (var i = 0; i < perSheet; i++) {
+        cells.add(i < group.length ? etiqueta(group[i]) : pw.SizedBox(width: labelW * PdfPageFormat.mm, height: labelH * PdfPageFormat.mm));
+      }
+      final rowsWidgets = <pw.Widget>[];
+      for (var r = 0; r < rows; r++) {
+        final rowCells = <pw.Widget>[];
+        for (var c = 0; c < cols; c++) {
+          if (c > 0) rowCells.add(pw.SizedBox(width: gap * PdfPageFormat.mm));
+          rowCells.add(cells[r * cols + c]);
+        }
+        rowsWidgets.add(pw.Row(children: rowCells));
+        if (r < rows - 1) rowsWidgets.add(pw.SizedBox(height: gap * PdfPageFormat.mm));
+      }
+      doc.addPage(pw.Page(
+        pageFormat: pageFormat,
+        margin: pw.EdgeInsets.zero,
+        build: (_) => pw.Column(children: rowsWidgets),
+      ));
+    }
     return doc.save();
   }
 
-  Future<void> _imprimirProductos(
-    List<Map<String, dynamic>> productos, {
-    int copias = 1,
-  }) async {
-    final validos = _conCodigo(productos);
+  Future<void> _imprimir(List<Map<String, dynamic>> productos) async {
+    final validos = productos.where((p) => '${p['codigo_barras'] ?? ''}'.trim().isNotEmpty).toList();
     if (validos.isEmpty) {
-      _mostrarSnackbar(
-        'No hay productos con código de barras para imprimir',
-        AppColors.warning,
-      );
+      _snack('No hay productos con código para imprimir', AppColors.warning);
       return;
     }
-
     if (_imprimiendo) return;
     setState(() => _imprimiendo = true);
-
     try {
-      final bytes = await _crearPdfEtiquetas(validos, copias);
+      final bytes = await _crearPdfEtiquetas(validos);
       await Printing.layoutPdf(
         name: 'Etiquetas SINTHETIX PRO',
         onLayout: (_) async => bytes,
+        usePrinterSettings: true,
       );
-      _mostrarSnackbar(
-        '${validos.length * copias} etiquetas enviadas a impresión',
-        AppColors.success,
-      );
+      _snack('${validos.length * _copias} etiquetas preparadas para impresión', AppColors.success);
     } catch (e) {
-      _mostrarSnackbar('Error de impresión: $e', AppColors.danger);
+      _snack('Error al imprimir etiquetas: $e', AppColors.danger);
     } finally {
       if (mounted) setState(() => _imprimiendo = false);
     }
   }
 
-  void _imprimirUno(Map<String, dynamic> producto) {
-    _imprimirProductos([producto], copias: _cantidadEtiquetas);
-  }
-
-  Future<void> _seleccionarCantidad() async {
-    int cantidad = _cantidadEtiquetas;
+  Future<void> _cantidadCopias() async {
+    var value = _copias;
     final result = await showDialog<int>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Cantidad de etiquetas'),
-          content: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                onPressed: () {
-                  if (cantidad > 1) setDialogState(() => cantidad--);
-                },
-                icon: const Icon(Icons.remove_circle_outline),
-              ),
-              Text(
-                '$cantidad',
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              IconButton(
-                onPressed: () {
-                  if (cantidad < 100) setDialogState(() => cantidad++);
-                },
-                icon: const Icon(Icons.add_circle_outline),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, cantidad),
-              child: const Text('Aplicar'),
-            ),
-          ],
-        ),
-      ),
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
+        title: const Text('Cantidad de etiquetas por producto'),
+        content: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          IconButton(onPressed: () { if (value > 1) setD(() => value--); }, icon: const Icon(Icons.remove_circle_outline)),
+          Text('$value', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+          IconButton(onPressed: () { if (value < 100) setD(() => value++); }, icon: const Icon(Icons.add_circle_outline)),
+        ]),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')), FilledButton(onPressed: () => Navigator.pop(ctx, value), child: const Text('Aplicar'))],
+      )),
     );
-
-    if (result != null && mounted) {
-      setState(() => _cantidadEtiquetas = result);
+    if (result != null) {
+      setState(() => _copias = result);
+      await _guardarConfiguracion();
     }
   }
 
-  void _mostrarSnackbar(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg, style: const TextStyle(color: Colors.white)),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+  void _snack(String text, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text), backgroundColor: color, behavior: SnackBarBehavior.floating));
+  }
+
+  Widget _productoCard(Map<String, dynamic> p, bool dark) {
+    final id = '${p['id']}';
+    final codigo = '${p['codigo_barras'] ?? ''}'.trim();
+    final selected = _seleccionados.contains(id);
+    final stock = (p['stock'] as num?)?.toInt() ?? 0;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(16), border: Border.all(color: selected ? AppColors.primary : AppColors.divider(dark))),
+      child: ListTile(
+        leading: Checkbox(value: selected, onChanged: (v) => setState(() { if (v == true) _seleccionados.add(id); else _seleccionados.remove(id); })),
+        title: Text('${p['nombre'] ?? 'Producto'}', style: TextStyle(color: AppColors.text(dark), fontWeight: FontWeight.w800)),
+        subtitle: Text('${codigo.isEmpty ? 'SIN CÓDIGO' : codigo} · Stock: $stock', style: TextStyle(color: codigo.isEmpty ? AppColors.warning : AppColors.subtext(dark), fontSize: 11)),
+        trailing: Wrap(spacing: 2, children: [
+          if (codigo.isEmpty) IconButton(tooltip: 'Generar código', onPressed: () => _generarCodigo(p), icon: const Icon(Icons.auto_awesome_rounded, color: AppColors.warning)),
+          IconButton(tooltip: 'Editar datos de etiqueta', onPressed: () => _editarProducto(p), icon: const Icon(Icons.edit_outlined, color: AppColors.primary)),
+          if (codigo.isNotEmpty) IconButton(tooltip: 'Imprimir este producto', onPressed: () => _imprimir([p]), icon: const Icon(Icons.print_outlined, color: AppColors.success)),
+        ]),
       ),
     );
+  }
+
+  Widget _catalogoTab(bool dark) {
+    final conCodigo = _filtrados.where((p) => '${p['codigo_barras'] ?? ''}'.trim().isNotEmpty).length;
+    return ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 28), children: [
+      Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(gradient: AppColors.gradientPrimary, borderRadius: BorderRadius.circular(20)), child: Row(children: [
+        const Icon(Icons.qr_code_2_rounded, color: Colors.white, size: 34), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Etiquetas y códigos', style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text('${_productos.length} productos · $conCodigo con código', style: const TextStyle(color: Colors.white70, fontSize: 11))]))
+      ])),
+      const SizedBox(height: 12),
+      Row(children: [
+        Expanded(child: ElevatedButton.icon(onPressed: _generarFaltantes, icon: const Icon(Icons.auto_awesome_rounded, size: 18), label: const Text('Generar faltantes'))),
+        const SizedBox(width: 8),
+        Expanded(child: ElevatedButton.icon(onPressed: _filtrados.isEmpty || _imprimiendo ? null : () => _imprimir(_filtrados), icon: const Icon(Icons.print_rounded, size: 18), label: Text(_imprimiendo ? 'Preparando...' : 'Imprimir todos'))),
+      ]),
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(child: OutlinedButton.icon(onPressed: _seleccionados.isEmpty ? null : () => _imprimir(_filtrados.where((p) => _seleccionados.contains('${p['id']}')).toList()), icon: const Icon(Icons.checklist_rounded), label: Text('Imprimir seleccionados (${_seleccionados.length})'))),
+        const SizedBox(width: 8),
+        OutlinedButton.icon(onPressed: _cantidadCopias, icon: const Icon(Icons.copy_rounded), label: Text('$_copias copias')),
+      ]),
+      const SizedBox(height: 12),
+      TextField(onChanged: (v) => setState(() { _busqueda = v; _aplicarFiltros(); }), decoration: _field('Buscar producto o código').copyWith(prefixIcon: const Icon(Icons.search_rounded))),
+      const SizedBox(height: 10),
+      DropdownButtonFormField<String>(value: _categoria, decoration: _field('Categoría'), items: ['Todas', ..._categorias.map((e) => '${e['nombre'] ?? ''}')].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => setState(() { _categoria = v ?? 'Todas'; _aplicarFiltros(); })),
+      const SizedBox(height: 12),
+      if (_cargando) const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
+      else if (_filtrados.isEmpty) Padding(padding: const EdgeInsets.all(30), child: Center(child: Text('No hay productos para mostrar', style: TextStyle(color: AppColors.subtext(dark)))))
+      else ..._filtrados.map((p) => _productoCard(p, dark)),
+    ]);
+  }
+
+  Widget _disenoTab(bool dark) {
+    final demo = _filtrados.isNotEmpty
+        ? _filtrados.first
+        : <String, dynamic>{
+            'nombre': 'Zapatilla deportiva',
+            'codigo_barras': '7591020080804',
+            'precio_venta': 29.99,
+            'marca': 'NIKE',
+            'color': 'Negro',
+            'talla': '42',
+          };
+    final tiposDiseno = <Map<String, dynamic>>[
+      {'n': 'Tradicional', 'i': Icons.view_agenda_outlined, 'd': 'Clásica: nombre + código + precio.'},
+      {'n': 'QR', 'i': Icons.qr_code_2_rounded, 'd': 'QR protagonista para lectura rápida.'},
+      {'n': 'Compacta', 'i': Icons.crop_square_rounded, 'd': 'Mínima y densa para etiquetas pequeñas.'},
+      {'n': 'Logo', 'i': Icons.branding_watermark_outlined, 'd': 'Marca/logo destacado para calzado.'},
+    ];
+    final tamanos = <String, String>{
+      'Pequeña': '50 × 30 mm',
+      'Mediana': '70 × 40 mm',
+      'Grande': '90 × 50 mm',
+    };
+    final distribuciones = <int, String>{1: '1 etiqueta', 2: '2 etiquetas', 4: '4 etiquetas', 8: '8 etiquetas'};
+
+    return ListView(padding: const EdgeInsets.fromLTRB(14, 12, 14, 30), children: [
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(gradient: AppColors.gradientPrimary, borderRadius: BorderRadius.circular(20)),
+        child: Row(children: [
+          Container(width: 44, height: 44, decoration: BoxDecoration(color: Colors.white.withValues(alpha: .15), borderRadius: BorderRadius.circular(14)), child: const Icon(Icons.design_services_rounded, color: Colors.white)),
+          const SizedBox(width: 12),
+          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Diseñador de etiquetas', style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900)),
+            SizedBox(height: 3),
+            Text('Diseña una vez y la impresión respeta exactamente el formato elegido.', style: TextStyle(color: Colors.white70, fontSize: 10.5)),
+          ])),
+        ]),
+      ),
+      const SizedBox(height: 12),
+      Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.divider(dark))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('1. Tipo de diseño', style: TextStyle(color: AppColors.text(dark), fontSize: 15, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          ...tiposDiseno.map((d) => Padding(
+            padding: const EdgeInsets.only(bottom: 7),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(13),
+              onTap: () => setState(() => _tipoDiseno = d['n'] as String),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _tipoDiseno == d['n'] ? AppColors.primary.withValues(alpha: .09) : AppColors.background(dark),
+                  borderRadius: BorderRadius.circular(13),
+                  border: Border.all(color: _tipoDiseno == d['n'] ? AppColors.primary : AppColors.divider(dark)),
+                ),
+                child: Row(children: [
+                  Icon(d['i'] as IconData, color: _tipoDiseno == d['n'] ? AppColors.primary : AppColors.subtext(dark), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(d['n'] as String, style: TextStyle(color: AppColors.text(dark), fontSize: 12, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 2),
+                    Text(d['d'] as String, style: TextStyle(color: AppColors.subtext(dark), fontSize: 9.5)),
+                  ])),
+                  if (_tipoDiseno == d['n']) const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 19),
+                ]),
+              ),
+            ),
+          )),
+          const SizedBox(height: 7),
+          Text('2. Tipo de código', style: TextStyle(color: AppColors.text(dark), fontSize: 15, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 8),
+          Wrap(spacing: 7, runSpacing: 7, children: ['Code 128', 'EAN-13', 'Code 39', 'QR'].map((e) => ChoiceChip(label: Text(e), selected: _tipoCodigo == e, onSelected: (_) => setState(() => _tipoCodigo = e))).toList()),
+          const SizedBox(height: 13),
+          Row(children: [
+            Expanded(child: DropdownButtonFormField<String>(value: _tamano, decoration: _field('Tamaño físico'), items: tamanos.entries.map((e) => DropdownMenuItem(value: e.key, child: Text('${e.key} · ${e.value}'))).toList(), onChanged: (v) => setState(() => _tamano = v ?? 'Mediana'))),
+            const SizedBox(width: 9),
+            Expanded(child: DropdownButtonFormField<int>(value: _etiquetasPorHoja, decoration: _field('Distribución'), items: distribuciones.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(), onChanged: (v) => setState(() => _etiquetasPorHoja = v ?? 1))),
+          ]),
+          const SizedBox(height: 12),
+          Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: AppColors.background(dark), borderRadius: BorderRadius.circular(13)), child: Row(children: [
+            Container(width: 54, height: 54, padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.divider(dark))), child: _logo == null ? Icon(Icons.image_outlined, color: AppColors.subtext(dark)) : Image.memory(_logo!, fit: BoxFit.contain)),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_logoNombre ?? 'Sin logo', style: TextStyle(color: AppColors.text(dark), fontSize: 12, fontWeight: FontWeight.w800)), const SizedBox(height: 3), Text('El logo se refleja en la vista y en la impresión.', style: TextStyle(color: AppColors.subtext(dark), fontSize: 9))])),
+            OutlinedButton.icon(onPressed: _seleccionarLogo, icon: const Icon(Icons.upload_rounded, size: 15), label: const Text('Logo')),
+          ])),
+          const SizedBox(height: 7),
+          _switch('Mostrar logo', _mostrarLogo, (v) => setState(() => _mostrarLogo = v), dark),
+          _switch('Nombre', _mostrarNombre, (v) => setState(() => _mostrarNombre = v), dark),
+          _switch('Código', _mostrarCodigo, (v) => setState(() => _mostrarCodigo = v), dark),
+          _switch('Precio', _mostrarPrecio, (v) => setState(() => _mostrarPrecio = v), dark),
+          _switch('Marca', _mostrarMarca, (v) => setState(() => _mostrarMarca = v), dark),
+          _switch('Color', _mostrarColor, (v) => setState(() => _mostrarColor = v), dark),
+          _switch('Talla', _mostrarTalla, (v) => setState(() => _mostrarTalla = v), dark),
+          const SizedBox(height: 4),
+          FilledButton.icon(onPressed: () async { await _guardarConfiguracion(); _snack('Diseño guardado', AppColors.success); }, icon: const Icon(Icons.save_rounded), label: const Text('Guardar diseño')),
+        ]),
+      ),
+      const SizedBox(height: 12),
+      _previewEtiqueta(demo, dark),
+    ]);
+  }
+
+  Widget _switch(String label, bool value, ValueChanged<bool> onChanged, bool dark) => SwitchListTile.adaptive(contentPadding: EdgeInsets.zero, dense: true, title: Text(label, style: TextStyle(color: AppColors.text(dark), fontSize: 12, fontWeight: FontWeight.w700)), value: value, onChanged: onChanged);
+
+  Widget _previewEtiqueta(Map<String, dynamic> p, bool dark) {
+    final codigo = '${p['codigo_barras'] ?? '7591020080804'}';
+    final marca = _valor(p, ['marca', 'brand']);
+    final color = _valor(p, ['color', 'color_nombre']);
+    final talla = _valor(p, ['talla', 'talla_nombre', 'size']);
+    final mm = {'Pequeña': [50.0, 30.0], 'Mediana': [70.0, 40.0], 'Grande': [90.0, 50.0]}[_tamano]!;
+    final qr = _tipoCodigo == 'QR' || _tipoDiseno == 'QR';
+    final count = _etiquetasPorHoja;
+    final columns = count <= 1 ? 1 : 2;
+    final rows = count <= 2 ? 1 : (count <= 4 ? 2 : 4);
+
+    Widget mini() => _previewInfo(p, codigo, marca, color, talla, qr, compact: true);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.divider(dark))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(child: Text('Vista previa de impresión', style: TextStyle(color: AppColors.text(dark), fontSize: 16, fontWeight: FontWeight.w900))),
+          Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5), decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: .1), borderRadius: BorderRadius.circular(9)), child: Text('${mm[0].toInt()} × ${mm[1].toInt()} mm', style: const TextStyle(color: AppColors.primary, fontSize: 9, fontWeight: FontWeight.w900))),
+        ]),
+        const SizedBox(height: 6),
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          _previewBadge(_tipoDiseno, Icons.style_rounded, dark),
+          _previewBadge(_tipoCodigo, Icons.qr_code_2_rounded, dark),
+          _previewBadge('$count por hoja', Icons.grid_view_rounded, dark),
+        ]),
+        const SizedBox(height: 13),
+        Text('Etiqueta real', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 6),
+        Center(child: LayoutBuilder(builder: (context, c) {
+          final maxW = c.maxWidth.clamp(260.0, 520.0).toDouble();
+          final aspect = mm[0] / mm[1];
+          return Container(
+            width: maxW,
+            constraints: const BoxConstraints(maxHeight: 260),
+            child: AspectRatio(aspectRatio: aspect, child: _previewLabelCard(p, codigo, marca, color, talla, qr, dark, compact: false)),
+          );
+        })),
+        const SizedBox(height: 13),
+        Text('Así quedará la hoja', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: AppColors.background(dark), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.divider(dark))),
+          child: AspectRatio(aspectRatio: columns / rows.toDouble(), child: GridView.builder(physics: const NeverScrollableScrollPhysics(), gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: columns, crossAxisSpacing: 5, mainAxisSpacing: 5), itemCount: count, itemBuilder: (_, __) => _previewLabelCard(p, codigo, marca, color, talla, qr, dark, compact: true))),
+        ),
+        const SizedBox(height: 7),
+        Text('El formato seleccionado se usa también al generar el PDF de impresión.', style: TextStyle(color: AppColors.subtext(dark), fontSize: 9)),
+      ]),
+    );
+  }
+
+  Widget _previewBadge(String text, IconData icon, bool dark) => Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5), decoration: BoxDecoration(color: AppColors.background(dark), borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.divider(dark))), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 12, color: AppColors.primary), const SizedBox(width: 4), Text(text, style: TextStyle(color: AppColors.text(dark), fontSize: 9, fontWeight: FontWeight.w800))]));
+
+  Widget _previewLabelCard(Map<String, dynamic> p, String codigo, String marca, String color, String talla, bool qr, bool dark, {required bool compact}) {
+    return Container(
+      padding: EdgeInsets.all(compact ? 5 : 10),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(compact ? 5 : 8), border: Border.all(color: Colors.black26)),
+      child: _tipoDiseno == 'Logo'
+          ? Row(children: [
+              if (_logo != null) Expanded(flex: 3, child: Padding(padding: const EdgeInsets.all(3), child: Image.memory(_logo!, fit: BoxFit.contain))),
+              Expanded(flex: 7, child: _previewInfo(p, codigo, marca, color, talla, qr, compact: compact)),
+            ])
+          : _previewInfo(p, codigo, marca, color, talla, qr, compact: compact),
+    );
+  }
+
+  Widget _previewInfo(Map<String, dynamic> p, String codigo, String marca, String color, String talla, bool qr, {required bool compact}) {
+    return LayoutBuilder(builder: (context, c) => Column(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
+      if (_tipoDiseno != 'Logo' && _mostrarLogo && _logo != null) SizedBox(height: compact ? 13 : 24, child: Image.memory(_logo!, fit: BoxFit.contain)),
+      if (_mostrarNombre) FittedBox(fit: BoxFit.scaleDown, child: Text('${p['nombre'] ?? 'Zapatilla deportiva'}', maxLines: 1, style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: compact ? 7 : 12))),
+      if (_mostrarMarca && marca.isNotEmpty) FittedBox(fit: BoxFit.scaleDown, child: Text(marca, style: TextStyle(color: Colors.black87, fontSize: compact ? 5.5 : 8))),
+      if (_mostrarColor || _mostrarTalla) FittedBox(fit: BoxFit.scaleDown, child: Text([if (_mostrarColor && color.isNotEmpty) color, if (_mostrarTalla && talla.isNotEmpty) 'Talla $talla'].join(' · '), style: TextStyle(color: Colors.black87, fontSize: compact ? 5 : 7))),
+      if (_mostrarCodigo) qr
+          ? Padding(padding: EdgeInsets.symmetric(vertical: compact ? 1 : 3), child: QrImageView(data: codigo, size: compact ? 30 : 58))
+          : SizedBox(height: compact ? 20 : 43, width: c.maxWidth, child: CustomPaint(painter: _PreviewBarcodePainter(codigo, _tipoCodigo))),
+      if (_mostrarPrecio) FittedBox(fit: BoxFit.scaleDown, child: Text('\$${p['precio_venta'] ?? p['precio'] ?? '29.99'}', style: TextStyle(color: Colors.black, fontSize: compact ? 7 : 14, fontWeight: FontWeight.w900))),
+    ]));
+  }
+
+  Widget _escanearTab(bool dark) {
+    final controller = TextEditingController();
+    return StatefulBuilder(builder: (context, setLocal) {
+      Map<String, dynamic>? encontrado;
+      void buscar() {
+        final q = controller.text.trim().toLowerCase();
+        encontrado = _productos.cast<Map<String, dynamic>?>().firstWhere((p) => p != null && ('${p['codigo_barras'] ?? ''}'.toLowerCase() == q || '${p['nombre'] ?? ''}'.toLowerCase().contains(q)), orElse: () => null);
+        setLocal(() {});
+      }
+      return ListView(padding: const EdgeInsets.all(16), children: [
+        Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(gradient: AppColors.gradientPrimary, borderRadius: BorderRadius.circular(20)), child: const Row(children: [Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 34), SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Escanear producto', style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900)), SizedBox(height: 4), Text('Cámara Android, lector externo o código manual', style: TextStyle(color: Colors.white70, fontSize: 11))]))])),
+        const SizedBox(height: 12),
+        TextField(controller: controller, onSubmitted: (_) => buscar(), decoration: _field('Introducir código manual').copyWith(prefixIcon: const Icon(Icons.keyboard_rounded), suffixIcon: IconButton(onPressed: buscar, icon: const Icon(Icons.search_rounded)))),
+        const SizedBox(height: 12),
+        Material(
+          color: AppColors.primary,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () async {
+              final value = await showDialog<String>(
+                context: context,
+                barrierDismissible: false,
+                builder: (ctx) => Dialog(
+                  backgroundColor: Colors.transparent,
+                  insetPadding: const EdgeInsets.all(18),
+                  child: SizedBox(
+                    width: 560,
+                    height: 430,
+                    child: ScannerRapido(
+                      isDark: dark,
+                      onCodigoDetectado: (codigo) async => Navigator.pop(ctx, codigo),
+                      onCerrar: () => Navigator.pop(ctx),
+                    ),
+                  ),
+                ),
+              );
+              if (value != null && value.isNotEmpty) {
+                controller.text = value;
+                buscar();
+              }
+            },
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 15, horizontal: 16),
+              child: Row(children: [
+                Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 22),
+                SizedBox(width: 10),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Abrir scanner profesional', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900)),
+                  SizedBox(height: 3),
+                  Text('Cámara + EAN / UPC / Code 128 / QR / Code 39', style: TextStyle(color: Colors.white70, fontSize: 9)),
+                ])),
+                Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
+              ]),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (encontrado != null) Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.success)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${encontrado!['nombre'] ?? ''}', style: TextStyle(color: AppColors.text(dark), fontSize: 17, fontWeight: FontWeight.w900)), const SizedBox(height: 8), Text('Código: ${encontrado!['codigo_barras'] ?? ''}'), Text('Precio: ${encontrado!['precio_venta'] ?? encontrado!['precio'] ?? 0}'), Text('Stock: ${encontrado!['stock'] ?? 0}'), Text('Categoría: ${encontrado!['categoria'] ?? 'General'}'), const SizedBox(height: 10), FilledButton.icon(onPressed: () => _imprimir([encontrado!]), icon: const Icon(Icons.print_rounded), label: const Text('Imprimir etiqueta'))]))
+        else Padding(padding: const EdgeInsets.all(24), child: Text('Escanea o escribe un código para localizar el producto.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.subtext(dark)))),
+      ]);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = widget.modoOscuro;
-    final conCodigo = _conCodigo(_productosFiltrados);
-    final sinCodigo = _productosFiltrados.length - conCodigo.length;
-
+    final dark = widget.modoOscuro;
     return Scaffold(
-      backgroundColor: AppColors.background(isDark),
+      backgroundColor: AppColors.background(dark),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Row(
-          children: [
-            
-            Expanded(
-              child: Text(
-                'Etiquetas y códigos',
-                style: TextStyle(
-                  color: AppColors.text(isDark),
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
-          ],
-        ),
+        leading: IconButton(tooltip: 'Abrir menú', onPressed: widget.onAbrirSidebar, icon: Icon(Icons.menu_rounded, color: AppColors.text(dark))),
+        title: Text('Códigos de barras', style: TextStyle(color: AppColors.text(dark), fontWeight: FontWeight.w900)),
+        bottom: TabBar(controller: _tabs, labelColor: AppColors.primary, unselectedLabelColor: AppColors.subtext(dark), indicatorColor: AppColors.primary, tabs: const [Tab(icon: Icon(Icons.inventory_2_outlined), text: 'Productos'), Tab(icon: Icon(Icons.design_services_outlined), text: 'Diseño'), Tab(icon: Icon(Icons.qr_code_scanner_rounded), text: 'Escanear')]),
       ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    gradient: AppColors.gradientPrimary,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.local_offer_rounded,
-                        color: Colors.white,
-                        size: 34,
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Impresión de etiquetas',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${_productos.length} productos · $conCodigo con código · $sinCodigo pendientes',
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _accion(
-                        isDark,
-                        Icons.auto_awesome_rounded,
-                        'Generar faltantes',
-                        _generarCodigosMasivos,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _accion(
-                        isDark,
-                        Icons.print_rounded,
-                        _imprimiendo ? 'Imprimiendo...' : 'Imprimir todos',
-                        () => _imprimirProductos(_productosFiltrados),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: AppColors.card(isDark),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.divider(isDark)),
-                  ),
-                  child: TextField(
-                    onChanged: (v) {
-                      setState(() {
-                        _busqueda = v;
-                        _aplicarFiltros();
-                      });
-                    },
-                    style: TextStyle(color: AppColors.text(isDark)),
-                    decoration: InputDecoration(
-                      hintText: 'Buscar producto o código...',
-                      prefixIcon: const Icon(Icons.search_rounded),
-                      border: InputBorder.none,
-                      filled: true,
-                      fillColor: AppColors.background(isDark),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  children: ['Todos', 'Con código', 'Sin código']
-                      .map(
-                        (f) => ChoiceChip(
-                          label: Text(f),
-                          selected: _filtro == f,
-                          onSelected: (_) {
-                            setState(() {
-                              _filtro = f;
-                              _aplicarFiltros();
-                            });
-                          },
-                        ),
-                      )
-                      .toList(),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.card(isDark),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.divider(isDark)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.sticky_note_2_outlined,
-                        color: AppColors.primary,
-                      ),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Text(
-                          'Etiquetas por producto',
-                          style: TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed: _seleccionarCantidad,
-                        icon: const Icon(Icons.copy_rounded, size: 17),
-                        label: Text('$_cantidadEtiquetas'),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-                if (_cargando)
-                  const Padding(
-                    padding: EdgeInsets.all(40),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else if (_productosFiltrados.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(40),
-                    child: Center(
-                      child: Text(
-                        'No hay productos para mostrar',
-                        style: TextStyle(color: AppColors.subtext(isDark)),
-                      ),
-                    ),
-                  )
-                else
-                  ..._productosFiltrados.map(
-                    (prod) => _productoTile(prod, isDark),
-                  ),
-              ],
-            );
-          },
-        ),
-      ),
+      body: TabBarView(controller: _tabs, children: [_catalogoTab(dark), _disenoTab(dark), _escanearTab(dark)]),
     );
   }
+}
 
-  Widget _accion(
-    bool isDark,
-    IconData icon,
-    String label,
-    VoidCallback onTap,
-  ) {
-    return ElevatedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
-      style: ElevatedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 13),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(13),
-        ),
-      ),
-    );
+class _PreviewBarcodePainter extends CustomPainter {
+  final String value;
+  final String type;
+  _PreviewBarcodePainter(this.value, this.type);
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = Colors.black;
+    final seed = (type + value).codeUnits.fold<int>(0, (a, b) => (a * 31 + b) & 0x7fffffff);
+    final bars = type == 'Code 39' ? 46 : (type == 'EAN-13' ? 59 : 67);
+    var x = 2.0;
+    for (var i = 0; i < bars && x < size.width - 2; i++) {
+      final wide = type == 'Code 39' ? ((seed + i * 13) % 4 == 0) : ((seed + i * 17) % 3 == 0);
+      final w = wide ? 2.2 : 1.0;
+      final top = type == 'EAN-13' && (i < 3 || (i > bars / 2 - 2 && i < bars / 2 + 2) || i > bars - 4) ? 1.0 : 4.0;
+      canvas.drawRect(Rect.fromLTWH(x, top, w, size.height - (type == 'EAN-13' ? 20 : 15)), paint);
+      x += w + ((seed + i * 7) % 3 + 1);
+    }
+    final tp = TextPainter(text: TextSpan(text: value, style: const TextStyle(color: Colors.black, fontSize: 9, letterSpacing: 1)), textDirection: ui.TextDirection.ltr, textAlign: TextAlign.center)..layout(maxWidth: size.width);
+    tp.paint(canvas, Offset((size.width - tp.width) / 2, size.height - 14));
   }
-
-  Widget _productoTile(Map<String, dynamic> prod, bool isDark) {
-    final codigo = (prod['codigo_barras'] ?? '').toString().trim();
-    final tieneCodigo = codigo.isNotEmpty;
-    final nombre = (prod['nombre'] ?? 'Producto').toString();
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: AppColors.card(isDark),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider(isDark)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: tieneCodigo
-                  ? AppColors.success.withValues(alpha: .10)
-                  : AppColors.warning.withValues(alpha: .10),
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Icon(
-              tieneCodigo
-                  ? Icons.qr_code_2_rounded
-                  : Icons.qr_code_scanner_rounded,
-              color: tieneCodigo ? AppColors.success : AppColors.warning,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  nombre,
-                  style: TextStyle(
-                    color: AppColors.text(isDark),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  tieneCodigo ? codigo : 'Sin código de barras',
-                  style: TextStyle(
-                    color: tieneCodigo
-                        ? AppColors.subtext(isDark)
-                        : AppColors.warning,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (!tieneCodigo)
-            IconButton(
-              tooltip: 'Generar código',
-              onPressed: () => _generarCodigo(prod['id'].toString()),
-              icon: const Icon(Icons.add_circle_outline),
-            ),
-          if (tieneCodigo)
-            IconButton(
-              tooltip: 'Imprimir etiqueta',
-              onPressed: () => _imprimirUno(prod),
-              icon: const Icon(Icons.print_outlined),
-            ),
-        ],
-      ),
-    );
-  }
+  @override
+  bool shouldRepaint(covariant _PreviewBarcodePainter oldDelegate) => oldDelegate.value != value || oldDelegate.type != type;
 }
 
 // ============================================
@@ -11278,6 +11691,11 @@ class _ReportesScreenState extends State<ReportesScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          tooltip: 'Abrir menu',
+          onPressed: widget.onAbrirSidebar,
+          icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
+        ),
         title: Row(children: [
 const SizedBox(width: 14),
           Text('REPORTES',
@@ -11648,6 +12066,33 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
   Future<void> _cargarImpresoras() async {
     if (mounted) setState(() => _cargando = true);
     try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // En Web el navegador no permite a Flutter enumerar las impresoras
+      // instaladas de forma fiable. La impresión se hace mediante el diálogo
+      // nativo del navegador/sistema. No llamamos a pickPrinter/listPrinters
+      // en esta plataforma para evitar el UnimplementedError que se veía en
+      // Chrome/Android.
+      if (kIsWeb) {
+        final savedName = prefs.getString('impresora_nombre');
+        if (!mounted) return;
+        setState(() {
+          _info = PrintingInfo(
+            canPrint: true,
+            canListPrinters: false,
+            directPrint: false,
+          );
+          _impresoras = [];
+          _seleccionada = null;
+          _cargando = false;
+        });
+        if (savedName != null && savedName.isNotEmpty) {
+          // Se conserva el nombre guardado como referencia visual, pero no se
+          // inventa una Printer que el navegador no puede controlar.
+        }
+        return;
+      }
+
       final info = await Printing.info();
       List<Printer> lista = [];
       if (info.canListPrinters) {
@@ -11662,7 +12107,6 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
         );
       }
 
-      final prefs = await SharedPreferences.getInstance();
       final savedUrl = prefs.getString('impresora_url');
       if (savedUrl != null && savedUrl.isNotEmpty) {
         for (final p in lista) {
@@ -11703,6 +12147,12 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
   }
 
   Future<void> _abrirSelectorNativo() async {
+    // Web: abre directamente el diálogo real de impresión del navegador.
+    if (kIsWeb) {
+      await _probarImpresion();
+      return;
+    }
+
     try {
       final printer = await Printing.pickPrinter(
         context: context,
@@ -11713,42 +12163,67 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
         await _cargarImpresoras();
       }
     } catch (e) {
-      _mostrarMensaje('El sistema no pudo abrir el selector: $e', false);
+      _mostrarMensaje('No se pudo abrir el selector de impresoras: $e', false);
     }
   }
 
   Future<Uint8List> _pdfPrueba(PdfPageFormat format) async {
     final doc = pw.Document();
-    doc.addPage(
-      pw.Page(
-        pageFormat: format,
-        build: (_) => pw.Center(
-          child: pw.Column(
-            mainAxisAlignment: pw.MainAxisAlignment.center,
-            children: [
-              pw.Text(
-                'SINTHETIX PRO',
-                style: pw.TextStyle(
-                  fontSize: 22,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-              pw.SizedBox(height: 8),
-              pw.Text('PRUEBA DE IMPRESIÓN'),
-              pw.SizedBox(height: 12),
-              pw.Text(DateTime.now().toString()),
-              pw.SizedBox(height: 12),
-              pw.BarcodeWidget(
-                barcode: pw.Barcode.code128(),
-                data: 'SINTHETIX-TEST',
-                width: 55 * PdfPageFormat.mm,
-                height: 18 * PdfPageFormat.mm,
-              ),
-            ],
-          ),
-        ),
+    Map<String, dynamic>? cfg;
+    try { cfg = await DatabaseService().getConfiguracionTicket(); } catch (_) {}
+    final nombre = (cfg?['nombre_negocio'] ?? 'SINTHETIX PRO').toString();
+    final eslogan = (cfg?['eslogan'] ?? '').toString();
+    final rif = (cfg?['rif'] ?? '').toString();
+    final direccion = (cfg?['direccion'] ?? '').toString();
+    final telefono = (cfg?['telefono'] ?? '').toString();
+    final email = (cfg?['email'] ?? '').toString();
+    final mensajePie = (cfg?['mensaje_pie'] ?? '¡Gracias por su compra!').toString();
+    final mensajeAdicional = (cfg?['mensaje_adicional'] ?? '').toString();
+    final mostrarLogo = cfg == null ? _mostrarLogo : (cfg?['mostrar_logo'] == 1 || cfg?['mostrar_logo'] == true);
+    final mostrarEslogan = cfg == null ? true : (cfg?['mostrar_eslogan'] == 1 || cfg?['mostrar_eslogan'] == true);
+    final mostrarRif = cfg == null ? true : (cfg?['mostrar_rif'] == 1 || cfg?['mostrar_rif'] == true);
+    final mostrarDireccion = cfg == null ? true : (cfg?['mostrar_direccion'] == 1 || cfg?['mostrar_direccion'] == true);
+    final mostrarTelefono = cfg == null ? true : (cfg?['mostrar_telefono'] == 1 || cfg?['mostrar_telefono'] == true);
+    final mostrarEmail = cfg == null ? false : (cfg?['mostrar_email'] == 1 || cfg?['mostrar_email'] == true);
+    final mostrarCliente = cfg == null ? true : (cfg?['mostrar_cliente'] == 1 || cfg?['mostrar_cliente'] == true);
+    final mostrarQR = cfg == null ? _mostrarQR : (cfg?['mostrar_qr'] == 1 || cfg?['mostrar_qr'] == true);
+    pw.MemoryImage? logo;
+    final logoRaw = cfg?['logo_base64']?.toString();
+    if (logoRaw != null && logoRaw.isNotEmpty) { try { logo = pw.MemoryImage(base64Decode(logoRaw)); } catch (_) {} }
+    final ahora = DateTime.now();
+    doc.addPage(pw.Page(
+      pageFormat: format,
+      margin: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      build: (_) => pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: [
+          if (mostrarLogo && logo != null) pw.Center(child: pw.Container(height: 48, width: 90, child: pw.Image(logo!, fit: pw.BoxFit.contain))),
+          pw.Center(child: pw.Text(nombre, style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold))),
+          if (mostrarEslogan && eslogan.isNotEmpty) pw.Center(child: pw.Text(eslogan, style: const pw.TextStyle(fontSize: 9))),
+          if (mostrarRif && rif.isNotEmpty) pw.Center(child: pw.Text(rif, style: const pw.TextStyle(fontSize: 8))),
+          if (mostrarDireccion && direccion.isNotEmpty) pw.Center(child: pw.Text(direccion, textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 8))),
+          if (mostrarTelefono && telefono.isNotEmpty) pw.Center(child: pw.Text(telefono, style: const pw.TextStyle(fontSize: 8))),
+          if (mostrarEmail && email.isNotEmpty) pw.Center(child: pw.Text(email, style: const pw.TextStyle(fontSize: 8))),
+          pw.SizedBox(height: 8), pw.Divider(),
+          pw.Text('PRUEBA DE IMPRESION', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 6),
+          if (mostrarCliente) pw.Text('Cliente: Cliente de prueba', style: const pw.TextStyle(fontSize: 9)),
+          pw.Text('Fecha: ${DateFormat('dd/MM/yyyy').format(ahora)}', style: const pw.TextStyle(fontSize: 9)),
+          pw.Text('Hora: ${DateFormat('HH:mm:ss').format(ahora)}', style: const pw.TextStyle(fontSize: 9)),
+          pw.SizedBox(height: 6), pw.Divider(),
+          pw.Row(children: [pw.Expanded(child: pw.Text('Producto de prueba', style: const pw.TextStyle(fontSize: 9))), pw.Text('\$10.00', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold))]),
+          pw.Text('1 x producto configurado', style: const pw.TextStyle(fontSize: 8)),
+          pw.SizedBox(height: 5),
+          pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('TOTAL', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)), pw.Text('\$10.00', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold))]),
+          if (mostrarQR) pw.Center(child: pw.BarcodeWidget(barcode: pw.Barcode.qrCode(), data: 'SINTHETIX-PRUEBA', width: 45, height: 45)),
+          pw.SizedBox(height: 8),
+          if (mensajeAdicional.isNotEmpty) pw.Center(child: pw.Text(mensajeAdicional, textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 8))),
+          pw.Center(child: pw.Text(mensajePie, textAlign: pw.TextAlign.center, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold))),
+          pw.SizedBox(height: 6),
+          pw.Center(child: pw.Text('FUNCIONANDO OK', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold))),
+        ],
       ),
-    );
+    ));
     return doc.save();
   }
 
@@ -11763,7 +12238,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
 
       final bytes = await _pdfPrueba(format);
 
-      if (_seleccionada != null && (_info?.directPrint ?? false)) {
+      if (!kIsWeb && _seleccionada != null && (_info?.directPrint ?? false)) {
         await Printing.directPrintPdf(
           printer: _seleccionada!,
           name: 'Prueba SINTHETIX PRO',
@@ -11826,9 +12301,13 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          tooltip: 'Abrir menú',
+          onPressed: widget.onAbrirSidebar,
+          icon: Icon(Icons.menu_rounded, color: text, size: 24),
+        ),
         title: Row(
           children: [
-            
             Expanded(
               child: Text(
                 'Impresoras',
@@ -11966,7 +12445,9 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _seleccionada == null
+                  kIsWeb
+                      ? 'Impresión del navegador'
+                      : _seleccionada == null
                       ? 'Sin impresora seleccionada'
                       : _seleccionada!.name,
                   maxLines: 1,
@@ -11978,7 +12459,9 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  canList
+                  kIsWeb
+                      ? 'Selector del navegador / sistema'
+                      : canList
                       ? 'Lista de impresoras disponible'
                       : 'El sistema usa el selector de impresión',
                   style: TextStyle(color: sub, fontSize: 11),
@@ -11997,7 +12480,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              direct ? 'DIRECTA' : 'SISTEMA',
+              kIsWeb ? 'WEB' : (direct ? 'DIRECTA' : 'SISTEMA'),
               style: TextStyle(
                 color: direct ? AppColors.success : AppColors.primary,
                 fontSize: 9,
@@ -12059,7 +12542,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                 child: OutlinedButton.icon(
                   onPressed: _abrirSelectorNativo,
                   icon: const Icon(Icons.manage_search_rounded, size: 18),
-                  label: const Text('Elegir impresora'),
+                  label: Text(kIsWeb ? 'Seleccionar impresora' : 'Elegir impresora'),
                 ),
               ),
               const SizedBox(width: 8),
@@ -12127,7 +12610,9 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'No hay impresoras enumerables en esta plataforma. Usa "Elegir impresora" para abrir el selector del sistema.',
+                      kIsWeb
+                          ? 'En Web Chrome no permite enumerar las impresoras. Pulsa "Seleccionar impresora" para abrir el diálogo del sistema y elegirla.'
+                          : 'No hay impresoras enumerables en esta plataforma. Usa "Elegir impresora" para abrir el selector del sistema.',
                       style: TextStyle(color: sub, fontSize: 11),
                     ),
                   ),
@@ -12386,6 +12871,11 @@ class _BackupScreenState extends State<BackupScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          tooltip: 'Abrir menu',
+          onPressed: widget.onAbrirSidebar,
+          icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
+        ),
         title: Row(children: [
 const SizedBox(width: 14),
           Text('RESPALDO DE DATOS',
@@ -13126,6 +13616,11 @@ class _CajaScreenState extends State<CajaScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          tooltip: 'Abrir menu',
+          onPressed: widget.onAbrirSidebar,
+          icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
+        ),
         title: Row(children: [
 const SizedBox(width: 14),
           Text('CAJA',
@@ -13412,6 +13907,11 @@ class _PerfilScreenState extends State<PerfilScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          tooltip: 'Abrir menu',
+          onPressed: widget.onAbrirSidebar,
+          icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
+        ),
         title: Row(children: [
 const SizedBox(width: 14),
           Text('MI PERFIL',
@@ -13863,6 +14363,11 @@ class _InventarioScreenState extends State<InventarioScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          tooltip: 'Abrir menu',
+          onPressed: widget.onAbrirSidebar,
+          icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
+        ),
         title: Row(children: [
 const SizedBox(width: 14),
           Text('INVENTARIO',
@@ -13967,205 +14472,966 @@ const SizedBox(width: 14),
 }
 
 // ============================================
-// PANTALLA: TIENDA SINTHETIX
+// ============================================
+// TIENDA VIRTUAL SINTHETIX PRO - V27
+// Catálogo universal + carrito + WhatsApp + favoritos + banners
 // ============================================
 class UniversalFlyCartStore extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
   const UniversalFlyCartStore({super.key, required this.onAbrirSidebar});
   @override
-  _UniversalFlyCartStoreState createState() => _UniversalFlyCartStoreState();
+  State<UniversalFlyCartStore> createState() => _UniversalFlyCartStoreState();
 }
 
 class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
-  final _db = DatabaseService();
+  final DatabaseService _db = DatabaseService();
+  final TextEditingController _search = TextEditingController();
+  final PageController _bannerController = PageController();
+  Timer? _bannerTimer;
   List<Map<String, dynamic>> _productos = [];
   List<Map<String, dynamic>> _categorias = [];
+  List<Map<String, dynamic>> _banners = [];
+  List<Map<String, dynamic>> _carrito = [];
+  Set<String> _favoritos = <String>{};
+  String _categoria = 'Todas';
+  String _nombreTienda = 'SINTHETIX PRO';
+  String _whatsapp = '';
+  String _publicUrl = 'https://synthetixapp17.github.io/mi_tienda/tienda.html';
+  String? _logo;
+  int _bannerIndex = 0;
   bool _cargando = true;
-  String _categoriaSeleccionada = 'Todas';
 
   @override
   void initState() {
     super.initState();
-    _cargarDatos();
+    _cargar();
   }
 
-  Future<void> _cargarDatos() async {
-    setState(() => _cargando = true);
+  @override
+  void dispose() {
+    _bannerTimer?.cancel();
+    _bannerController.dispose();
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _cargar() async {
+    if (mounted) setState(() => _cargando = true);
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final cfg = await _db.getConfiguracion();
       _productos = await _db.getProductos();
       _categorias = await _db.getCategorias();
+      final rawBanners = prefs.getString('sinthetix_store_banners');
+      if (rawBanners != null && rawBanners.isNotEmpty) {
+        final decoded = jsonDecode(rawBanners);
+        if (decoded is List) {
+          _banners = decoded
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .where((e) => e['active'] != false)
+              .toList();
+        }
+      } else {
+        _banners = [];
+      }
+      final rawFav = prefs.getStringList('sinthetix_store_favorites') ?? [];
+      _favoritos = rawFav.toSet();
+      _whatsapp = (prefs.getString('sinthetix_store_whatsapp') ??
+              cfg?['telefono'] ?? '')
+          .toString();
+      _publicUrl = (prefs.getString('sinthetix_store_public_url') ??
+              'https://synthetixapp17.github.io/mi_tienda/tienda.html')
+          .toString();
+      _nombreTienda = (cfg?['nombre_negocio'] ?? 'SINTHETIX PRO').toString();
+      _logo = cfg?['logo_base64']?.toString();
+      _iniciarRotacionBanners();
     } catch (e) {
-      debugPrint('Error cargando tienda: $e');
-      _productos = [];
-      _categorias = [];
+      debugPrint('Error tienda: $e');
     }
-    setState(() => _cargando = false);
+    if (mounted) setState(() => _cargando = false);
+  }
+
+  void _iniciarRotacionBanners() {
+    _bannerTimer?.cancel();
+    if (_banners.length < 2) return;
+    _bannerTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!_bannerController.hasClients || !mounted) return;
+      _bannerIndex = (_bannerIndex + 1) % _banners.length;
+      _bannerController.animateToPage(
+        _bannerIndex,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  double _precio(Map<String, dynamic> p) =>
+      double.tryParse((p['precio'] ?? 0).toString()) ?? 0;
+
+  int _stock(Map<String, dynamic> p) =>
+      int.tryParse((p['stock'] ?? 0).toString()) ?? 0;
+
+  String _money(double n) => '\$${n.toStringAsFixed(2)}';
+
+  List<Map<String, dynamic>> get _filtrados {
+    final q = _search.text.trim().toLowerCase();
+    return _productos.where((p) {
+      final catOk = _categoria == 'Todas' ||
+          (p['categoria'] ?? '').toString() == _categoria;
+      final searchOk = q.isEmpty ||
+          (p['nombre'] ?? '').toString().toLowerCase().contains(q) ||
+          (p['descripcion'] ?? '').toString().toLowerCase().contains(q) ||
+          (p['codigo_barras'] ?? '').toString().contains(q);
+      return catOk &&
+          searchOk &&
+          (int.tryParse((p['activo'] ?? 1).toString()) ?? 1) != 0;
+    }).toList();
+  }
+
+  int _cantidad(Map<String, dynamic> p) => _carrito
+      .where((x) => x['id'].toString() == p['id'].toString())
+      .fold(0, (n, x) => n + ((x['_qty'] as int?) ?? 0));
+
+  Future<void> _toggleFavorito(Map<String, dynamic> p) async {
+    final id = p['id'].toString();
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      if (_favoritos.contains(id)) {
+        _favoritos.remove(id);
+      } else {
+        _favoritos.add(id);
+      }
+    });
+    await prefs.setStringList('sinthetix_store_favorites', _favoritos.toList());
+  }
+
+  void _agregar(Map<String, dynamic> p, {int cantidad = 1}) {
+    if (_stock(p) <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Producto sin stock disponible.')),
+      );
+      return;
+    }
+    final i = _carrito.indexWhere(
+      (x) => x['id'].toString() == p['id'].toString(),
+    );
+    setState(() {
+      if (i < 0) {
+        final x = Map<String, dynamic>.from(p);
+        x['_qty'] = cantidad.clamp(1, _stock(p));
+        _carrito.add(x);
+      } else {
+        final q = ((_carrito[i]['_qty'] as int?) ?? 0) + cantidad;
+        _carrito[i]['_qty'] = q.clamp(1, _stock(p));
+      }
+    });
+  }
+
+  void _abrirCarrito() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _StoreCartSheet(
+        items: _carrito,
+        money: _money,
+        price: _precio,
+        stock: _stock,
+        onChange: (i, q) => setState(() => _carrito[i]['_qty'] = q),
+        onRemove: (i) => setState(() => _carrito.removeAt(i)),
+        onCheckout: () {
+          Navigator.pop(context);
+          _enviarCarritoWhatsApp();
+        },
+      ),
+    );
+  }
+
+  Future<void> _enviarCarritoWhatsApp() async {
+    if (_carrito.isEmpty) return;
+    final phone = _whatsapp.replaceAll(RegExp(r'[^0-9]'), '');
+    if (phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Configura el WhatsApp de la tienda en Administrar tienda.')),
+      );
+      return;
+    }
+    final total = _carrito.fold<double>(
+      0,
+      (sum, item) => sum + _precio(item) * ((item['_qty'] as int?) ?? 0),
+    );
+    final buffer = StringBuffer()
+      ..writeln('🛍️🛍️ PEDIDO - $_nombreTienda')
+      ..writeln()
+      ..writeln('Hola, quiero realizar este pedido:')
+      ..writeln();
+    for (final item in _carrito) {
+      final q = (item['_qty'] as int?) ?? 0;
+      buffer
+        ..writeln('$q x ${item['nombre'] ?? 'Producto'}')
+        ..writeln('Precio: ${_money(_precio(item))}')
+        ..writeln();
+    }
+    buffer.writeln('TOTAL: ${_money(total)}');
+    final url = 'https://wa.me/$phone?text=${Uri.encodeComponent(buffer.toString())}';
+    await launchURL(url);
+    if (!mounted) return;
+    setState(() => _carrito.clear());
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Pedido preparado en WhatsApp. El carrito fue reiniciado.')),
+    );
+  }
+
+  Future<void> _whatsappConsulta() async {
+    final phone = _whatsapp.replaceAll(RegExp(r'[^0-9]'), '');
+    if (phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Configura el WhatsApp de la tienda en Administrar tienda.')),
+      );
+      return;
+    }
+    final text = Uri.encodeComponent(
+      'Hola, tengo una consulta sobre los productos de $_nombreTienda.',
+    );
+    await launchURL('https://wa.me/$phone?text=$text');
+  }
+
+  Future<void> _compartirTienda() async {
+    await Share.share(
+      '🛍️ Visita $_nombreTienda\n$_publicUrl',
+      subject: 'Tienda online - $_nombreTienda',
+    );
+  }
+
+  List<Map<String, dynamic>> _relacionados(Map<String, dynamic> p) {
+    final categoria = (p['categoria'] ?? '').toString();
+    return _productos
+        .where((x) =>
+            x['id'].toString() != p['id'].toString() &&
+            (x['categoria'] ?? '').toString() == categoria &&
+            (int.tryParse((x['activo'] ?? 1).toString()) ?? 1) != 0)
+        .take(8)
+        .toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    const isDark = false;
-    final productosFiltrados = _categoriaSeleccionada == 'Todas'
-        ? _productos
-        : _productos
-            .where((p) => p['categoria'] == _categoriaSeleccionada)
-            .toList();
-
+    final width = MediaQuery.sizeOf(context).width;
+    final cols = width >= 1100 ? 5 : width >= 800 ? 4 : width >= 520 ? 3 : 2;
+    final cartCount = _carrito.fold<int>(
+      0,
+      (n, p) => n + ((p['_qty'] as int?) ?? 0),
+    );
     return Scaffold(
-      backgroundColor: AppColors.background(isDark),
+      backgroundColor: const Color(0xFFF8F7FC),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
-        title: Row(children: [
-const SizedBox(width: 14),
-          Text('TIENDA SINTHETIX',
-              style: TextStyle(
-                  color: AppColors.text(isDark),
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5)),
-        ]),
+        leading: IconButton(
+          onPressed: widget.onAbrirSidebar,
+          icon: const Icon(Icons.menu_rounded, color: AppColors.dark),
+        ),
+        title: Row(
+          children: [
+            if (_logo != null && _logo!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: _StoreImage(base64: _logo!, width: 34, height: 34, radius: 9),
+              ),
+            Expanded(
+              child: Text(
+                _nombreTienda,
+                style: const TextStyle(color: AppColors.dark, fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(onPressed: _compartirTienda, icon: const Icon(Icons.share_outlined, color: AppColors.dark)),
+          IconButton(
+            onPressed: _abrirCarrito,
+            icon: Badge(
+              isLabelVisible: cartCount > 0,
+              label: Text('$cartCount'),
+              child: const Icon(Icons.shopping_bag_outlined, color: AppColors.dark),
+            ),
+          ),
+          const SizedBox(width: 6),
+        ],
       ),
-      body: SafeArea(
-        child: _cargando
-            ? const Center(
-                child: CircularProgressIndicator(color: AppColors.primary))
-            : Column(children: [
-                SizedBox(
-                  height: 50,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _categorias.length + 1,
-                    itemBuilder: (_, i) {
-                      final nombre =
-                          i == 0 ? 'Todas' : _categorias[i - 1]['nombre'] ?? '';
-                      final sel = _categoriaSeleccionada == nombre;
-                      return GestureDetector(
-                        onTap: () =>
-                            setState(() => _categoriaSeleccionada = nombre),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          margin: const EdgeInsets.only(right: 8),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
-                          decoration: BoxDecoration(
-                            gradient: sel ? AppColors.gradientPrimary : null,
-                            color: sel ? null : AppColors.card(isDark),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: sel
-                                  ? AppColors.primary
-                                  : AppColors.divider(isDark),
-                              width: 1,
+      floatingActionButton: _whatsapp.isEmpty
+          ? null
+          : FloatingActionButton(
+              onPressed: _whatsappConsulta,
+              backgroundColor: AppColors.whatsapp,
+              child: const Icon(Icons.chat_rounded, color: Colors.white),
+            ),
+      body: _cargando
+          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          : RefreshIndicator(
+              onRefresh: _cargar,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 90),
+                children: [
+                  TextField(
+                    controller: _search,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Buscar productos, marcas o códigos...',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: _search.text.isEmpty
+                          ? null
+                          : IconButton(
+                              onPressed: () {
+                                _search.clear();
+                                setState(() {});
+                              },
+                              icon: const Icon(Icons.close_rounded),
                             ),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_banners.isNotEmpty)
+                    SizedBox(
+                      height: width < 600 ? 175 : 230,
+                      child: PageView.builder(
+                        controller: _bannerController,
+                        itemCount: _banners.length,
+                        onPageChanged: (i) => setState(() => _bannerIndex = i),
+                        itemBuilder: (_, i) => _StoreBanner(data: _banners[i]),
+                      ),
+                    )
+                  else
+                    _StoreHero(nombre: _nombreTienda),
+                  if (_banners.length > 1) ...[
+                    const SizedBox(height: 7),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        _banners.length,
+                        (i) => AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          width: i == _bannerIndex ? 18 : 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: i == _bannerIndex ? AppColors.primary : const Color(0xFFD1D5DB),
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Text(
-                            nombre,
-                            style: TextStyle(
-                              color:
-                                  sel ? Colors.white : AppColors.text(isDark),
-                              fontSize: 13,
-                              fontWeight:
-                                  sel ? FontWeight.w600 : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      const Expanded(child: Text('Categorías', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.dark))),
+                      Text('${_filtrados.length} productos', style: const TextStyle(fontSize: 11, color: AppColors.subtextLight)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 40,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [_chip('Todas'), ..._categorias.map((c) => _chip((c['nombre'] ?? '').toString()))],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      const Expanded(child: Text('Productos', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.dark))),
+                      TextButton(onPressed: () => setState(() => _categoria = 'Todas'), child: const Text('Ver todos')),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  if (_filtrados.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(35),
+                      child: Center(child: Text('No encontramos productos con esos criterios.')),
+                    ),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _filtrados.length,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: cols,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                      childAspectRatio: .68,
+                    ),
+                    itemBuilder: (_, i) {
+                      final p = _filtrados[i];
+                      return _StoreProductCard(
+                        product: p,
+                        price: _precio(p),
+                        stock: _stock(p),
+                        favorite: _favoritos.contains(p['id'].toString()),
+                        onFavorite: () => _toggleFavorito(p),
+                        onOpen: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => _StoreProductDetail(
+                              product: p,
+                              related: _relacionados(p),
+                              price: _precio,
+                              onAdd: _agregar,
+                              onFavorite: _toggleFavorito,
+                              favorite: _favoritos.contains(p['id'].toString()),
+                              onOpenCart: _abrirCarrito,
+                              logo: _logo,
                             ),
                           ),
                         ),
+                        onAdd: () => _agregar(p),
                       );
                     },
                   ),
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: productosFiltrados.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.storefront,
-                                  size: 60, color: AppColors.subtext(isDark)),
-                              const SizedBox(height: 16),
-                              Text('No hay productos en esta categoría',
-                                  style: TextStyle(
-                                      color: AppColors.subtext(isDark))),
-                            ],
-                          ),
-                        )
-                      : GridView.builder(
-                          padding: const EdgeInsets.all(16),
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            childAspectRatio: 0.75,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
-                          ),
-                          itemCount: productosFiltrados.length,
-                          itemBuilder: (_, i) {
-                            final prod = productosFiltrados[i];
-                            return Container(
-                              decoration: BoxDecoration(
-                                color: AppColors.card(isDark),
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.04),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                                border: Border.all(
-                                  color: AppColors.divider(isDark),
-                                  width: 1,
-                                ),
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: ImagenProducto(
-                                        imagenBase64:
-                                            prod['imagen_base64']?.toString(),
-                                        width: double.infinity,
-                                        height: double.infinity,
-                                        fit: BoxFit.cover,
-                                      ),
-                                    ),
-                                    Padding(
-                                      padding: const EdgeInsets.all(8),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(prod['nombre'] ?? '',
-                                              style: TextStyle(
-                                                  color: AppColors.text(isDark),
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w600),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            '\$${(prod['precio'] as num).toStringAsFixed(2)}',
-                                            style: const TextStyle(
-                                                color: AppColors.primary,
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w700),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ]),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _chip(String n) {
+    final selected = _categoria == n;
+    return Padding(
+      padding: const EdgeInsets.only(right: 7),
+      child: ChoiceChip(
+        label: Text(n),
+        selected: selected,
+        onSelected: (_) => setState(() => _categoria = n),
+        selectedColor: AppColors.primary,
+        labelStyle: TextStyle(color: selected ? Colors.white : AppColors.dark, fontWeight: FontWeight.w700),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: selected ? AppColors.primary : const Color(0xFFE5E7EB)),
+        ),
       ),
+    );
+  }
+}
+
+class _StoreHero extends StatelessWidget {
+  final String nombre;
+  const _StoreHero({required this.nombre});
+  @override
+  Widget build(BuildContext context) => Container(
+        height: 165,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: AppColors.gradientPrimary,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('DESCUBRE NUEVOS PRODUCTOS', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1)),
+            const SizedBox(height: 7),
+            Text(nombre, style: const TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 5),
+            const Text('Compra fácil, rápido y desde cualquier dispositivo.', style: TextStyle(color: Colors.white70, fontSize: 11)),
+          ],
+        ),
+      );
+}
+
+class _StoreBanner extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const _StoreBanner({required this.data});
+  @override
+  Widget build(BuildContext context) {
+    final b = data['image']?.toString() ?? '';
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(24)),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (b.isNotEmpty) Image.memory(base64Decode(b), fit: BoxFit.cover),
+          Container(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.bottomLeft, end: Alignment.topRight, colors: [Colors.black.withValues(alpha: .66), Colors.transparent]))),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(data['title']?.toString() ?? 'Oferta especial', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+                if ((data['subtitle'] ?? '').toString().isNotEmpty) Text(data['subtitle'].toString(), style: const TextStyle(color: Colors.white, fontSize: 11)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StoreProductCard extends StatelessWidget {
+  final Map<String, dynamic> product;
+  final double price;
+  final int stock;
+  final bool favorite;
+  final VoidCallback onFavorite;
+  final VoidCallback onOpen;
+  final VoidCallback onAdd;
+  const _StoreProductCard({
+    required this.product,
+    required this.price,
+    required this.stock,
+    required this.favorite,
+    required this.onFavorite,
+    required this.onOpen,
+    required this.onAdd,
+  });
+  @override
+  Widget build(BuildContext context) => Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: onOpen,
+          borderRadius: BorderRadius.circular(18),
+          child: Padding(
+            padding: const EdgeInsets.all(7),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Stack(
+                    children: [
+                      Positioned.fill(child: _StoreImage(base64: product['imagen_base64']?.toString() ?? '', url: product['imagen_url']?.toString(), radius: 14)),
+                      if ((product['descuento'] ?? 0).toString() != '0')
+                        Positioned(
+                          top: 7,
+                          left: 7,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            decoration: BoxDecoration(color: AppColors.danger, borderRadius: BorderRadius.circular(8)),
+                            child: Text('-${product['descuento']}%', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)),
+                          ),
+                        ),
+                      Positioned(
+                        top: 7,
+                        right: 7,
+                        child: Material(
+                          color: Colors.white.withValues(alpha: .92),
+                          shape: const CircleBorder(),
+                          child: IconButton(
+                            onPressed: onFavorite,
+                            icon: Icon(favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: favorite ? AppColors.danger : AppColors.dark, size: 17),
+                            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                            padding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Text(product['nombre']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.dark)),
+                const SizedBox(height: 2),
+                Text(stock > 0 ? 'Disponible' : 'Agotado', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: stock > 0 ? AppColors.success : AppColors.danger)),
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    Expanded(child: Text('\$${price.toStringAsFixed(2)}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.dark))),
+                    IconButton(onPressed: stock > 0 ? onAdd : null, icon: const Icon(Icons.add_circle_rounded, color: AppColors.primary), visualDensity: VisualDensity.compact),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
+class _StoreImage extends StatelessWidget {
+  final String base64;
+  final String? url;
+  final double width;
+  final double height;
+  final double radius;
+  const _StoreImage({required this.base64, this.url, this.width = double.infinity, this.height = double.infinity, this.radius = 12});
+  @override
+  Widget build(BuildContext context) {
+    Uint8List? bytes;
+    try {
+      if (base64.isNotEmpty) bytes = base64Decode(base64);
+    } catch (_) {}
+    final remote = (url ?? '').startsWith('http') ? url : null;
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(radius)),
+      child: remote != null
+          ? ClipRRect(borderRadius: BorderRadius.circular(radius), child: Image.network(remote, fit: BoxFit.cover, errorBuilder: (_, __, ___) => bytes == null ? const Center(child: Icon(Icons.image_outlined, color: AppColors.subtextLight, size: 34)) : Image.memory(bytes, fit: BoxFit.cover)))
+          : bytes == null
+              ? const Center(child: Icon(Icons.image_outlined, color: AppColors.subtextLight, size: 34))
+              : ClipRRect(borderRadius: BorderRadius.circular(radius), child: Image.memory(bytes, fit: BoxFit.cover)),
+    );
+  }
+}
+
+class _StoreProductDetail extends StatefulWidget {
+  final Map<String, dynamic> product;
+  final List<Map<String, dynamic>> related;
+  final double Function(Map<String, dynamic>) price;
+  final void Function(Map<String, dynamic>, {int cantidad}) onAdd;
+  final Future<void> Function(Map<String, dynamic>) onFavorite;
+  final bool favorite;
+  final VoidCallback onOpenCart;
+  final String? logo;
+  const _StoreProductDetail({
+    required this.product,
+    required this.related,
+    required this.price,
+    required this.onAdd,
+    required this.onFavorite,
+    required this.favorite,
+    required this.onOpenCart,
+    required this.logo,
+  });
+  @override
+  State<_StoreProductDetail> createState() => _StoreProductDetailState();
+}
+
+class _StoreProductDetailState extends State<_StoreProductDetail> {
+  int qty = 1;
+  late bool favorite = widget.favorite;
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.product;
+    final stock = int.tryParse((p['stock'] ?? 0).toString()) ?? 0;
+    final price = widget.price(p);
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F7FC),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_back_rounded)),
+        title: const Text('Detalles', style: TextStyle(fontWeight: FontWeight.w900)),
+        actions: [IconButton(onPressed: widget.onOpenCart, icon: const Icon(Icons.shopping_bag_outlined)), const SizedBox(width: 5)],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(14),
+        children: [
+          _StoreImage(base64: p['imagen_base64']?.toString() ?? '', url: p['imagen_url']?.toString(), height: MediaQuery.sizeOf(context).width * .78, radius: 24),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(child: Text(p['nombre']?.toString() ?? '', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.dark))),
+              IconButton(
+                onPressed: () async {
+                  await widget.onFavorite(p);
+                  if (mounted) setState(() => favorite = !favorite);
+                },
+                icon: Icon(favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: favorite ? AppColors.danger : AppColors.dark),
+              ),
+            ],
+          ),
+          Text((p['categoria'] ?? '').toString(), style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 11)),
+          const SizedBox(height: 7),
+          Text('\$${price.toStringAsFixed(2)}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppColors.dark)),
+          if ((p['descuento'] ?? 0).toString() != '0') Text('Descuento ${p['descuento']}%', style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 18),
+          const Text('Descripción', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.dark)),
+          const SizedBox(height: 6),
+          Text((p['descripcion'] ?? 'Producto disponible en nuestra tienda.').toString(), style: const TextStyle(color: AppColors.subtextLight, height: 1.5)),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: [
+              if ((p['marca'] ?? '').toString().isNotEmpty) Chip(label: Text('Marca ${p['marca']}')),
+              if ((p['color'] ?? '').toString().isNotEmpty) Chip(label: Text('Color ${p['color']}')),
+              if ((p['talla'] ?? '').toString().isNotEmpty) Chip(label: Text('Talla ${p['talla']}')),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Text(stock > 0 ? 'Stock disponible: $stock' : 'Agotado', style: TextStyle(color: stock > 0 ? AppColors.success : AppColors.danger, fontWeight: FontWeight.w800)),
+              const Spacer(),
+              Container(
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                child: Row(
+                  children: [
+                    IconButton(onPressed: qty > 1 ? () => setState(() => qty--) : null, icon: const Icon(Icons.remove_rounded)),
+                    Text('$qty', style: const TextStyle(fontWeight: FontWeight.w900)),
+                    IconButton(onPressed: qty < stock ? () => setState(() => qty++) : null, icon: const Icon(Icons.add_rounded)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 52,
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: stock > 0 ? () {
+                widget.onAdd(p, cantidad: qty);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Producto agregado al carrito')));
+              } : null,
+              icon: const Icon(Icons.shopping_cart_rounded),
+              label: const Text('AGREGAR AL CARRITO', style: TextStyle(fontWeight: FontWeight.w900)),
+            ),
+          ),
+          const SizedBox(height: 9),
+          OutlinedButton.icon(onPressed: widget.onOpenCart, icon: const Icon(Icons.shopping_bag_outlined), label: const Text('VER CARRITO')),
+          if (widget.related.isNotEmpty) ...[
+            const SizedBox(height: 22),
+            const Text('Productos relacionados', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: AppColors.dark)),
+            const SizedBox(height: 9),
+            SizedBox(
+              height: 205,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: widget.related.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 9),
+                itemBuilder: (_, i) {
+                  final r = widget.related[i];
+                  return SizedBox(
+                    width: 150,
+                    child: _StoreProductCard(
+                      product: r,
+                      price: widget.price(r),
+                      stock: int.tryParse((r['stock'] ?? 0).toString()) ?? 0,
+                      favorite: false,
+                      onFavorite: () {},
+                      onOpen: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _StoreProductDetail(product: r, related: widget.related.where((x) => x['id'].toString() != r['id'].toString()).take(6).toList(), price: widget.price, onAdd: widget.onAdd, onFavorite: widget.onFavorite, favorite: false, onOpenCart: widget.onOpenCart, logo: widget.logo))),
+                      onAdd: () => widget.onAdd(r, cantidad: 1),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StoreCartSheet extends StatelessWidget {
+  final List<Map<String, dynamic>> items;
+  final String Function(double) money;
+  final double Function(Map<String, dynamic>) price;
+  final int Function(Map<String, dynamic>) stock;
+  final void Function(int, int) onChange;
+  final void Function(int) onRemove;
+  final VoidCallback onCheckout;
+  const _StoreCartSheet({required this.items, required this.money, required this.price, required this.stock, required this.onChange, required this.onRemove, required this.onCheckout});
+  @override
+  Widget build(BuildContext context) {
+    final total = items.fold<double>(0, (sum, item) => sum + price(item) * ((item['_qty'] as int?) ?? 0));
+    return DraggableScrollableSheet(
+      initialChildSize: .78,
+      minChildSize: .45,
+      maxChildSize: .94,
+      builder: (_, scrollController) => Container(
+        decoration: const BoxDecoration(color: Color(0xFFF8F7FC), borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+        child: Column(
+          children: [
+            Padding(padding: const EdgeInsets.fromLTRB(18, 16, 10, 10), child: Row(children: [const Expanded(child: Text('Mi carrito', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900))), IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded))])),
+            Expanded(
+              child: items.isEmpty
+                  ? const Center(child: Text('Tu carrito está vacío.'))
+                  : ListView.separated(
+                      controller: scrollController,
+                      padding: const EdgeInsets.fromLTRB(14, 4, 14, 20),
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (_, index) {
+                        final product = items[index];
+                        final quantity = (product['_qty'] as int?) ?? 1;
+                        return Container(
+                          padding: const EdgeInsets.all(9),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+                          child: Row(children: [
+                            _StoreImage(base64: product['imagen_base64']?.toString() ?? '', url: product['imagen_url']?.toString(), width: 74, height: 74, radius: 13),
+                            const SizedBox(width: 10),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(product['nombre']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 4), Text(money(price(product)), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)), const SizedBox(height: 6), Row(children: [IconButton(onPressed: quantity > 1 ? () => onChange(index, quantity - 1) : () => onRemove(index), icon: const Icon(Icons.remove_rounded), visualDensity: VisualDensity.compact), Text('$quantity', style: const TextStyle(fontWeight: FontWeight.w900)), IconButton(onPressed: quantity < stock(product) ? () => onChange(index, quantity + 1) : null, icon: const Icon(Icons.add_rounded), visualDensity: VisualDensity.compact), const Spacer(), IconButton(onPressed: () => onRemove(index), icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger))])])) ,
+                          ]),
+                        );
+                      },
+                    ),
+            ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
+              decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
+              child: Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('TOTAL', style: TextStyle(fontSize: 10, color: AppColors.subtextLight, fontWeight: FontWeight.w800)), Text(money(total), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900))])), FilledButton.icon(onPressed: items.isEmpty ? null : onCheckout, icon: const Icon(Icons.chat_rounded), label: const Text('WhatsApp', style: TextStyle(fontWeight: FontWeight.w900)), style: FilledButton.styleFrom(backgroundColor: AppColors.whatsapp, minimumSize: const Size(150, 50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))))]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class TiendaAdminScreen extends StatefulWidget {
+  final VoidCallback onAbrirSidebar;
+  const TiendaAdminScreen({super.key, required this.onAbrirSidebar});
+  @override
+  State<TiendaAdminScreen> createState() => _TiendaAdminScreenState();
+}
+
+class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
+  final ImagePicker _picker = ImagePicker();
+  final _title = TextEditingController();
+  final _subtitle = TextEditingController();
+  final _button = TextEditingController(text: 'Ver productos');
+  final _whatsapp = TextEditingController();
+  final _publicUrl = TextEditingController(text: 'https://synthetixapp17.github.io/mi_tienda/tienda.html');
+  List<Map<String, dynamic>> _banners = [];
+  List<Map<String, dynamic>> _productos = [];
+  List<Map<String, dynamic>> _categorias = [];
+  String? _bannerImage;
+  bool _loading = true;
+
+  @override
+  void initState() { super.initState(); _load(); }
+  @override
+  void dispose() { _title.dispose(); _subtitle.dispose(); _button.dispose(); _whatsapp.dispose(); _publicUrl.dispose(); super.dispose(); }
+
+  Future<void> _load() async {
+    if (mounted) setState(() => _loading = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('sinthetix_store_banners');
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) _banners = decoded.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      } else { _banners = []; }
+      final db = DatabaseService();
+      _productos = await db.getProductos();
+      _categorias = await db.getCategorias();
+      _whatsapp.text = prefs.getString('sinthetix_store_whatsapp') ?? '';
+      _publicUrl.text = prefs.getString('sinthetix_store_public_url') ?? 'https://synthetixapp17.github.io/mi_tienda/tienda.html';
+    } catch (e) { debugPrint('Error administrador tienda: $e'); }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _save() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('sinthetix_store_banners', jsonEncode(_banners));
+    await prefs.setString('sinthetix_store_whatsapp', _whatsapp.text.trim());
+    await prefs.setString('sinthetix_store_public_url', _publicUrl.text.trim());
+  }
+
+  Future<void> _pickBanner() async {
+    try {
+      final x = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 82, maxWidth: 1800);
+      if (x == null) return;
+      final bytes = await x.readAsBytes();
+      if (mounted) setState(() => _bannerImage = base64Encode(bytes));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo cargar la imagen: $e')));
+    }
+  }
+
+  Future<void> _addBanner() async {
+    final image = _bannerImage;
+    if (image == null || image.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selecciona una imagen para el banner.')));
+      return;
+    }
+    final banner = <String, dynamic>{'id': DateTime.now().millisecondsSinceEpoch.toString(), 'image': image, 'title': _title.text.trim().isEmpty ? 'Nueva promoción' : _title.text.trim(), 'subtitle': _subtitle.text.trim(), 'button': _button.text.trim(), 'active': true};
+    setState(() => _banners.add(banner));
+    await _save();
+    _title.clear(); _subtitle.clear();
+    if (mounted) { setState(() => _bannerImage = null); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Banner agregado a la tienda.'))); }
+  }
+
+  Future<void> _toggle(int index) async { if (index < 0 || index >= _banners.length) return; setState(() => _banners[index]['active'] = !(_banners[index]['active'] ?? true)); await _save(); }
+  Future<void> _delete(int index) async { if (index < 0 || index >= _banners.length) return; setState(() => _banners.removeAt(index)); await _save(); }
+
+  Future<void> _saveSettings() async {
+    await _save();
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Configuración de la tienda guardada.')));
+  }
+
+  Future<void> _shareStore() async {
+    await _save();
+    await Share.share('🛍️ Visita nuestra tienda online\n${_publicUrl.text.trim()}', subject: 'Tienda online');
+  }
+
+  Future<void> _openStore() async {
+    final url = _publicUrl.text.trim();
+    if (url.isEmpty) return;
+    await launchURL(url);
+  }
+
+  Future<void> _exportarCatalogoPublico() async {
+    try {
+      final cfg = await DatabaseService().getConfiguracion();
+      final payload = <String, dynamic>{
+        'store': {
+          'name': (cfg?['nombre_negocio'] ?? 'SINTHETIX PRO').toString(),
+          'whatsapp': _whatsapp.text.trim(),
+          'logo': (cfg?['logo_base64'] ?? '').toString(),
+        },
+        'banners': _banners.where((b) => b['active'] != false).toList(),
+        'categories': _categorias,
+        'products': _productos.map((p) => {
+          'id': p['id'],
+          'nombre': p['nombre'],
+          'descripcion': p['descripcion'],
+          'precio': p['precio'],
+          'stock': p['stock'],
+          'categoria': p['categoria'],
+          'codigo_barras': p['codigo_barras'],
+          'imagen_base64': p['imagen_base64'],
+          'imagen_url': p['imagen_url'],
+          'marca': p['marca'],
+          'color': p['color'],
+          'talla': p['talla'],
+          'descuento': p['descuento'],
+          'activo': p['activo'],
+        }).where((p) => (int.tryParse((p['activo'] ?? 1).toString()) ?? 1) != 0).toList(),
+      };
+      final bytes = Uint8List.fromList(utf8.encode(jsonEncode(payload)));
+      await Share.shareXFiles(
+        [XFile.fromData(bytes, name: 'catalogo_tienda.json', mimeType: 'application/json')],
+        text: 'Catalogo publico de ${payload['store']['name']}. Reemplaza catalogo_tienda.json en la carpeta publica de la tienda.',
+      );
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo exportar el catálogo: $e')));
+    }
+  }
+
+  Widget _adminCard(String title, String subtitle, Widget child) => Container(padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFE5E7EB))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.dark)), const SizedBox(height: 3), Text(subtitle, style: const TextStyle(fontSize: 10, color: AppColors.subtextLight)), const SizedBox(height: 10), child]));
+  Widget _miniStat(String value, String label) => Column(children: [Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.primary)), Text(label, style: const TextStyle(fontSize: 9, color: AppColors.subtextLight))]);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F7FC),
+      appBar: AppBar(backgroundColor: Colors.white, elevation: 0, leading: IconButton(onPressed: widget.onAbrirSidebar, icon: const Icon(Icons.menu_rounded)), title: const Text('Administrar tienda', style: TextStyle(fontWeight: FontWeight.w900)), actions: [IconButton(onPressed: _shareStore, icon: const Icon(Icons.share_outlined)), IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded))]),
+      body: _loading ? const Center(child: CircularProgressIndicator(color: AppColors.primary)) : ListView(padding: const EdgeInsets.all(14), children: [
+        Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(gradient: AppColors.gradientPrimary, borderRadius: BorderRadius.circular(22)), child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('TIENDA ONLINE', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)), SizedBox(height: 5), Text('Controla tu escaparate', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)), SizedBox(height: 4), Text('Productos y categorías vienen directamente del POS.', style: TextStyle(color: Colors.white70, fontSize: 11))])),
+        const SizedBox(height: 12),
+        _adminCard('Contacto y enlace público', 'Estos datos se usan para compartir la tienda y para el botón flotante de WhatsApp.', Column(children: [TextField(controller: _whatsapp, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'WhatsApp de la tienda', hintText: 'Ej. 17865551234', prefixIcon: Icon(Icons.chat_rounded))), const SizedBox(height: 8), TextField(controller: _publicUrl, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Enlace público de la tienda', prefixIcon: Icon(Icons.link_rounded))), const SizedBox(height: 10), Row(children: [Expanded(child: OutlinedButton.icon(onPressed: _openStore, icon: const Icon(Icons.open_in_new_rounded), label: const Text('Ver tienda'))), const SizedBox(width: 8), Expanded(child: FilledButton.icon(onPressed: _saveSettings, icon: const Icon(Icons.save_rounded), label: const Text('Guardar')))]), const SizedBox(height: 8), SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _shareStore, icon: const Icon(Icons.share_rounded), label: const Text('Compartir tienda')))])),
+        const SizedBox(height: 12),
+        _adminCard('Banners de portada', 'Sube promociones. La tienda los cambia automáticamente cada 5 segundos.', Column(children: [TextField(controller: _title, decoration: const InputDecoration(labelText: 'Título')), TextField(controller: _subtitle, decoration: const InputDecoration(labelText: 'Subtítulo')), TextField(controller: _button, decoration: const InputDecoration(labelText: 'Texto del botón')), const SizedBox(height: 10), Row(children: [Expanded(child: OutlinedButton.icon(onPressed: _pickBanner, icon: const Icon(Icons.image_outlined), label: Text(_bannerImage == null ? 'Subir banner' : 'Imagen seleccionada'))), const SizedBox(width: 8), FilledButton.icon(onPressed: _addBanner, icon: const Icon(Icons.add_rounded), label: const Text('Agregar'))]), if (_bannerImage != null) Padding(padding: const EdgeInsets.only(top: 10), child: ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.memory(base64Decode(_bannerImage!), height: 150, width: double.infinity, fit: BoxFit.cover)))])),
+        const SizedBox(height: 12),
+        ..._banners.asMap().entries.map((entry) { final index = entry.key; final banner = entry.value; final image = banner['image']?.toString() ?? ''; final active = banner['active'] ?? true; return Container(margin: const EdgeInsets.only(bottom: 9), padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFE5E7EB))), child: Row(children: [ClipRRect(borderRadius: BorderRadius.circular(12), child: image.isEmpty ? const SizedBox(width: 100, height: 64, child: Icon(Icons.image_outlined)) : Image.memory(base64Decode(image), width: 100, height: 64, fit: BoxFit.cover)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(banner['title']?.toString() ?? '', style: const TextStyle(fontWeight: FontWeight.w900)), Text(banner['subtitle']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: AppColors.subtextLight)), Text(active ? 'Visible en la tienda' : 'Oculto', style: TextStyle(fontSize: 9, color: active ? AppColors.success : AppColors.danger, fontWeight: FontWeight.w800))])), Switch(value: active, onChanged: (_) => _toggle(index)), IconButton(onPressed: () => _delete(index), icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger))])); }),
+        const SizedBox(height: 12),
+        _adminCard('Catálogo conectado', 'Los productos y categorías son los mismos del POS.', Row(children: [Expanded(child: _miniStat('${_productos.length}', 'Productos')), Expanded(child: _miniStat('${_categorias.length}', 'Categorías')), Expanded(child: _miniStat('${_productos.where((p) => (int.tryParse((p['destacado'] ?? 0).toString()) ?? 0) > 0).length}', 'Destacados'))])),
+        const SizedBox(height: 12),
+        _adminCard('Publicación', 'El POS sigue siendo local. Genera el catálogo público y publícalo junto con tienda.html en GitHub Pages.', Column(children: [const ListTile(leading: Icon(Icons.cloud_done_rounded, color: AppColors.success), title: Text('Catálogo local conectado'), subtitle: Text('Los productos de esta pantalla salen del mismo inventario del POS.')), ListTile(leading: const Icon(Icons.info_outline_rounded, color: AppColors.primary), title: const Text('Cómo funciona'), subtitle: Text('El cliente nunca ve el POS. La página pública lee catalogo_tienda.json y solo muestra los datos que publicaste.')), const SizedBox(height: 4), SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _exportarCatalogoPublico, icon: const Icon(Icons.file_upload_outlined), label: const Text('Generar catálogo público')))])),
+      ]),
     );
   }
 }
@@ -15437,23 +16703,23 @@ const SizedBox(width: 14),
   }
 }
 
-// ============================================
-// PANTALLA: ESTADÍSTICAS
-// ============================================
+
 class EstadisticasScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
   final bool modoOscuro;
-  const EstadisticasScreen(
-      {super.key, required this.onAbrirSidebar, this.modoOscuro = false});
+  const EstadisticasScreen({super.key, required this.onAbrirSidebar, this.modoOscuro = false});
   @override
   State<EstadisticasScreen> createState() => _EstadisticasScreenState();
 }
 
 class _EstadisticasScreenState extends State<EstadisticasScreen> {
   final _db = DatabaseService();
-  List<Map<String, dynamic>> _ventasHoy = [];
-  List<Map<String, dynamic>> _productosMasVendidos = [];
+  List<Map<String, dynamic>> _ventas = [];
+  List<Map<String, dynamic>> _masVendidos = [];
+  Map<String, double> _porMetodo = {};
+  double _gastos = 0;
   bool _cargando = true;
+  String _periodo = 'Hoy';
 
   @override
   void initState() {
@@ -15461,232 +16727,153 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
     _cargarDatos();
   }
 
+  double _num(dynamic v) => v is num ? v.toDouble() : double.tryParse('$v') ?? 0;
+
   Future<void> _cargarDatos() async {
-    setState(() => _cargando = true);
+    if (mounted) setState(() => _cargando = true);
     try {
-      _ventasHoy = await _db.getVentasHoy();
-      _productosMasVendidos = await _db.getProductosMasVendidos();
+      final ahora = DateTime.now();
+      late DateTime inicio;
+      if (_periodo == 'Hoy') {
+        inicio = DateTime(ahora.year, ahora.month, ahora.day);
+      } else if (_periodo == '7 días') {
+        inicio = DateTime(ahora.year, ahora.month, ahora.day).subtract(const Duration(days: 6));
+      } else if (_periodo == '30 días') {
+        inicio = DateTime(ahora.year, ahora.month, ahora.day).subtract(const Duration(days: 29));
+      } else {
+        inicio = DateTime(ahora.year, ahora.month, 1);
+      }
+      _ventas = await _db.getVentasPorFecha(inicio, ahora);
+      _masVendidos = await _db.getProductosMasVendidos();
+      final gastos = await _db.query('SELECT * FROM gastos WHERE fecha >= ? AND fecha <= ? ORDER BY fecha DESC', [inicio.toIso8601String(), ahora.toIso8601String()]);
+      _gastos = gastos.fold<double>(0, (sum, g) => sum + _num(g['monto']));
+      final mapa = <String, double>{};
+      for (final v in _ventas) {
+        final metodo = (v['metodo_pago']?.toString().trim().isNotEmpty ?? false) ? v['metodo_pago'].toString() : 'Otros';
+        mapa[metodo] = (mapa[metodo] ?? 0) + _num(v['total']);
+      }
+      _porMetodo = mapa;
     } catch (e) {
-      debugPrint('Error cargando estadísticas: $e');
-      _ventasHoy = [];
-      _productosMasVendidos = [];
+      debugPrint('Error cargando estadísticas profesionales: $e');
+      _ventas = []; _masVendidos = []; _porMetodo = {}; _gastos = 0;
+    } finally {
+      if (mounted) setState(() => _cargando = false);
     }
-    setState(() => _cargando = false);
+  }
+
+  double get _ventasTotal => _ventas.fold(0, (s, v) => s + _num(v['total']));
+  double get _ganancia => _ventas.fold(0, (s, v) => s + _num(v['ganancia_total']));
+  double get _ticketPromedio => _ventas.isEmpty ? 0 : _ventasTotal / _ventas.length;
+  double get _efectivo => _porMetodo.entries.where((e) => e.key.toLowerCase().contains('efect')).fold(0, (s,e)=>s+e.value);
+  double get _digital => _ventasTotal - _efectivo;
+
+  String _money(double v) => '\$${v.toStringAsFixed(2)}';
+
+  Widget _card({required String title, required String value, required IconData icon, String? detail, bool dark=false}) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.divider(dark))),
+      child: Row(children: [
+        Container(width: 40, height: 40, decoration: BoxDecoration(color: AppColors.primary.withValues(alpha:.10), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: AppColors.primary, size: 21)),
+        const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: TextStyle(color: AppColors.subtext(dark), fontSize: 10, fontWeight: FontWeight.w700)), const SizedBox(height: 3), Text(value, style: TextStyle(color: AppColors.text(dark), fontSize: 19, fontWeight: FontWeight.w900)), if (detail != null) Text(detail, style: TextStyle(color: AppColors.success, fontSize: 9, fontWeight: FontWeight.w700))]))
+      ]),
+    );
+  }
+
+  Widget _section(String title, Widget child, bool dark, {String? subtitle}) {
+    return Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.divider(dark))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: TextStyle(color: AppColors.text(dark), fontSize: 14, fontWeight: FontWeight.w900)), if (subtitle != null) Padding(padding: const EdgeInsets.only(top:3,bottom:10), child: Text(subtitle, style: TextStyle(color: AppColors.subtext(dark), fontSize: 10))), if (subtitle == null) const SizedBox(height:10), child]));
+  }
+
+  Widget _paymentChart(bool dark) {
+    if (_porMetodo.isEmpty) return Center(child: Padding(padding: const EdgeInsets.all(18), child: Text('Aún no hay pagos registrados en este periodo.', style: TextStyle(color: AppColors.subtext(dark), fontSize: 11))));
+    final entries = _porMetodo.entries.toList()..sort((a,b)=>b.value.compareTo(a.value));
+    final total = _ventasTotal <= 0 ? 1 : _ventasTotal;
+    final colors = [AppColors.primary, AppColors.info, AppColors.success, AppColors.warning, AppColors.secondary, AppColors.danger];
+    return Row(children: [
+      SizedBox(width: 145, height: 145, child: PieChart(PieChartData(centerSpaceRadius: 34, sectionsSpace: 2, sections: [for (var i=0;i<entries.length;i++) PieChartSectionData(value: entries[i].value, title: '${(entries[i].value/total*100).round()}%', radius: 48, color: colors[i%colors.length], titleStyle: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold))]))),
+      const SizedBox(width: 12), Expanded(child: Column(children: [for (var i=0;i<entries.length;i++) Padding(padding: const EdgeInsets.symmetric(vertical:4), child: Row(children: [Container(width:9,height:9,decoration:BoxDecoration(color:colors[i%colors.length],shape:BoxShape.circle)),const SizedBox(width:6),Expanded(child:Text(entries[i].key,overflow:TextOverflow.ellipsis,style:TextStyle(color:AppColors.text(dark),fontSize:10,fontWeight:FontWeight.w700))),Text(_money(entries[i].value),style:TextStyle(color:AppColors.text(dark),fontSize:10,fontWeight:FontWeight.w800))]))]))
+    ]);
+  }
+
+  Widget _hourChart(bool dark) {
+    final horas = List<double>.filled(24, 0);
+    for (final v in _ventas) {
+      try { final d=DateTime.parse('${v['fecha']}'); horas[d.hour]+= _num(v['total']); } catch (_) {}
+    }
+    final spots = <FlSpot>[];
+    for (var h=0;h<24;h++) spots.add(FlSpot(h.toDouble(), horas[h]));
+    final maxY = horas.fold<double>(0,(m,v)=>v>m?v:m);
+    return SizedBox(height: 180, child: LineChart(LineChartData(minX:0,maxX:23,minY:0,maxY:maxY<=0?10:maxY*1.25, gridData: const FlGridData(show:false), borderData: FlBorderData(show:false), titlesData: FlTitlesData(leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles:false)), topTitles: const AxisTitles(sideTitles: SideTitles(showTitles:false)), rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles:false)), bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles:true, reservedSize:22, interval:4, getTitlesWidget:(v,m)=>Text('${v.toInt()}h',style:TextStyle(color:AppColors.subtext(dark),fontSize:8))))), lineBarsData:[LineChartBarData(spots:spots,isCurved:true,barWidth:3,color:AppColors.primary,dotData: const FlDotData(show:false), belowBarData: BarAreaData(show:true,color:AppColors.primary.withValues(alpha:.08))) ])));
+  }
+
+  Widget _topProducts(bool dark) {
+    if (_masVendidos.isEmpty) return Text('Sin productos vendidos todavía.', style: TextStyle(color: AppColors.subtext(dark), fontSize: 11));
+    final top=_masVendidos.take(6).toList();
+    final max=top.fold<double>(1,(m,p)=>_num(p['cantidad'])>m?_num(p['cantidad']):m);
+    return Column(children:[for(final p in top) Padding(padding:const EdgeInsets.symmetric(vertical:5),child:Row(children:[Expanded(flex:3,child:Text('${p['nombre']??''}',maxLines:1,overflow:TextOverflow.ellipsis,style:TextStyle(color:AppColors.text(dark),fontSize:10,fontWeight:FontWeight.w700))),Expanded(flex:4,child:Padding(padding:const EdgeInsets.symmetric(horizontal:8),child:ClipRRect(borderRadius:BorderRadius.circular(8),child:LinearProgressIndicator(value:_num(p['cantidad'])/max,minHeight:8,backgroundColor:AppColors.divider(dark),valueColor:AlwaysStoppedAnimation(AppColors.primary))))),SizedBox(width:55,child:Text('${p['cantidad']} uds',textAlign:TextAlign.right,style:TextStyle(color:AppColors.subtext(dark),fontSize:9,fontWeight:FontWeight.w700))) ]))]);
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = widget.modoOscuro;
-    double totalVentas = 0;
-    for (var v in _ventasHoy) {
-      totalVentas += (v['total'] as num? ?? 0).toDouble();
-    }
-    double gananciaTotal = 0;
-    for (var v in _ventasHoy) {
-      gananciaTotal += (v['ganancia_total'] as num? ?? 0).toDouble();
-    }
+    final dark=widget.modoOscuro;
+    final fecha=DateFormat('dd MMM yyyy', 'es').format(DateTime.now());
+    return Scaffold(backgroundColor:AppColors.background(dark),appBar:AppBar(backgroundColor:Colors.transparent,elevation:0,leading:IconButton(onPressed:widget.onAbrirSidebar,tooltip:'Abrir menú',icon:Icon(Icons.menu_rounded,color:AppColors.text(dark))),title:Text('Estadísticas y métricas',style:TextStyle(color:AppColors.text(dark),fontSize:18,fontWeight:FontWeight.w900))),body:_cargando?const Center(child:CircularProgressIndicator(color:AppColors.primary)):RefreshIndicator(onRefresh:_cargarDatos,child:ListView(padding:const EdgeInsets.fromLTRB(14,4,14,28),children:[
+      Row(children:[Expanded(child:Text('Resumen del negocio',style:TextStyle(color:AppColors.text(dark),fontSize:20,fontWeight:FontWeight.w900))),Container(padding:const EdgeInsets.symmetric(horizontal:9,vertical:5),decoration:BoxDecoration(color:AppColors.primary.withValues(alpha:.08),borderRadius:BorderRadius.circular(10)),child:Text(fecha,style:TextStyle(color:AppColors.primary,fontSize:9,fontWeight:FontWeight.w800)))]),
+      const SizedBox(height:10),
+      SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(children:[for(final p in ['Hoy','7 días','30 días','Mes']) Padding(padding:const EdgeInsets.only(right:7),child:ChoiceChip(label:Text(p),selected:_periodo==p,onSelected:(_){if(_){setState(()=>_periodo=p);_cargarDatos();}}))])),
+      const SizedBox(height:10),
+      LayoutBuilder(builder:(ctx,c)=>GridView.count(crossAxisCount:c.maxWidth>700?4:2,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),crossAxisSpacing:8,mainAxisSpacing:8,childAspectRatio:c.maxWidth>700?2.5:1.8,children:[_card(title:'Ventas',value:_money(_ventasTotal),icon:Icons.point_of_sale_outlined,detail:'Ingresos por ventas',dark:dark),_card(title:'Transacciones',value:'${_ventas.length}',icon:Icons.receipt_long_outlined,detail:'Tickets procesados',dark:dark),_card(title:'Ticket promedio',value:_money(_ticketPromedio),icon:Icons.analytics_outlined,detail:'Venta media',dark:dark),_card(title:'Ganancia',value:_money(_ganancia),icon:Icons.trending_up_rounded,detail:'Utilidad registrada',dark:dark)])),
+      const SizedBox(height:10),
+      _section('Dinero recogido',Row(children:[Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(_money(_ventasTotal),style:TextStyle(color:AppColors.text(dark),fontSize:25,fontWeight:FontWeight.w900)),Text('Total cobrado en ventas',style:TextStyle(color:AppColors.subtext(dark),fontSize:10)),const SizedBox(height:9),Row(children:[Expanded(child:Text('Efectivo\n${_money(_efectivo)}',style:TextStyle(color:AppColors.text(dark),fontSize:11,fontWeight:FontWeight.w800))),Expanded(child:Text('Digital\n${_money(_digital)}',style:TextStyle(color:AppColors.text(dark),fontSize:11,fontWeight:FontWeight.w800))),Expanded(child:Text('Gastos\n${_money(_gastos)}',style:TextStyle(color:AppColors.danger,fontSize:11,fontWeight:FontWeight.w800)))])])),Container(width:95,height:95,decoration:BoxDecoration(shape:BoxShape.circle,color:AppColors.success.withValues(alpha:.10)),child:Icon(Icons.account_balance_wallet_rounded,color:AppColors.success,size:42))]),dark,subtitle:'Cuánto dinero entró y cuánto salió durante el periodo.'),
+      const SizedBox(height:10),
+      _section('Pagos por método',_paymentChart(dark),dark,subtitle:'Monto recaudado por cada forma de pago.'),
+      const SizedBox(height:10),
+      _section('Ventas por hora',_hourChart(dark),dark,subtitle:'Distribución de ingresos durante el día.'),
+      const SizedBox(height:10),
+      _section('Productos más vendidos',_topProducts(dark),dark,subtitle:'Unidades vendidas y ranking del catálogo.'),
+      const SizedBox(height:10),
+      _section('Indicadores adicionales',Column(children:[_metricRow('Efectivo recaudado',_money(_efectivo),Icons.payments_outlined,dark),_metricRow('Pagos digitales',_money(_digital),Icons.credit_card_outlined,dark),_metricRow('Gastos registrados',_money(_gastos),Icons.remove_circle_outline,dark),_metricRow('Margen de ganancia',_ventasTotal<=0?'0%':'${(_ganancia/_ventasTotal*100).toStringAsFixed(1)}%',Icons.percent_rounded,dark)]),dark),
+    ])));
+  }
 
-    return Scaffold(
-      backgroundColor: AppColors.background(isDark),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Row(children: [
-const SizedBox(width: 14),
-          Text('ESTADÍSTICAS',
-              style: TextStyle(
-                  color: AppColors.text(isDark),
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5)),
-        ]),
+  Widget _buildFiltroDropdown(String value, List<String> items, ValueChanged<String?> onChanged, bool isDark) {
+    final safeItems = <String>[];
+    for (final item in items) {
+      if (item.isEmpty || safeItems.contains(item)) continue;
+      safeItems.add(item);
+    }
+    if (safeItems.isEmpty) safeItems.add(value.isEmpty ? 'Todas' : value);
+    final selected = safeItems.contains(value) ? value : safeItems.first;
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: AppColors.background(isDark),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.divider(isDark)),
       ),
-      body: SafeArea(
-        child: _cargando
-            ? const Center(
-                child: CircularProgressIndicator(color: AppColors.primary))
-            : RefreshIndicator(
-                onRefresh: _cargarDatos,
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    Row(children: [
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            gradient: AppColors.gradientPrimary,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.primary.withValues(alpha: 0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Column(children: [
-                            const Text('Total Ventas Hoy',
-                                style: TextStyle(
-                                    color: Colors.white70, fontSize: 10)),
-                            const SizedBox(height: 4),
-                            Text('\$${totalVentas.toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700)),
-                          ]),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            gradient: AppColors.gradientSuccess,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.success.withValues(alpha: 0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Column(children: [
-                            const Text('Ganancia',
-                                style: TextStyle(
-                                    color: Colors.white70, fontSize: 10)),
-                            const SizedBox(height: 4),
-                            Text('\$${gananciaTotal.toStringAsFixed(2)}',
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700)),
-                          ]),
-                        ),
-                      ),
-                    ]),
-                    const SizedBox(height: 16),
-                    if (_productosMasVendidos.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.card(isDark),
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.05),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('PRODUCTOS MÁS VENDIDOS',
-                                style: TextStyle(
-                                    color: AppColors.text(isDark),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 1)),
-                            const SizedBox(height: 12),
-                            ..._productosMasVendidos.take(10).map((p) {
-                              return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        p['nombre'] ?? '',
-                                        style: TextStyle(
-                                            color: AppColors.text(isDark),
-                                            fontSize: 12),
-                                      ),
-                                    ),
-                                    Text(
-                                      '${p['cantidad']} vendidos',
-                                      style: TextStyle(
-                                          color: AppColors.subtext(isDark),
-                                          fontSize: 11),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }),
-                          ],
-                        ),
-                      ),
-                    const SizedBox(height: 16),
-                    if (_ventasHoy.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.card(isDark),
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.05),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('VENTAS DE HOY',
-                                style: TextStyle(
-                                    color: AppColors.text(isDark),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 1)),
-                            const SizedBox(height: 12),
-                            ..._ventasHoy.take(10).map((v) {
-                              final fecha = v['fecha'] != null
-                                  ? DateTime.parse(v['fecha'].toString())
-                                  : DateTime.now();
-                              return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        v['numero_factura'] ??
-                                            'Venta #${v['id']}',
-                                        style: TextStyle(
-                                            color: AppColors.text(isDark),
-                                            fontSize: 12),
-                                      ),
-                                    ),
-                                    Text(
-                                      DateFormat('HH:mm').format(fecha),
-                                      style: TextStyle(
-                                          color: AppColors.subtext(isDark),
-                                          fontSize: 11),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '\$${(v['total'] as num).toStringAsFixed(2)}',
-                                      style: const TextStyle(
-                                          color: AppColors.primary,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w700),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: selected,
+          isExpanded: true,
+          isDense: true,
+          dropdownColor: AppColors.card(isDark),
+          icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.subtext(isDark), size: 18),
+          style: TextStyle(
+            color: AppColors.text(isDark),
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+          ),
+          items: safeItems.map((item) => DropdownMenuItem<String>(
+            value: item,
+            child: Text(item, maxLines: 1, overflow: TextOverflow.ellipsis),
+          )).toList(),
+          onChanged: onChanged,
+        ),
       ),
     );
   }
+
+  Widget _metricRow(String label,String value,IconData icon,bool dark)=>Container(padding:const EdgeInsets.symmetric(vertical:9),decoration:BoxDecoration(border:Border(bottom:BorderSide(color:AppColors.divider(dark)))),child:Row(children:[Icon(icon,color:AppColors.primary,size:18),const SizedBox(width:10),Expanded(child:Text(label,style:TextStyle(color:AppColors.text(dark),fontSize:11,fontWeight:FontWeight.w700))),Text(value,style:TextStyle(color:AppColors.text(dark),fontSize:12,fontWeight:FontWeight.w900))]));
 }
+
