@@ -49,7 +49,7 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 // ============================================
 class AppColors {
   static Color background(bool isDark) =>
-      isDark ? const Color(0xFF0B0E11) : const Color(0xFFF7F7F8);
+      isDark ? const Color(0xFF0B0E11) : Colors.white;
   static Color card(bool isDark) =>
       isDark ? const Color(0xFF181A20) : Colors.white;
   static Color text(bool isDark) =>
@@ -120,7 +120,7 @@ class AppColors {
 
   static const Color subtextLight = Color(0xFF64748B);
   static const Color textLight = Color(0xFF1A1D26);
-  static const Color backgroundLight = Color(0xFFF8F7FC);
+  static const Color backgroundLight = Colors.white;
   static const Color dividerLight = Color(0xFFE2E8F0);
 }
 
@@ -334,6 +334,7 @@ class LocalDatabase {
       CREATE TABLE IF NOT EXISTS metodos_pago (
         id TEXT PRIMARY KEY,
         nombre TEXT NOT NULL,
+        tipo TEXT,
         banco TEXT,
         numero_cuenta TEXT,
         telefono_pago_movil TEXT,
@@ -539,6 +540,8 @@ class LocalDatabase {
       });
     }
 
+    try { await db.execute('ALTER TABLE metodos_pago ADD COLUMN tipo TEXT'); } catch (_) {}
+
     final usuariosExist = await db.query('usuarios');
     if (usuariosExist.isEmpty) {
       await db.insert('usuarios', {
@@ -700,11 +703,15 @@ class DatabaseService {
           'Producto insertado con ID: ${prod['id']}, resultado: $result');
       if (result > 0) {
         productosVersion.value++;
-        final okOnline = await SupabaseSyncService.upsertProduct(prod);
+        // LOCAL FIRST: el producto queda guardado inmediatamente aunque no haya
+        // internet. La sincronización con Supabase/Cloudinary continúa en segundo plano.
+        prod['sync_estado'] = 'pendiente';
+        prod['sync_error'] = null;
         await _db.update('productos', {
-          'sync_estado': okOnline ? 'sincronizado' : 'pendiente',
-          'sync_error': okOnline ? null : 'sin conexion o Supabase no disponible',
+          'sync_estado': 'pendiente',
+          'sync_error': null,
         }, 'id = ?', [prod['id']]);
+        unawaited(SupabaseSyncService.syncPendingProducts());
         return prod;
       }
       return null;
@@ -729,11 +736,8 @@ class DatabaseService {
       final result = await _db.update('productos', prod, 'id = ?', [id]);
       debugPrint('Producto actualizado: $id, filas: $result');
       if (result > 0) {
-        final local = await _db.query('SELECT * FROM productos WHERE id = ?', [id]);
-        if (local.isNotEmpty) {
-          final okOnline = await SupabaseSyncService.upsertProduct(local.first);
-          await marcarProductoSincronizado(id, okOnline, okOnline ? null : 'Sin conexión');
-        }
+        // La edición también es local-first; no bloquea la pantalla si la nube está offline.
+        unawaited(SupabaseSyncService.syncPendingProducts());
       }
       return result > 0;
     } catch (e) {
@@ -2078,7 +2082,7 @@ class CloudinaryService {
         ..fields['folder'] = folder
         ..files.add(http.MultipartFile.fromBytes('file', bytes,
             filename: file.name.isEmpty ? 'imagen.jpg' : file.name));
-      final response = await request.send();
+      final response = await request.send().timeout(const Duration(seconds: 20));
       final body = await response.stream.bytesToString();
       if (response.statusCode < 200 || response.statusCode >= 300) {
         debugPrint('Cloudinary error ${response.statusCode}: $body');
@@ -2098,26 +2102,33 @@ class SupabaseSyncService {
   static const String anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV1d2pyem1oaHppa3d3d214Z2VwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0ODIxOTcsImV4cCI6MjEwNTA1ODE5N30.VWMnbhdcmoO6g_QkY019essMUlrYbhJP0TPjKznTJ4A';
   static bool ready = false;
 
+  static bool _syncing = false;
+
   static Future<void> initialize() async {
     try {
-      await Supabase.initialize(url: url, anonKey: anonKey);
+      try {
+        await Supabase.initialize(url: url, anonKey: anonKey);
+      } catch (e) {
+        // Hot reload / reinicio de la app: el cliente puede existir ya.
+        debugPrint('Supabase initialize: $e');
+      }
+      final c = Supabase.instance.client;
       ready = true;
-      try {
-        if (Supabase.instance.client.auth.currentSession == null) {
-          await Supabase.instance.client.auth.signInAnonymously();
+
+      // El POS usa una sesión anónima para que RLS permita escribir
+      // productos/categorías sin exponer una service_role key.
+      if (c.auth.currentSession == null) {
+        try {
+          await c.auth.signInAnonymously();
+        } catch (authError) {
+          debugPrint('Supabase Auth anónimo no disponible: $authError');
         }
-      } catch (authError) {
-        debugPrint('Supabase Auth anónimo no disponible: $authError');
       }
-      debugPrint('Supabase inicializado');
+
+      final session = c.auth.currentSession;
+      debugPrint('Supabase inicializado. Sesión POS: ${session != null ? 'OK' : 'NO'}');
     } catch (e) {
-      // Puede ocurrir si ya fue inicializado en hot reload.
-      try {
-        final _ = Supabase.instance.client;
-        ready = true;
-      } catch (_) {
-        ready = false;
-      }
+      ready = false;
       debugPrint('Supabase no disponible: $e');
     }
   }
@@ -2136,7 +2147,7 @@ class SupabaseSyncService {
         ..fields['upload_preset'] = CloudinaryService.uploadPreset
         ..fields['folder'] = folder
         ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'producto_${DateTime.now().millisecondsSinceEpoch}.jpg'));
-      final response = await request.send();
+      final response = await request.send().timeout(const Duration(seconds: 20));
       final body = await response.stream.bytesToString();
       if (response.statusCode < 200 || response.statusCode >= 300) return null;
       return jsonDecode(body)['secure_url']?.toString();
@@ -2149,12 +2160,25 @@ class SupabaseSyncService {
     final c = client;
     if (c == null) return false;
     try {
-      final localId = p['id']?.toString();
+      // La escritura requiere sesión authenticated (anónima).
+      if (c.auth.currentSession == null) {
+        try { await c.auth.signInAnonymously(); } catch (_) {}
+      }
+      if (c.auth.currentSession == null) {
+        debugPrint('SYNC producto: sin sesión autenticada');
+        return false;
+      }
+
+      final localId = p['id']?.toString().trim();
       if (localId == null || localId.isEmpty) return false;
+
       String? categoryId;
       final categoryName = p['categoria']?.toString().trim();
       if (categoryName != null && categoryName.isNotEmpty) {
-        final existing = await c.from('store_categories').select('id').eq('name', categoryName).maybeSingle();
+        final existing = await c.from('store_categories')
+            .select('id')
+            .eq('name', categoryName)
+            .maybeSingle();
         if (existing != null) {
           categoryId = existing['id']?.toString();
         } else {
@@ -2165,27 +2189,32 @@ class SupabaseSyncService {
           categoryId = created['id']?.toString();
         }
       }
+
+      final imageUrl = p['imagen_url']?.toString().trim() ?? '';
       final payload = <String, dynamic>{
         'local_id': localId,
-        'name': p['nombre']?.toString() ?? '',
+        'name': p['nombre']?.toString().trim() ?? '',
         'description': p['descripcion']?.toString(),
         'sku': p['sku']?.toString(),
-        'barcode': p['codigo_barras']?.toString(),
+        'barcode': p['codigo_barras']?.toString().trim(),
         'price': (p['precio'] as num?)?.toDouble() ?? double.tryParse('${p['precio']}') ?? 0,
         'stock': (p['stock'] as num?)?.toDouble() ?? double.tryParse('${p['stock']}') ?? 0,
         'category_id': categoryId,
         'brand': p['marca']?.toString(),
         'color': p['color']?.toString(),
         'size': p['talla']?.toString(),
-        'image_url': p['imagen_url']?.toString(),
+        'image_url': imageUrl.isEmpty ? null : imageUrl,
         'active': p['activo'] == 1 || p['activo'] == true,
         'featured': p['destacado'] == 1 || p['destacado'] == true,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
+
       await c.from('store_products').upsert(payload, onConflict: 'local_id');
+      debugPrint('SYNC OK producto $localId -> Supabase');
       return true;
-    } catch (e) {
-      debugPrint('Supabase producto pendiente: $e');
+    } catch (e, st) {
+      debugPrint('SYNC ERROR producto ${p['id']}: $e');
+      debugPrint('$st');
       return false;
     }
   }
@@ -2215,21 +2244,45 @@ class SupabaseSyncService {
   }
 
   static Future<void> syncPendingProducts() async {
-    final db = DatabaseService();
-    final products = await db.query("SELECT * FROM productos WHERE sync_estado IS NULL OR sync_estado != 'sincronizado'");
-    for (final original in products) {
-      final p = Map<String, dynamic>.from(original);
-      if ((p['imagen_url']?.toString() ?? '').isEmpty && (p['imagen_base64']?.toString() ?? '').isNotEmpty) {
-        final url = await uploadBase64(p['imagen_base64'].toString());
-        if (url != null) {
-          p['imagen_url'] = url;
-          await db.update('productos', {'imagen_url': url}, 'id = ?', [p['id']]);
+    if (_syncing) return;
+    _syncing = true;
+    try {
+      // Si la app arrancó sin internet, reintentamos inicializar/auth al volver a tener red.
+      if (!ready) {
+        await initialize();
+      }
+      final db = DatabaseService();
+      final products = await db.query("SELECT * FROM productos WHERE sync_estado IS NULL OR sync_estado != 'sincronizado' ORDER BY actualizado_en DESC");
+      debugPrint('SYNC pendientes: ${products.length}');
+      for (final original in products) {
+        final p = Map<String, dynamic>.from(original);
+
+        // 1) Si la imagen aún está solo en local, primero la subimos a Cloudinary.
+        if ((p['imagen_url']?.toString() ?? '').trim().isEmpty &&
+            (p['imagen_base64']?.toString() ?? '').trim().isNotEmpty) {
+          final urlCloudinary = await uploadBase64(p['imagen_base64'].toString());
+          if (urlCloudinary != null && urlCloudinary.isNotEmpty) {
+            p['imagen_url'] = urlCloudinary;
+            await db.update('productos', {
+              'imagen_url': urlCloudinary,
+              'sync_estado': 'pendiente',
+              'sync_error': null,
+            }, 'id = ?', [p['id']]);
+          }
         }
+
+        // 2) Solo después de tener la URL, sincronizamos el registro en Supabase.
+        final ok = await upsertProduct(p).timeout(const Duration(seconds: 15), onTimeout: () => false);
+        await db.marcarProductoSincronizado(
+          p['id'].toString(),
+          ok,
+          ok ? null : 'Supabase/Cloudinary no disponible o RLS sin permisos',
+        );
       }
-      final ok = await upsertProduct(p);
-      if (ok) {
-        await db.marcarProductoSincronizado(p['id'].toString(), true);
-      }
+    } catch (e) {
+      debugPrint('SYNC general error: $e');
+    } finally {
+      _syncing = false;
     }
   }
 }
@@ -2249,8 +2302,9 @@ class MiApp extends StatefulWidget {
 }
 
 class _MiAppState extends State<MiApp> {
-  bool _modoOscuro = true;
+  bool _modoOscuro = false;
   int _currentIndex = 0;
+  int _solicitudNuevoProducto = 0;
 
   void _abrirSidebar() {
     final navContext = navigatorKey.currentState?.overlay?.context;
@@ -2375,7 +2429,7 @@ class _MiAppState extends State<MiApp> {
           surface: Colors.white,
         ),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
+          backgroundColor: Colors.white,
           elevation: 0,
           iconTheme: IconThemeData(color: AppColors.textLight),
           titleTextStyle: TextStyle(
@@ -2451,6 +2505,7 @@ class _MiAppState extends State<MiApp> {
                     onNavigateToDashboard: () => setState(() => _currentIndex = 1),
                     modoOscuro: _modoOscuro,
                     onToggleModoOscuro: _toggleModoOscuro,
+                    solicitudNuevoProducto: _solicitudNuevoProducto,
                   ),
                   DashboardScreen(
                     onAbrirSidebar: _abrirSidebar,
@@ -2490,63 +2545,81 @@ return content;
           ),
           bottomNavigationBar: LayoutBuilder(
             builder: (context, constraints) {
-              if (constraints.maxWidth >= 480 || _currentIndex > 1) {
-                return const SizedBox.shrink();
-              }
-              return CurvedNavigationBar(
-                backgroundColor: Colors.transparent,
-                color: _modoOscuro
-                    ? const Color(0xFF1F2937)
-                    : const Color(0xFFE5E7EB),
-                buttonBackgroundColor: _modoOscuro
-                    ? const Color(0xFF374151)
-                    : const Color(0xFFD1D5DB),
-                height: 65,
-                animationDuration: const Duration(milliseconds: 280),
-                animationCurve: Curves.easeInOut,
-                index: _currentIndex,
-                items: [
-                  CurvedNavigationBarItem(
-                    child: Icon(
-                      Icons.point_of_sale_outlined,
-                      size: 25,
-                      color: _currentIndex == 0
-                          ? (_modoOscuro ? Colors.white : Colors.black)
-                          : AppColors.subtext(_modoOscuro),
-                    ),
-                    label: 'POS',
-                    labelStyle: TextStyle(
-                      color: _currentIndex == 0
-                          ? (_modoOscuro ? Colors.white : Colors.black)
-                          : AppColors.subtext(_modoOscuro),
-                      fontSize: 10,
-                    ),
-                  ),
-                  CurvedNavigationBarItem(
-                    child: Icon(
-                      Icons.dashboard_outlined,
-                      size: 25,
-                      color: _currentIndex == 1
-                          ? (_modoOscuro ? Colors.white : Colors.black)
-                          : AppColors.subtext(_modoOscuro),
-                    ),
-                    label: 'Dashboard',
-                    labelStyle: TextStyle(
-                      color: _currentIndex == 1
-                          ? (_modoOscuro ? Colors.white : Colors.black)
-                          : AppColors.subtext(_modoOscuro),
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-                onTap: (index) => setState(() => _currentIndex = index),
-              );
+              if (constraints.maxWidth >= 480) return const SizedBox.shrink();
+              return _buildMobileNav();
             },
           ),
         ),
       ),
     );
   }
+
+  Widget _buildMobileNav() {
+    final dark = _modoOscuro;
+    final surface = dark ? const Color(0xFF1B1F26) : Colors.white;
+    final muted = dark ? const Color(0xFF9AA4B2) : const Color(0xFF667085);
+    final active = AppColors.primary;
+
+    Widget item(String label, IconData icon, int index) {
+      final selected = _currentIndex == index;
+      return Expanded(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => setState(() => _currentIndex = index),
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(icon, size: 22, color: selected ? active : muted),
+            const SizedBox(height: 4),
+            Text(label, style: TextStyle(color: selected ? active : muted, fontSize: 9, fontWeight: selected ? FontWeight.w900 : FontWeight.w700)),
+          ]),
+        ),
+      );
+    }
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+        child: Material(
+          color: surface,
+          elevation: 14,
+          shadowColor: Colors.black.withValues(alpha: .18),
+          borderRadius: BorderRadius.circular(22),
+          child: Container(
+            height: 70,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(22), border: Border.all(color: AppColors.divider(dark))),
+            child: Row(children: [
+              item('Inicio', Icons.dashboard_customize_outlined, 1),
+              item('POS', Icons.point_of_sale_outlined, 0),
+              SizedBox(width: 66, child: Center(child: Material(
+                color: active, shape: const CircleBorder(), elevation: 9,
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () {
+                    setState(() {
+                      _currentIndex = 1;
+                      _solicitudNuevoProducto++;
+                    });
+                  },
+                  child: const SizedBox(width: 54, height: 54, child: Icon(Icons.add_rounded, color: Colors.white, size: 30)),
+                ),
+              ))),
+              item('Productos', Icons.inventory_2_rounded, 1),
+              Expanded(child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: _abrirSidebar,
+                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(Icons.apps_rounded, size: 22, color: muted),
+                  const SizedBox(height: 4),
+                  Text('Más', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w700)),
+                ]),
+              )),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+
 }
 
 // ============================================
@@ -2818,12 +2891,14 @@ class EscanerVentas extends StatefulWidget {
   final VoidCallback onNavigateToDashboard;
   final bool modoOscuro;
   final VoidCallback onToggleModoOscuro;
+  final int solicitudNuevoProducto;
   const EscanerVentas({
     super.key,
     required this.onAbrirSidebar,
     required this.onNavigateToDashboard,
     required this.modoOscuro,
     required this.onToggleModoOscuro,
+    this.solicitudNuevoProducto = 0,
   });
   @override
   State<EscanerVentas> createState() => _EscanerVentasState();
@@ -3827,80 +3902,45 @@ class _EscanerVentasState extends State<EscanerVentas> {
   }
 
   AppBar _buildModernAppBar(bool dark) {
-    final bg = dark ? const Color(0xFF0F131A) : Colors.white;
+    final bg = dark ? const Color(0xFF101318) : const Color(0xFFF8F9FB);
     final ink = dark ? Colors.white : const Color(0xFF17202A);
-    final muted = dark ? const Color(0xFF8D98A8) : const Color(0xFF6B7280);
-
+    final muted = dark ? const Color(0xFF8F98A6) : const Color(0xFF667085);
     return AppBar(
-      backgroundColor: bg,
-      elevation: 0,
-      surfaceTintColor: Colors.transparent,
-      automaticallyImplyLeading: false,
-      titleSpacing: 18,
-      leadingWidth: 68,
+      backgroundColor: bg, elevation: 0, scrolledUnderElevation: 0, surfaceTintColor: Colors.transparent,
+      automaticallyImplyLeading: false, toolbarHeight: 82, titleSpacing: 0,
+      leadingWidth: 66,
       leading: Padding(
-        padding: const EdgeInsets.only(left: 12, top: 7, bottom: 7),
+        padding: const EdgeInsets.only(left: 14, top: 18, bottom: 18),
         child: Material(
-          color: dark ? const Color(0xFF171D26) : const Color(0xFFF0F3F7),
-          borderRadius: BorderRadius.circular(14),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: widget.onAbrirSidebar,
-            child: const Icon(Icons.menu_rounded, size: 22, color: AppColors.primary),
-          ),
+          color: dark ? const Color(0xFF1B2028) : Colors.white, elevation: 1,
+          borderRadius: BorderRadius.circular(15),
+          child: InkWell(borderRadius: BorderRadius.circular(15), onTap: widget.onAbrirSidebar,
+            child: Icon(Icons.grid_view_rounded, color: ink, size: 21)),
         ),
       ),
-      title: Row(
-        children: [
-          if (_logoNegocio != null)
-            Container(
-              width: 38,
-              height: 38,
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: dark ? const Color(0xFF171D26) : const Color(0xFFF4F6F9),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Image.memory(_logoNegocio!, fit: BoxFit.contain),
-            )
-          else
-            Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFF0B90B), Color(0xFFF8D33A)],
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.point_of_sale_rounded, color: Colors.white, size: 20),
-          ),
-          const SizedBox(width: 11),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'SINTHETIX PRO',
-                style: TextStyle(
-                  color: ink,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: .5,
-                ),
-              ),
-              Text(
-                'Terminal de ventas',
-                style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w600),
-              ),
-            ],
-          ),
-        ],
-      ),
-      actions: [
-        _buildTopStatus(Icons.cloud_off_rounded, 'SIN CONEXIÓN', muted, dark),
-        const SizedBox(width: 6),
-        _buildTopStatus(Icons.inventory_2_outlined, '${listaProductos.length} productos', muted, dark),
+      title: Row(children: [
+        Container(width: 48, height: 48, padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: dark ? Colors.white12 : const Color(0xFFE6EAF0))),
+          child: _logoNegocio != null ? Image.memory(_logoNegocio!, fit: BoxFit.contain) : const Icon(Icons.storefront_rounded, color: AppColors.primary, size: 24)),
         const SizedBox(width: 12),
+        Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text('SINTHETIX PRO', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: ink, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: -.2)),
+          const SizedBox(height: 3),
+          Row(children: [Container(width: 7, height: 7, decoration: const BoxDecoration(color: AppColors.success, shape: BoxShape.circle)), const SizedBox(width: 6), Flexible(child: Text('Punto de venta · Local', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 9.5, fontWeight: FontWeight.w600)))])
+        ])),
+      ]),
+      actions: [
+        IconButton(tooltip: 'Sincronizar', onPressed: () => SupabaseSyncService.syncPendingProducts(), icon: Icon(Icons.sync_rounded, color: muted, size: 21)),
+        PopupMenuButton<String>(tooltip: 'Más opciones', icon: Icon(Icons.more_vert_rounded, color: ink), onSelected: (v) {
+          if (v == 'dashboard') widget.onNavigateToDashboard();
+          if (v == 'tienda') { Navigator.pop(context); }
+          if (v == 'config') { Navigator.pop(context); widget.onAbrirSidebar(); }
+        }, itemBuilder: (_) => const [
+          PopupMenuItem(value: 'dashboard', child: ListTile(leading: Icon(Icons.dashboard_outlined), title: Text('Resumen'))),
+          PopupMenuItem(value: 'tienda', child: ListTile(leading: Icon(Icons.storefront_outlined), title: Text('Tienda'))),
+          PopupMenuItem(value: 'config', child: ListTile(leading: Icon(Icons.settings_outlined), title: Text('Configuración'))),
+        ]),
+        const SizedBox(width: 8),
       ],
     );
   }
@@ -5147,6 +5187,7 @@ class DashboardScreen extends StatefulWidget {
   final VoidCallback onNavigateToCaja;
   final bool modoOscuro;
   final VoidCallback onToggleModoOscuro;
+  final int solicitudNuevoProducto;
   const DashboardScreen({
     super.key,
     required this.onAbrirSidebar,
@@ -5156,6 +5197,7 @@ class DashboardScreen extends StatefulWidget {
     required this.onNavigateToCaja,
     this.modoOscuro = false,
     required this.onToggleModoOscuro,
+    this.solicitudNuevoProducto = 0,
   });
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -5187,6 +5229,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _margenPorcentaje = 0;
   Map<String, double> _ventasPorMetodo = {};
   String? _logoDashboard;
+  int _ultimaSolicitudNuevoProducto = 0;
 
   bool cargando = true;
   String searchQuery = '';
@@ -5198,6 +5241,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _ultimaSolicitudNuevoProducto = widget.solicitudNuevoProducto;
     ventasVersion.addListener(_sincronizarDashboard);
     productosVersion.addListener(_sincronizarDashboard);
     cargarDatos();
@@ -5206,6 +5250,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _sincronizarDashboard() {
     if (!mounted) return;
     cargarDatos(silencioso: true);
+  }
+
+  @override
+  void didUpdateWidget(covariant DashboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.solicitudNuevoProducto != _ultimaSolicitudNuevoProducto) {
+      _ultimaSolicitudNuevoProducto = widget.solicitudNuevoProducto;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => seccionActual = 1);
+        mostrarDialogoProducto();
+      });
+    }
   }
 
   @override
@@ -6380,29 +6437,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }).length;
 
     Widget stat(String label, String value, IconData icon, Color color) {
-      return Expanded(
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: border),
-          ),
-          child: Row(children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(color: color.withValues(alpha: .11), borderRadius: BorderRadius.circular(11)),
-              child: Icon(icon, color: color, size: 19),
-            ),
-            const SizedBox(width: 10),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(label.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: .7)),
-              const SizedBox(height: 3),
-              Text(value, style: TextStyle(color: ink, fontSize: 19, fontWeight: FontWeight.w900)),
-            ])),
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Row(children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 8),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 7.5, fontWeight: FontWeight.w900, letterSpacing: .7)),
+            const SizedBox(height: 2),
+            Text(value, style: TextStyle(color: ink, fontSize: 17, fontWeight: FontWeight.w900)),
           ]),
-        ),
+        ]),
       );
     }
 
@@ -6452,8 +6497,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(width: 4),
                       Text('$stock unidades', style: TextStyle(color: statusColor, fontSize: 8.5, fontWeight: FontWeight.w800)),
                       const Spacer(),
-                      IconButton(padding: EdgeInsets.zero, constraints: const BoxConstraints.tightFor(width: 28, height: 28), tooltip: 'Editar producto', onPressed: () => mostrarDialogoProducto(productoEditar: prod), icon: Icon(Icons.edit_rounded, color: muted, size: 16)),
-                      IconButton(padding: EdgeInsets.zero, constraints: const BoxConstraints.tightFor(width: 28, height: 28), tooltip: 'Eliminar producto', onPressed: () => eliminarProducto(prod['id'].toString()), icon: Icon(Icons.delete_outline_rounded, color: AppColors.danger.withValues(alpha: .75), size: 16)),
+                      PopupMenuButton<String>(
+                        tooltip: 'Opciones del producto',
+                        padding: EdgeInsets.zero,
+                        icon: Icon(Icons.more_vert_rounded, color: muted, size: 20),
+                        color: surface,
+                        onSelected: (action) {
+                          if (action == 'edit') {
+                            mostrarDialogoProducto(productoEditar: prod);
+                          } else if (action == 'copy') {
+                            Clipboard.setData(ClipboardData(text: (prod['codigo_barras'] ?? '').toString()));
+                            mostrarSnackBar('Código copiado', AppColors.primary);
+                          } else if (action == 'delete') {
+                            eliminarProducto(prod['id'].toString());
+                          }
+                        },
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18), SizedBox(width: 10), Text('Editar') ])),
+                          PopupMenuItem(value: 'copy', child: Row(children: [Icon(Icons.content_copy_outlined, size: 18), SizedBox(width: 10), Text('Copiar código') ])),
+                          PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 18, color: AppColors.danger), SizedBox(width: 10), Text('Eliminar') ])),
+                        ],
+                      ),
                     ]),
                   ]),
                 ),
@@ -6480,15 +6544,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Material(color: AppColors.primary, borderRadius: BorderRadius.circular(13), child: InkWell(borderRadius: BorderRadius.circular(13), onTap: () => mostrarDialogoProducto(), child: const Padding(padding: EdgeInsets.symmetric(horizontal: 13, vertical: 11), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.add_rounded, color: Colors.white, size: 18), SizedBox(width: 6), Text('Nuevo producto', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900))])))),
           ]),
           const SizedBox(height: 14),
-          Row(children: [
-            stat('Total', '$total', Icons.inventory_2_rounded, AppColors.primary),
-            const SizedBox(width: 8),
-            stat('Disponibles', '$disponibles', Icons.check_circle_outline_rounded, AppColors.success),
-            const SizedBox(width: 8),
-            stat('Stock bajo', '$stockBajo', Icons.warning_amber_rounded, AppColors.warning),
-            const SizedBox(width: 8),
-            stat('Agotados', '$agotados', Icons.remove_shopping_cart_outlined, AppColors.danger),
-          ]),
+          LayoutBuilder(builder: (context, metricConstraints) {
+            final compact = metricConstraints.maxWidth < 700;
+            final stats = [
+              stat('Total', '$total', Icons.inventory_2_rounded, AppColors.primary),
+              stat('Disponibles', '$disponibles', Icons.check_circle_outline_rounded, AppColors.success),
+              stat('Stock bajo', '$stockBajo', Icons.warning_amber_rounded, AppColors.warning),
+              stat('Agotados', '$agotados', Icons.remove_shopping_cart_outlined, AppColors.danger),
+            ];
+            if (!compact) return Row(children: [for (int i = 0; i < stats.length; i++) ...[Expanded(child: stats[i]), if (i < stats.length - 1) const SizedBox(width: 12)]]);
+            return Wrap(spacing: 8, runSpacing: 8, children: stats.map((v) => SizedBox(width: (metricConstraints.maxWidth - 8) / 2, child: v)).toList());
+          }),
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(11),
@@ -6556,7 +6622,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _precioDashboard(double value) => '\$${value.toStringAsFixed(2)}';
 
   Widget _buildSalesKpi(String label, String value, String sub, IconData icon, Color color, bool isDark) {
-    return Expanded(child: Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: AppColors.card(isDark), borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.divider(isDark))), child: Row(children: [Container(width: 38, height: 38, decoration: BoxDecoration(color: color.withValues(alpha: .11), borderRadius: BorderRadius.circular(11)), child: Icon(icon, color: color, size: 19)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label.toUpperCase(), style: TextStyle(color: AppColors.subtext(isDark), fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: .7)), const SizedBox(height: 3), Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.text(isDark), fontSize: 17, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.subtext(isDark), fontSize: 8))]))])));
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      child: Row(children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(width: 8),
+        Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.subtext(isDark), fontSize: 7.5, fontWeight: FontWeight.w900, letterSpacing: .7)),
+          const SizedBox(height: 2),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.text(isDark), fontSize: 16, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 1),
+          Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.subtext(isDark), fontSize: 7.5, fontWeight: FontWeight.w600)),
+        ])),
+      ]),
+    );
   }
 
   Widget _ventasWidget(bool isDark) {
@@ -6570,15 +6649,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return ListView(padding: const EdgeInsets.fromLTRB(14, 4, 14, 24), children: [
         Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Ventas', style: TextStyle(color: ink, fontSize: desktop ? 24 : 20, fontWeight: FontWeight.w900, letterSpacing: -.6)), const SizedBox(height: 3), Text('Control de operaciones, tickets y clientes.', style: TextStyle(color: muted, fontSize: 10.5))])), Material(color: AppColors.primary, borderRadius: BorderRadius.circular(13), child: InkWell(borderRadius: BorderRadius.circular(13), onTap: widget.onNavigateToPOS, child: const Padding(padding: EdgeInsets.symmetric(horizontal: 13, vertical: 11), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.point_of_sale_rounded, color: Colors.white, size: 17), SizedBox(width: 6), Text('Nueva venta', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900))]))))]),
         const SizedBox(height: 14),
-        Row(children: [
-          _buildSalesKpi('Ventas hoy', '\$${totalVentasHoy.toStringAsFixed(2)}', '$cantidadVentasHoy operaciones', Icons.trending_up_rounded, AppColors.success, isDark),
-          const SizedBox(width: 8),
-          _buildSalesKpi('Este mes', '\$${totalVentasMes.toStringAsFixed(2)}', 'Acumulado mensual', Icons.calendar_month_rounded, AppColors.primary, isDark),
-          const SizedBox(width: 8),
-          _buildSalesKpi('Ticket medio', '\$${_ticketPromedio.toStringAsFixed(2)}', 'Por operación', Icons.receipt_long_rounded, AppColors.info, isDark),
-          const SizedBox(width: 8),
-          _buildSalesKpi('Margen', '${_margenPorcentaje.toStringAsFixed(1)}%', 'Rentabilidad estimada', Icons.savings_rounded, AppColors.secondary, isDark),
-        ]),
+        LayoutBuilder(builder: (context, metricConstraints) {
+          final compact = metricConstraints.maxWidth < 700;
+          final values = [
+            _buildSalesKpi('Ventas hoy', '\$${totalVentasHoy.toStringAsFixed(2)}', '$cantidadVentasHoy operaciones', Icons.trending_up_rounded, AppColors.success, isDark),
+            _buildSalesKpi('Este mes', '\$${totalVentasMes.toStringAsFixed(2)}', 'Acumulado mensual', Icons.calendar_month_rounded, AppColors.primary, isDark),
+            _buildSalesKpi('Ticket medio', '\$${_ticketPromedio.toStringAsFixed(2)}', 'Por operación', Icons.receipt_long_rounded, AppColors.info, isDark),
+            _buildSalesKpi('Margen', '${_margenPorcentaje.toStringAsFixed(1)}%', 'Rentabilidad estimada', Icons.savings_rounded, AppColors.secondary, isDark),
+          ];
+          if (!compact) return Row(children: [for (int i = 0; i < values.length; i++) ...[Expanded(child: values[i]), if (i < values.length - 1) const SizedBox(width: 12)]]);
+          return Wrap(spacing: 10, runSpacing: 8, children: values.map((v) => SizedBox(width: (metricConstraints.maxWidth - 10) / 2, child: v)).toList());
+        }),
         const SizedBox(height: 12),
         Container(padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: border)), child: Row(children: [Expanded(child: _buildFiltroDropdown(_filtroFechaVentas, ['Hoy', 'Ayer', 'Esta Semana', 'Este Mes', 'Todo'], (v) { setState(() => _filtroFechaVentas = v ?? 'Hoy'); _aplicarFiltroVentas(); }, isDark)), const SizedBox(width: 8), Material(color: bg, borderRadius: BorderRadius.circular(10), child: InkWell(borderRadius: BorderRadius.circular(10), onTap: () { cargarDatos(); mostrarSnackBar('Ventas actualizadas', AppColors.primary); }, child: const SizedBox(width: 42, height: 38, child: Icon(Icons.refresh_rounded, color: AppColors.primary, size: 19))))])),
         const SizedBox(height: 12),
@@ -7383,14 +7464,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 throw Exception(
                                     'No se pudo guardar el producto en la base de datos.');
                               }
+                              final synced = creado['sync_estado'] == 'sincronizado';
+                              Navigator.pop(dialogContext);
+                              await cargarDatos();
+                              mostrarSnackBar(
+                                synced
+                                    ? 'Producto creado y sincronizado en Supabase'
+                                    : 'Producto guardado localmente. Quedó pendiente de sincronización.',
+                                synced ? AppColors.success : AppColors.warning,
+                              );
+                              return;
                             }
 
                             Navigator.pop(dialogContext);
                             await cargarDatos();
                             mostrarSnackBar(
                                 esEdicion
-                                    ? 'Producto actualizado'
-                                    : 'Producto creado exitosamente',
+                                    ? 'Producto actualizado y sincronizado'
+                                    : 'Producto guardado',
                                 AppColors.success);
                           } catch (e) {
                             setDialogState(() => guardando = false);
@@ -7452,103 +7543,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final isDark = widget.modoOscuro;
     final ca = _cajaActual != null;
+    final ink = AppColors.text(isDark);
+    final muted = AppColors.subtext(isDark);
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
       appBar: AppBar(
         backgroundColor: AppColors.background(isDark),
         elevation: 0,
         scrolledUnderElevation: 0,
-        titleSpacing: 8,
-        leading: IconButton(
-          tooltip: 'Abrir menú',
-          onPressed: widget.onAbrirSidebar,
-          icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
+        toolbarHeight: 76,
+        titleSpacing: 0,
+        leadingWidth: 64,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 12, top: 14, bottom: 14),
+          child: Material(
+            color: isDark ? const Color(0xFF151B23) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            child: InkWell(borderRadius: BorderRadius.circular(16), onTap: widget.onAbrirSidebar,
+              child: const Icon(Icons.menu_rounded, color: AppColors.primary, size: 23)),
+          ),
         ),
-        title: Row(
-          children: [
-            if (_logoDashboard != null && _logoDashboard!.isNotEmpty)
-              Container(
-                width: 34,
-                height: 34,
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: AppColors.card(isDark),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Image.memory(base64Decode(_logoDashboard!), fit: BoxFit.contain),
-              ),
-            const SizedBox(width: 6),
-            const SizedBox(width: 4),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('DASHBOARD', style: TextStyle(color: AppColors.text(isDark), fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
-                Text('${productos.length} productos · ${cantidadVentasHoy} ventas hoy', style: TextStyle(color: AppColors.subtext(isDark), fontSize: 10)),
-              ],
-            ),
-          ],
-        ),
+        title: Row(children: [
+          Container(
+            width: 44, height: 44, padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(color: isDark ? const Color(0xFF151B23) : Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.divider(isDark))),
+            child: (_logoDashboard != null && _logoDashboard!.isNotEmpty)
+                ? Image.memory(base64Decode(_logoDashboard!), fit: BoxFit.contain)
+                : const Icon(Icons.dashboard_rounded, color: AppColors.primary, size: 23),
+          ),
+          const SizedBox(width: 11),
+          Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('DASHBOARD', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: ink, fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: .2)),
+            const SizedBox(height: 2),
+            Text('${productos.length} productos · ${cantidadVentasHoy} ventas hoy', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 9.5, fontWeight: FontWeight.w600)),
+          ])),
+        ]),
         actions: [
-          IconButton(
-            tooltip: isDark ? 'Modo claro' : 'Modo oscuro',
-            icon: Icon(isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded, color: AppColors.primary, size: 21),
-            onPressed: widget.onToggleModoOscuro,
-          ),
-          PopupMenuButton<String>(
-            tooltip: 'Acciones',
-            icon: Icon(Icons.more_horiz_rounded, color: AppColors.subtext(isDark)),
-            color: AppColors.card(isDark),
-            onSelected: (value) {
-              if (value == 'refresh') {
-                cargarDatos();
-                mostrarSnackBar('Dashboard actualizado', AppColors.primary);
-              } else if (value == 'caja') {
-                ca ? cerrarCaja() : abrirCaja();
-              } else if (value == 'pos') {
-                widget.onNavigateToPOS();
-              }
-            },
-            itemBuilder: (_) => [
-              PopupMenuItem(value: 'refresh', child: Row(children: [Icon(Icons.refresh_rounded, color: AppColors.primary, size: 18), const SizedBox(width: 10), const Text('Actualizar') ])),
-              PopupMenuItem(value: 'caja', child: Row(children: [Icon(ca ? Icons.lock_open_rounded : Icons.lock_rounded, color: ca ? AppColors.success : AppColors.warning, size: 18), const SizedBox(width: 10), Text(ca ? 'Cerrar caja' : 'Abrir caja') ])),
-              const PopupMenuDivider(),
-              const PopupMenuItem(value: 'pos', child: Row(children: [Icon(Icons.point_of_sale_rounded, color: AppColors.primary, size: 18), SizedBox(width: 10), Text('Ir al POS') ])),
-            ],
-          ),
-          const SizedBox(width: 4),
+          Material(color: isDark ? const Color(0xFF151B23) : Colors.white, borderRadius: BorderRadius.circular(14), child: InkWell(borderRadius: BorderRadius.circular(14), onTap: widget.onToggleModoOscuro,
+            child: SizedBox(width: 44, height: 44, child: Icon(isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded, color: AppColors.primary, size: 20)))),
+          const SizedBox(width: 7),
+          Material(color: isDark ? const Color(0xFF151B23) : Colors.white, borderRadius: BorderRadius.circular(14), child: InkWell(borderRadius: BorderRadius.circular(14), onTap: () => ca ? cerrarCaja() : abrirCaja(),
+            child: SizedBox(width: 44, height: 44, child: Icon(ca ? Icons.lock_open_rounded : Icons.lock_outline_rounded, color: ca ? AppColors.success : AppColors.warning, size: 20)))),
+          const SizedBox(width: 12),
         ],
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 2, 14, 10),
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 1450),
-                decoration: BoxDecoration(
-                  color: AppColors.card(isDark),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.divider(isDark)),
-                ),
-                child: Row(children: [
-                  _tab('Resumen', 0, isDark, Icons.dashboard_rounded),
-                  _tab('Productos', 1, isDark, Icons.inventory_2_outlined),
-                  _tab('Ventas', 2, isDark, Icons.receipt_long_outlined),
-                ]),
-              ),
-            ),
-            Expanded(
-              child: cargando
-                  ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-                  : seccionActual == 0
-                      ? _resumen(isDark)
-                      : seccionActual == 1
-                          ? _productosWidget(isDark)
-                          : _ventasWidget(isDark),
-            ),
-          ],
+      body: SafeArea(child: Column(children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 2, 14, 12),
+          child: Container(
+            height: 54,
+            decoration: BoxDecoration(color: isDark ? const Color(0xFF11161D) : Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.divider(isDark))),
+            child: Row(children: [
+              _tab('Resumen', 0, isDark, Icons.dashboard_rounded),
+              _tab('Productos', 1, isDark, Icons.inventory_2_outlined),
+              _tab('Ventas', 2, isDark, Icons.receipt_long_outlined),
+            ]),
+          ),
         ),
-      ),
+        Expanded(child: cargando ? const Center(child: CircularProgressIndicator(color: AppColors.primary)) : seccionActual == 0 ? _resumen(isDark) : seccionActual == 1 ? _productosWidget(isDark) : _ventasWidget(isDark)),
+      ])),
     );
   }
 }
@@ -7563,7 +7616,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Inicializa los datos locales antes de cualquier DateFormat con 'es'.
   await initializeDateFormatting('es');
-  await SupabaseSyncService.initialize();
+  unawaited(SupabaseSyncService.initialize());
 
   try {
     final prefs = await SharedPreferences.getInstance();
@@ -8294,187 +8347,62 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
   }
 
   void _mostrarDialogo({Map<String, dynamic>? metodo}) {
-    final isDark = widget.modoOscuro;
-    final nombreCtrl = TextEditingController(text: metodo?['nombre'] ?? '');
-    final bancoCtrl = TextEditingController(text: metodo?['banco'] ?? '');
-    final numeroCuentaCtrl =
-        TextEditingController(text: metodo?['numero_cuenta'] ?? '');
-    final telefonoCtrl =
-        TextEditingController(text: metodo?['telefono_pago_movil'] ?? '');
-    final titularCtrl = TextEditingController(text: metodo?['titular'] ?? '');
-    final datosCtrl =
-        TextEditingController(text: metodo?['datos_adicionales'] ?? '');
-    bool guardando = false;
+    final dark = widget.modoOscuro;
+    String tipo = (metodo?['tipo'] ?? metodo?['nombre'] ?? 'Efectivo').toString();
+    final nombre = TextEditingController(text: metodo?['nombre'] ?? tipo);
+    final banco = TextEditingController(text: metodo?['banco'] ?? '');
+    final cuenta = TextEditingController(text: metodo?['numero_cuenta'] ?? '');
+    final telefono = TextEditingController(text: metodo?['telefono_pago_movil'] ?? '');
+    final titular = TextEditingController(text: metodo?['titular'] ?? '');
+    final datos = TextEditingController(text: metodo?['datos_adicionales'] ?? '');
+    bool guardando=false;
+    final tipos=['Efectivo','Tarjeta','Transferencia','Pago Móvil','Otro'];
 
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: AppColors.card(isDark),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text(
-            metodo != null ? 'Editar Método' : 'Nuevo Método',
-            style: TextStyle(
-                color: AppColors.text(isDark), fontWeight: FontWeight.w700),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nombreCtrl,
-                  style: TextStyle(color: AppColors.text(isDark)),
-                  decoration: InputDecoration(
-                    labelText: 'Nombre *',
-                    labelStyle: TextStyle(color: AppColors.subtext(isDark)),
-                    filled: true,
-                    fillColor: AppColors.background(isDark),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(
-                            color: AppColors.primary, width: 2)),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: bancoCtrl,
-                  style: TextStyle(color: AppColors.text(isDark)),
-                  decoration: InputDecoration(
-                    labelText: 'Banco',
-                    labelStyle: TextStyle(color: AppColors.subtext(isDark)),
-                    filled: true,
-                    fillColor: AppColors.background(isDark),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(
-                            color: AppColors.primary, width: 2)),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: numeroCuentaCtrl,
-                  style: TextStyle(color: AppColors.text(isDark)),
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Número de cuenta',
-                    labelStyle: TextStyle(color: AppColors.subtext(isDark)),
-                    filled: true,
-                    fillColor: AppColors.background(isDark),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(
-                            color: AppColors.primary, width: 2)),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: telefonoCtrl,
-                  style: TextStyle(color: AppColors.text(isDark)),
-                  keyboardType: TextInputType.phone,
-                  decoration: InputDecoration(
-                    labelText: 'Teléfono (Pago Móvil)',
-                    labelStyle: TextStyle(color: AppColors.subtext(isDark)),
-                    filled: true,
-                    fillColor: AppColors.background(isDark),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(
-                            color: AppColors.primary, width: 2)),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: titularCtrl,
-                  style: TextStyle(color: AppColors.text(isDark)),
-                  decoration: InputDecoration(
-                    labelText: 'Titular',
-                    labelStyle: TextStyle(color: AppColors.subtext(isDark)),
-                    filled: true,
-                    fillColor: AppColors.background(isDark),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(
-                            color: AppColors.primary, width: 2)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text('Cancelar',
-                    style: TextStyle(color: AppColors.subtext(isDark)))),
-            ElevatedButton.icon(
-              onPressed: guardando
-                  ? null
-                  : () async {
-                      if (nombreCtrl.text.isEmpty) return;
-                      setDialogState(() => guardando = true);
-                      try {
-                        final data = {
-                          'nombre': nombreCtrl.text,
-                          'banco': bancoCtrl.text,
-                          'numero_cuenta': numeroCuentaCtrl.text,
-                          'telefono_pago_movil': telefonoCtrl.text,
-                          'titular': titularCtrl.text,
-                          'datos_adicionales': datosCtrl.text,
-                        };
-                        if (metodo != null) {
-                          await _db.actualizarMetodoPago(
-                              metodo['id'].toString(), data);
-                        } else {
-                          await _db.crearMetodoPago({...data, 'activo': 1});
-                        }
-                        Navigator.pop(ctx);
-                        await _cargarMetodos();
-                      } catch (e) {
-                        setDialogState(() => guardando = false);
-                        debugPrint('Error guardando método: $e');
-                      }
-                    },
-              icon: guardando
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.save_rounded,
-                      color: Colors.white, size: 18),
-              label: Text(
-                guardando ? 'GUARDANDO...' : 'GUARDAR',
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w700),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    showDialog(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setD)=>AlertDialog(
+      backgroundColor:AppColors.card(dark),
+      shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24)),
+      title:Row(children:[Container(width:42,height:42,decoration:BoxDecoration(color:AppColors.primary.withValues(alpha:.10),borderRadius:BorderRadius.circular(13)),child:const Icon(Icons.account_balance_wallet_outlined,color:AppColors.primary)),const SizedBox(width:12),Expanded(child:Text(metodo==null?'Agregar método de pago':'Editar método de pago',style:TextStyle(color:AppColors.text(dark),fontWeight:FontWeight.w900,fontSize:18)))]),
+      content:SizedBox(width:520,child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Text('TIPO',style:TextStyle(color:AppColors.subtext(dark),fontSize:10,fontWeight:FontWeight.w900,letterSpacing:1)),const SizedBox(height:7),
+        DropdownButtonFormField<String>(value:tipos.contains(tipo)?tipo:'Otro',decoration:_field('Método'),items:tipos.map((x)=>DropdownMenuItem(value:x,child:Text(x))).toList(),onChanged:(v){setD(()=>tipo=v??'Otro');if(metodo==null)nombre.text=tipo;}),
+        const SizedBox(height:16),
+        TextField(controller:nombre,decoration:_field('Nombre visible')),
+        const SizedBox(height:14),
+        if(tipo=='Efectivo') _infoMetodo('No necesita datos bancarios. Solo se registra el pago recibido y el vuelto.',Icons.payments_outlined,dark),
+        if(tipo=='Tarjeta') ...[
+          _infoMetodo('Registra únicamente los datos que tu negocio necesite para identificar la operación.',Icons.credit_card_outlined,dark),
+          const SizedBox(height:10),TextField(controller:datos,decoration:_field('Terminal / referencia (opcional)')),
+        ],
+        if(tipo=='Transferencia') ...[
+          TextField(controller:banco,decoration:_field('Banco')),
+          const SizedBox(height:10),TextField(controller:cuenta,decoration:_field('Número de cuenta / referencia')),
+          const SizedBox(height:10),TextField(controller:titular,decoration:_field('Titular')),
+        ],
+        if(tipo=='Pago Móvil') ...[
+          TextField(controller:telefono,keyboardType:TextInputType.phone,decoration:_field('Teléfono')),
+          const SizedBox(height:10),TextField(controller:banco,decoration:_field('Banco')),
+          const SizedBox(height:10),TextField(controller:titular,decoration:_field('Titular')),
+        ],
+        if(tipo=='Otro') ...[
+          TextField(controller:datos,maxLines:3,decoration:_field('Instrucciones / datos adicionales')),
+        ],
+      ]))),
+      actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:Text('Cancelar',style:TextStyle(color:AppColors.subtext(dark)))),FilledButton(onPressed:guardando?null:()async{if(nombre.text.trim().isEmpty)return;setD(()=>guardando=true);final data={'nombre':nombre.text.trim(),'tipo':tipo,'banco':banco.text.trim(),'numero_cuenta':cuenta.text.trim(),'telefono_pago_movil':telefono.text.trim(),'titular':titular.text.trim(),'datos_adicionales':datos.text.trim()};if(metodo!=null){await _db.actualizarMetodoPago(metodo['id'].toString(),data);}else{await _db.crearMetodoPago({...data,'activo':1});}if(ctx.mounted)Navigator.pop(ctx);await _cargarMetodos();},child:Text(guardando?'Guardando…':'Guardar'))],
+    )));
   }
+
+  InputDecoration _field(String label) => InputDecoration(
+    labelText: label,
+    filled: true,
+    fillColor: widget.modoOscuro ? const Color(0xFF202438) : const Color(0xFFF8F7FB),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: AppColors.divider(widget.modoOscuro))),
+    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: AppColors.divider(widget.modoOscuro))),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+    isDense: true,
+  );
+
+  Widget _infoMetodo(String text, IconData icon, bool dark)=>Container(width:double.infinity,padding:const EdgeInsets.all(13),decoration:BoxDecoration(color:AppColors.background(dark),borderRadius:BorderRadius.circular(14),border:Border.all(color:AppColors.divider(dark))),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[Icon(icon,color:AppColors.primary,size:19),const SizedBox(width:10),Expanded(child:Text(text,style:TextStyle(color:AppColors.subtext(dark),fontSize:10,height:1.4)))]));
+
 
   @override
   Widget build(BuildContext context) {
@@ -10837,798 +10765,378 @@ class _EAN13Painter extends CustomPainter {
 class CodigosBarrasScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
   final bool modoOscuro;
-  const CodigosBarrasScreen({
-    super.key,
-    required this.onAbrirSidebar,
-    this.modoOscuro = false,
-  });
-
-  @override
-  State<CodigosBarrasScreen> createState() => _CodigosBarrasScreenState();
+  const CodigosBarrasScreen({super.key, required this.onAbrirSidebar, this.modoOscuro = false});
+  @override State<CodigosBarrasScreen> createState() => _CodigosBarrasScreenState();
 }
 
 class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
     with SingleTickerProviderStateMixin {
   final _db = DatabaseService();
-  final _barcodeService = BarcodeService();
+  final _barcode = BarcodeService();
   late final TabController _tabs;
-
+  late final MobileScannerController _scanner;
+  final _manual = TextEditingController();
   List<Map<String, dynamic>> _productos = [];
-  List<Map<String, dynamic>> _categorias = [];
   List<Map<String, dynamic>> _filtrados = [];
-  final Set<String> _seleccionados = {};
   bool _cargando = true;
-  bool _imprimiendo = false;
-  bool _mostrarLogo = true;
-  bool _mostrarNombre = true;
-  bool _mostrarCodigo = true;
-  bool _mostrarPrecio = true;
-  bool _mostrarMarca = true;
-  bool _mostrarColor = true;
-  bool _mostrarTalla = true;
-  int _etiquetasPorHoja = 4;
-  int _copias = 1;
-  String _busqueda = '';
-  String _categoria = 'Todas';
-  String _tipoCodigo = 'Code 128';
-  String _tamano = 'Mediana';
-  String _tipoDiseno = 'Tradicional';
-  Uint8List? _logo;
-  String? _logoNombre;
-  Map<String, Map<String, String>> _etiquetaOverrides = {};
+  bool _camaraActiva = false;
+  String _q = '';
+  String _diseno = 'A';
+  String _codigoEncontrado = '';
+  Map<String, dynamic>? _productoEscaneado;
+  String? _logoBase64;
+  final Set<String> _seleccionados = {};
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
-    _cargarConfiguracion();
-    _cargarDatos();
+    _tabs = TabController(length: 2, vsync: this);
+    _scanner = MobileScannerController(
+      detectionSpeed: DetectionSpeed.normal,
+      formats: const [
+        BarcodeFormat.ean13,
+        BarcodeFormat.ean8,
+        BarcodeFormat.code128,
+        BarcodeFormat.code39,
+        BarcodeFormat.upcA,
+        BarcodeFormat.upcE,
+        BarcodeFormat.qrCode,
+      ],
+    );
+    _cargar();
   }
 
   @override
   void dispose() {
     _tabs.dispose();
+    _scanner.dispose();
+    _manual.dispose();
     super.dispose();
   }
 
-  Future<void> _cargarConfiguracion() async {
+  Future<void> _cargar() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final b64 = prefs.getString('etiquetas_logo_b64');
-      final overridesRaw = prefs.getString('etiquetas_overrides');
-      if (overridesRaw != null && overridesRaw.isNotEmpty) {
-        try {
-          final decoded = jsonDecode(overridesRaw);
-          if (decoded is Map) {
-            final restored = <String, Map<String, String>>{};
-            decoded.forEach((k, v) {
-              if (v is Map) {
-                restored['$k'] = v.map((a, b) => MapEntry('$a', '$b')).cast<String, String>();
-              }
-            });
-            _etiquetaOverrides = restored;
-          }
-        } catch (_) {}
-      }
-      if (!mounted) return;
-      setState(() {
-        _mostrarLogo = prefs.getBool('etiquetas_logo') ?? true;
-        _mostrarNombre = prefs.getBool('etiquetas_nombre') ?? true;
-        _mostrarCodigo = prefs.getBool('etiquetas_codigo') ?? true;
-        _mostrarPrecio = prefs.getBool('etiquetas_precio') ?? true;
-        _mostrarMarca = prefs.getBool('etiquetas_marca') ?? true;
-        _mostrarColor = prefs.getBool('etiquetas_color') ?? true;
-        _mostrarTalla = prefs.getBool('etiquetas_talla') ?? true;
-        _etiquetasPorHoja = prefs.getInt('etiquetas_por_hoja') ?? 4;
-        _copias = prefs.getInt('etiquetas_copias') ?? 1;
-        _tipoCodigo = prefs.getString('etiquetas_tipo_codigo') ?? 'Code 128';
-        _tamano = prefs.getString('etiquetas_tamano') ?? 'Mediana';
-        _tipoDiseno = prefs.getString('etiquetas_tipo_diseno') ?? 'Tradicional';
-        if (b64 != null && b64.isNotEmpty) {
-          _logo = base64Decode(b64);
-          _logoNombre = prefs.getString('etiquetas_logo_nombre');
-        }
-      });
-    } catch (e) {
-      debugPrint('Error cargando diseño de etiquetas: $e');
-    }
-  }
-
-  Future<void> _guardarConfiguracion() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('etiquetas_logo', _mostrarLogo);
-    await prefs.setBool('etiquetas_nombre', _mostrarNombre);
-    await prefs.setBool('etiquetas_codigo', _mostrarCodigo);
-    await prefs.setBool('etiquetas_precio', _mostrarPrecio);
-    await prefs.setBool('etiquetas_marca', _mostrarMarca);
-    await prefs.setBool('etiquetas_color', _mostrarColor);
-    await prefs.setBool('etiquetas_talla', _mostrarTalla);
-    await prefs.setInt('etiquetas_por_hoja', _etiquetasPorHoja);
-    await prefs.setInt('etiquetas_copias', _copias);
-    await prefs.setString('etiquetas_tipo_codigo', _tipoCodigo);
-    await prefs.setString('etiquetas_tamano', _tamano);
-    await prefs.setString('etiquetas_tipo_diseno', _tipoDiseno);
-  }
-
-  Future<void> _cargarDatos() async {
-    if (mounted) setState(() => _cargando = true);
-    try {
+      final cfg = await _db.getConfiguracion();
+      _logoBase64 = cfg?['logo_base64']?.toString();
       _productos = await _db.getProductos();
-      _categorias = await _db.getCategorias();
-      _aplicarFiltros();
+      _filtrar();
     } catch (e) {
-      _productos = [];
-      _categorias = [];
-      _filtrados = [];
-      debugPrint('Error cargando productos para etiquetas: $e');
+      debugPrint('Error cargando códigos: $e');
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
   }
 
-  void _aplicarFiltros() {
-    final q = _busqueda.trim().toLowerCase();
+  void _filtrar() {
+    final q = _q.trim().toLowerCase();
     _filtrados = _productos.where((p) {
-      final nombre = '${p['nombre'] ?? ''}'.toLowerCase();
-      final codigo = '${p['codigo_barras'] ?? ''}'.toLowerCase();
-      final cat = '${p['categoria'] ?? ''}';
-      return (q.isEmpty || nombre.contains(q) || codigo.contains(q)) &&
-          (_categoria == 'Todas' || cat == _categoria);
+      final n = '${p['nombre'] ?? ''}'.toLowerCase();
+      final c = '${p['codigo_barras'] ?? ''}'.toLowerCase();
+      final m = '${p['marca'] ?? ''}'.toLowerCase();
+      return q.isEmpty || n.contains(q) || c.contains(q) || m.contains(q);
     }).toList();
   }
 
-  Future<void> _generarCodigo(Map<String, dynamic> p) async {
-    try {
-      final codigo = await _barcodeService.generarCodigoEAN13();
-      await _db.actualizarProducto('${p['id']}', {'codigo_barras': codigo});
-      await _cargarDatos();
-      _snack('Código generado: $codigo', AppColors.success);
-    } catch (e) {
-      _snack('No se pudo generar el código: $e', AppColors.danger);
+  Map<String, dynamic>? _buscarCodigo(String code) {
+    final normalized = code.replaceAll(RegExp(r'\s+'), '').trim();
+    if (normalized.isEmpty) return null;
+    for (final p in _productos) {
+      final c = '${p['codigo_barras'] ?? ''}'.replaceAll(RegExp(r'\s+'), '').trim();
+      if (c == normalized) return p;
+    }
+    return null;
+  }
+
+  void _procesarCodigo(String code) {
+    final clean = code.trim();
+    if (clean.isEmpty) return;
+    final p = _buscarCodigo(clean);
+    setState(() {
+      _codigoEncontrado = clean;
+      _productoEscaneado = p;
+      _manual.text = clean;
+      _camaraActiva = false;
+    });
+    if (p == null) {
+      _snack('Código $clean no está asociado a un producto.', AppColors.warning);
+    } else {
+      _snack('Producto encontrado: ${p['nombre']}', AppColors.success);
     }
   }
 
-  Future<void> _generarFaltantes() async {
-    final faltantes = _productos.where((p) => '${p['codigo_barras'] ?? ''}'.trim().isEmpty).toList();
-    if (faltantes.isEmpty) {
-      _snack('Todos los productos ya tienen código', AppColors.warning);
+  void _onDetect(BarcodeCapture capture) {
+    if (!_camaraActiva) return;
+    for (final item in capture.barcodes) {
+      final value = item.rawValue?.trim() ?? '';
+      if (value.isNotEmpty) {
+        _procesarCodigo(value);
+        break;
+      }
+    }
+  }
+
+  Future<void> _generar(Map<String, dynamic> p) async {
+    final c = await _barcode.generarCodigoEAN13();
+    final ok = await _db.actualizarProducto('${p['id']}', {'codigo_barras': c});
+    if (!ok) {
+      _snack('No se pudo guardar el código.', AppColors.danger);
       return;
     }
-    for (final p in faltantes) {
-      final codigo = await _barcodeService.generarCodigoEAN13();
-      await _db.actualizarProducto('${p['id']}', {'codigo_barras': codigo});
+    await _cargar();
+    _snack('Código generado: $c', AppColors.success);
+  }
+
+  Future<void> _imprimir(List<Map<String, dynamic>> items) async {
+    if (items.isEmpty) {
+      _snack('Selecciona al menos un producto.', AppColors.warning);
+      return;
     }
-    await _cargarDatos();
-    _snack('${faltantes.length} códigos generados', AppColors.success);
-  }
-
-  Future<void> _seleccionarLogo() async {
-    try {
-      final file = await ImagePicker().pickImage(source: ImageSource.gallery);
-      if (file == null) return;
-      final bytes = await file.readAsBytes();
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('etiquetas_logo_b64', base64Encode(bytes));
-      await prefs.setString('etiquetas_logo_nombre', file.name);
-      if (!mounted) return;
-      setState(() {
-        _logo = bytes;
-        _logoNombre = file.name;
-        _mostrarLogo = true;
-      });
-      await _guardarConfiguracion();
-      _snack('Logo guardado para las etiquetas', AppColors.success);
-    } catch (e) {
-      _snack('No se pudo cargar el logo: $e', AppColors.danger);
-    }
-  }
-
-  Future<void> _editarProducto(Map<String, dynamic> p) async {
-    final id = '${p['id']}';
-    final current = _etiquetaOverrides[id] ?? <String, String>{};
-    final nombre = TextEditingController(text: '${p['nombre'] ?? ''}');
-    final codigo = TextEditingController(text: '${p['codigo_barras'] ?? ''}');
-    final precio = TextEditingController(text: '${p['precio_venta'] ?? p['precio'] ?? ''}');
-    final marca = TextEditingController(text: current['marca'] ?? '${p['marca'] ?? ''}');
-    final color = TextEditingController(text: current['color'] ?? '${p['color'] ?? ''}');
-    final talla = TextEditingController(text: current['talla'] ?? '${p['talla'] ?? p['talla_nombre'] ?? ''}');
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Diseño de etiqueta del producto'),
-        content: SingleChildScrollView(
-          child: Column(children: [
-            _dialogField(nombre, 'Nombre'),
-            _dialogField(codigo, 'Código de barras'),
-            _dialogField(precio, 'Precio'),
-            _dialogField(marca, 'Marca / fabricante'),
-            _dialogField(color, 'Color'),
-            _dialogField(talla, 'Talla / tamaño'),
-          ]),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Guardar')),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    try {
-      // Solo se actualizan columnas que ya existen en el catálogo. Marca/color/talla
-      // se guardan como datos propios de la etiqueta para no romper bases antiguas.
-      await _db.actualizarProducto(id, {
-        'nombre': nombre.text.trim(),
-        'codigo_barras': codigo.text.trim(),
-        'precio_venta': double.tryParse(precio.text.replaceAll(',', '.')) ?? 0,
-      });
-      _etiquetaOverrides[id] = {
-        'marca': marca.text.trim(),
-        'color': color.text.trim(),
-        'talla': talla.text.trim(),
-      };
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('etiquetas_overrides', jsonEncode(_etiquetaOverrides));
-      await _cargarDatos();
-      _snack('Diseño del producto guardado', AppColors.success);
-    } catch (e) {
-      _snack('No se pudo guardar: $e', AppColors.danger);
-    }
-  }
-
-  InputDecoration _field(String label) => InputDecoration(
-    labelText: label,
-    filled: true,
-    fillColor: AppColors.background(widget.modoOscuro),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-  );
-
-  Widget _dialogField(TextEditingController c, String label) => Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: TextField(controller: c, decoration: _field(label)),
-  );
-
-  pw.Barcode _barcode() {
-    switch (_tipoCodigo) {
-      case 'EAN-13': return pw.Barcode.ean13();
-      case 'Code 39': return pw.Barcode.code39();
-      case 'QR': return pw.Barcode.qrCode();
-      default: return pw.Barcode.code128();
-    }
-  }
-
-  String _codigoValido(Map<String, dynamic> p) {
-    final c = '${p['codigo_barras'] ?? ''}'.trim();
-    return c.isEmpty ? 'SIN-CODIGO' : c;
-  }
-
-  String _valor(Map<String, dynamic> p, List<String> keys) {
-    final override = _etiquetaOverrides['${p['id']}'];
-    for (final k in keys) {
-      final ov = override?[k];
-      if (ov != null && ov.trim().isNotEmpty) return ov;
-      final v = p[k];
-      if (v != null && '$v'.trim().isNotEmpty) return '$v';
-    }
-    return '';
-  }
-
-  Future<Uint8List> _crearPdfEtiquetas(List<Map<String, dynamic>> productos) async {
     final doc = pw.Document();
-    final items = <Map<String, dynamic>>[];
-    for (final p in productos) {
-      for (var i = 0; i < _copias; i++) items.add(p);
-    }
+    pw.MemoryImage? logo;
+    try {
+      if ((_logoBase64 ?? '').isNotEmpty) logo = pw.MemoryImage(base64Decode(_logoBase64!));
+    } catch (_) {}
 
-    final logo = _logo == null ? null : pw.MemoryImage(_logo!);
-    final dims = <String, List<double>>{
-      'Pequeña': [50, 30],
-      'Mediana': [70, 40],
-      'Grande': [90, 50],
-    }[_tamano] ?? [70, 40];
-    final labelW = dims[0];
-    final labelH = dims[1];
-    final perSheet = _etiquetasPorHoja.clamp(1, 8).toInt();
-    final cols = perSheet <= 1 ? 1 : 2;
-    final rows = perSheet <= 2 ? 1 : (perSheet <= 4 ? 2 : 4);
-    const gap = 1.2;
-    final pageW = perSheet == 1 ? labelW : (labelW * cols) + gap * (cols - 1);
-    final pageH = perSheet == 1 ? labelH : (labelH * rows) + gap * (rows - 1);
-    final pageFormat = PdfPageFormat(pageW * PdfPageFormat.mm, pageH * PdfPageFormat.mm, marginAll: 0);
-
-    pw.Widget etiqueta(Map<String, dynamic> p) {
+    for (final p in items) {
+      final codigo = '${p['codigo_barras'] ?? ''}'.trim();
+      if (codigo.isEmpty) continue;
       final nombre = '${p['nombre'] ?? 'Producto'}';
-      final codigo = _codigoValido(p);
-      final precio = _valor(p, ['precio_venta', 'precio']);
-      final marca = _valor(p, ['marca', 'brand']);
-      final color = _valor(p, ['color', 'color_nombre']);
-      final talla = _valor(p, ['talla', 'talla_nombre', 'size']);
-      final compacta = _tipoDiseno == 'Compacta' || _tamano == 'Pequeña';
-      final logoLayout = _tipoDiseno == 'Logo';
-      final usaQR = _tipoCodigo == 'QR' || _tipoDiseno == 'QR';
-      final barcodeW = (labelW - 7).clamp(28.0, 86.0);
-      final barcodeH = compacta ? 7.0 : (labelH <= 30 ? 8.0 : 10.0);
-
-      pw.Widget codigoWidget = usaQR
-          ? pw.BarcodeWidget(
-              barcode: pw.Barcode.qrCode(),
-              data: codigo,
-              width: compacta ? 12 * PdfPageFormat.mm : 16 * PdfPageFormat.mm,
-              height: compacta ? 12 * PdfPageFormat.mm : 16 * PdfPageFormat.mm,
-            )
-          : pw.BarcodeWidget(
-              barcode: _barcode(),
-              data: codigo,
-              width: barcodeW * PdfPageFormat.mm,
-              height: barcodeH * PdfPageFormat.mm,
-              drawText: true,
-              textStyle: pw.TextStyle(fontSize: compacta ? 4.5 : 5.4),
-            );
-
-      final dataLine = [
-        if (_mostrarMarca && marca.isNotEmpty) marca,
-        if (_mostrarColor && color.isNotEmpty) color,
-        if (_mostrarTalla && talla.isNotEmpty) 'Talla $talla',
-      ].join(' · ');
-
-      final info = pw.Column(
-        mainAxisAlignment: pw.MainAxisAlignment.center,
-        crossAxisAlignment: pw.CrossAxisAlignment.center,
-        mainAxisSize: pw.MainAxisSize.min,
-        children: [
-          if (_mostrarNombre)
-            pw.Text(
-              nombre,
-              maxLines: 1,
-              overflow: pw.TextOverflow.clip,
-              textAlign: pw.TextAlign.center,
-              style: pw.TextStyle(fontSize: compacta ? 5.8 : 6.6, fontWeight: pw.FontWeight.bold),
-            ),
-          if (dataLine.isNotEmpty)
-            pw.Text(dataLine, maxLines: 1, overflow: pw.TextOverflow.clip, style: pw.TextStyle(fontSize: compacta ? 4.2 : 4.8)),
-          if (_mostrarCodigo) pw.SizedBox(height: 0.8 * PdfPageFormat.mm, child: codigoWidget),
-          if (_mostrarPrecio && precio.isNotEmpty)
-            pw.Text('\$$precio', style: pw.TextStyle(fontSize: compacta ? 6.5 : 7.5, fontWeight: pw.FontWeight.bold)),
-        ],
-      );
-
-      return pw.Container(
-        width: labelW * PdfPageFormat.mm,
-        height: labelH * PdfPageFormat.mm,
-        padding: pw.EdgeInsets.symmetric(horizontal: 1.4 * PdfPageFormat.mm, vertical: 1.0 * PdfPageFormat.mm),
-        decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey500, width: .28)),
-        child: logoLayout
-            ? pw.Row(children: [
-                if (logo != null)
-                  pw.Container(width: 10 * PdfPageFormat.mm, height: 12 * PdfPageFormat.mm, child: pw.Image(logo, fit: pw.BoxFit.contain)),
-                pw.SizedBox(width: 1 * PdfPageFormat.mm),
-                pw.Expanded(child: info),
-              ])
-            : pw.Column(
+      final precio = _money(p);
+      final marca = '${p['marca'] ?? ''}'.trim();
+      final talla = '${p['talla'] ?? ''}'.trim();
+      final color = '${p['color'] ?? ''}'.trim();
+      doc.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat(70 * PdfPageFormat.mm, 40 * PdfPageFormat.mm),
+          margin: const pw.EdgeInsets.all(5),
+          build: (_) {
+            final details = [if (marca.isNotEmpty) marca, if (color.isNotEmpty) color, if (talla.isNotEmpty) talla].join(' · ');
+            if (_diseno == 'A') {
+              return pw.Column(
                 mainAxisAlignment: pw.MainAxisAlignment.center,
                 children: [
-                  if (_mostrarLogo && logo != null)
-                    pw.Container(height: compacta ? 5.5 : 7.0, width: labelW * PdfPageFormat.mm - 4 * PdfPageFormat.mm, child: pw.Image(logo, fit: pw.BoxFit.contain)),
-                  info,
+                  if (logo != null) pw.Image(logo!, height: 13),
+                  if (logo != null) pw.SizedBox(height: 2),
+                  pw.Text(nombre, maxLines: 1, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                  if (details.isNotEmpty) pw.Text(details, maxLines: 1, style: const pw.TextStyle(fontSize: 6.5)),
+                  pw.SizedBox(height: 3),
+                  pw.BarcodeWidget(barcode: pw.Barcode.code128(), data: codigo, height: 24, drawText: true),
+                  pw.SizedBox(height: 2),
+                  pw.Text(precio, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
                 ],
-              ),
+              );
+            }
+            return pw.Column(
+              mainAxisAlignment: pw.MainAxisAlignment.center,
+              children: [
+                pw.Text(nombre, maxLines: 1, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                pw.SizedBox(height: 3),
+                pw.BarcodeWidget(barcode: pw.Barcode.code128(), data: codigo, height: 26, drawText: true),
+                pw.SizedBox(height: 3),
+                pw.Text(precio, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+              ],
+            );
+          },
+        ),
       );
     }
-
-    for (var offset = 0; offset < items.length; offset += perSheet) {
-      final groupEnd = (offset + perSheet).clamp(0, items.length).toInt();
-      final group = items.sublist(offset, groupEnd);
-      final cells = <pw.Widget>[];
-      for (var i = 0; i < perSheet; i++) {
-        cells.add(i < group.length ? etiqueta(group[i]) : pw.SizedBox(width: labelW * PdfPageFormat.mm, height: labelH * PdfPageFormat.mm));
-      }
-      final rowsWidgets = <pw.Widget>[];
-      for (var r = 0; r < rows; r++) {
-        final rowCells = <pw.Widget>[];
-        for (var c = 0; c < cols; c++) {
-          if (c > 0) rowCells.add(pw.SizedBox(width: gap * PdfPageFormat.mm));
-          rowCells.add(cells[r * cols + c]);
-        }
-        rowsWidgets.add(pw.Row(children: rowCells));
-        if (r < rows - 1) rowsWidgets.add(pw.SizedBox(height: gap * PdfPageFormat.mm));
-      }
-      doc.addPage(pw.Page(
-        pageFormat: pageFormat,
-        margin: pw.EdgeInsets.zero,
-        build: (_) => pw.Column(children: rowsWidgets),
-      ));
-    }
-    return doc.save();
+    await Printing.layoutPdf(onLayout: (_) => doc.save());
   }
 
-  Future<void> _imprimir(List<Map<String, dynamic>> productos) async {
-    final validos = productos.where((p) => '${p['codigo_barras'] ?? ''}'.trim().isNotEmpty).toList();
-    if (validos.isEmpty) {
-      _snack('No hay productos con código para imprimir', AppColors.warning);
-      return;
-    }
-    if (_imprimiendo) return;
-    setState(() => _imprimiendo = true);
-    try {
-      final bytes = await _crearPdfEtiquetas(validos);
-      await Printing.layoutPdf(
-        name: 'Etiquetas SINTHETIX PRO',
-        onLayout: (_) async => bytes,
-        usePrinterSettings: true,
-      );
-      _snack('${validos.length * _copias} etiquetas preparadas para impresión', AppColors.success);
-    } catch (e) {
-      _snack('Error al imprimir etiquetas: $e', AppColors.danger);
-    } finally {
-      if (mounted) setState(() => _imprimiendo = false);
-    }
-  }
+  String _money(Map<String, dynamic> p) => '\$${((p['precio_venta'] ?? p['precio'] ?? 0) as num).toDouble().toStringAsFixed(2)}';
 
-  Future<void> _cantidadCopias() async {
-    var value = _copias;
-    final result = await showDialog<int>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
-        title: const Text('Cantidad de etiquetas por producto'),
-        content: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          IconButton(onPressed: () { if (value > 1) setD(() => value--); }, icon: const Icon(Icons.remove_circle_outline)),
-          Text('$value', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
-          IconButton(onPressed: () { if (value < 100) setD(() => value++); }, icon: const Icon(Icons.add_circle_outline)),
-        ]),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')), FilledButton(onPressed: () => Navigator.pop(ctx, value), child: const Text('Aplicar'))],
-      )),
-    );
-    if (result != null) {
-      setState(() => _copias = result);
-      await _guardarConfiguracion();
-    }
-  }
-
-  void _snack(String text, Color color) {
+  void _snack(String m, Color c) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text), backgroundColor: color, behavior: SnackBarBehavior.floating));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), backgroundColor: c, behavior: SnackBarBehavior.floating));
   }
 
-  Widget _productoCard(Map<String, dynamic> p, bool dark) {
+  Widget _header(bool dark) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+        decoration: BoxDecoration(color: AppColors.card(dark), border: Border(bottom: BorderSide(color: AppColors.divider(dark)))),
+        child: Row(children: [
+          Material(
+            color: dark ? const Color(0xFF20252D) : const Color(0xFFF1F3F6),
+            borderRadius: BorderRadius.circular(13),
+            child: InkWell(
+              onTap: widget.onAbrirSidebar,
+              borderRadius: BorderRadius.circular(13),
+              child: const SizedBox(width: 44, height: 44, child: Icon(Icons.apps_rounded, size: 20, color: AppColors.primary)),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Códigos de barras', style: TextStyle(color: AppColors.text(dark), fontSize: 21, fontWeight: FontWeight.w900)),
+            const SizedBox(height: 3),
+            Text('Escanea, genera y prepara etiquetas profesionales', style: TextStyle(color: AppColors.subtext(dark), fontSize: 11)),
+          ])),
+          IconButton(tooltip: 'Actualizar productos', onPressed: _cargar, icon: Icon(Icons.refresh_rounded, color: AppColors.subtext(dark))),
+        ]),
+      );
+
+  Widget _producto(Map<String, dynamic> p, bool dark) {
     final id = '${p['id']}';
-    final codigo = '${p['codigo_barras'] ?? ''}'.trim();
-    final selected = _seleccionados.contains(id);
-    final stock = (p['stock'] as num?)?.toInt() ?? 0;
+    final codigo = '${p['codigo_barras'] ?? ''}';
+    final sel = _seleccionados.contains(id);
+    final stock = int.tryParse('${p['stock'] ?? 0}') ?? 0;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(16), border: Border.all(color: selected ? AppColors.primary : AppColors.divider(dark))),
-      child: ListTile(
-        leading: Checkbox(value: selected, onChanged: (v) => setState(() { if (v == true) _seleccionados.add(id); else _seleccionados.remove(id); })),
-        title: Text('${p['nombre'] ?? 'Producto'}', style: TextStyle(color: AppColors.text(dark), fontWeight: FontWeight.w800)),
-        subtitle: Text('${codigo.isEmpty ? 'SIN CÓDIGO' : codigo} · Stock: $stock', style: TextStyle(color: codigo.isEmpty ? AppColors.warning : AppColors.subtext(dark), fontSize: 11)),
-        trailing: Wrap(spacing: 2, children: [
-          if (codigo.isEmpty) IconButton(tooltip: 'Generar código', onPressed: () => _generarCodigo(p), icon: const Icon(Icons.auto_awesome_rounded, color: AppColors.warning)),
-          IconButton(tooltip: 'Editar datos de etiqueta', onPressed: () => _editarProducto(p), icon: const Icon(Icons.edit_outlined, color: AppColors.primary)),
-          if (codigo.isNotEmpty) IconButton(tooltip: 'Imprimir este producto', onPressed: () => _imprimir([p]), icon: const Icon(Icons.print_outlined, color: AppColors.success)),
-        ]),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.card(dark),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: sel ? AppColors.primary : AppColors.divider(dark)),
       ),
-    );
-  }
-
-  Widget _catalogoTab(bool dark) {
-    final conCodigo = _filtrados.where((p) => '${p['codigo_barras'] ?? ''}'.trim().isNotEmpty).length;
-    return ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 28), children: [
-      Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(gradient: AppColors.gradientPrimary, borderRadius: BorderRadius.circular(20)), child: Row(children: [
-        const Icon(Icons.qr_code_2_rounded, color: Colors.white, size: 34), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Etiquetas y códigos', style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text('${_productos.length} productos · $conCodigo con código', style: const TextStyle(color: Colors.white70, fontSize: 11))]))
-      ])),
-      const SizedBox(height: 12),
-      Row(children: [
-        Expanded(child: ElevatedButton.icon(onPressed: _generarFaltantes, icon: const Icon(Icons.auto_awesome_rounded, size: 18), label: const Text('Generar faltantes'))),
-        const SizedBox(width: 8),
-        Expanded(child: ElevatedButton.icon(onPressed: _filtrados.isEmpty || _imprimiendo ? null : () => _imprimir(_filtrados), icon: const Icon(Icons.print_rounded, size: 18), label: Text(_imprimiendo ? 'Preparando...' : 'Imprimir todos'))),
-      ]),
-      const SizedBox(height: 8),
-      Row(children: [
-        Expanded(child: OutlinedButton.icon(onPressed: _seleccionados.isEmpty ? null : () => _imprimir(_filtrados.where((p) => _seleccionados.contains('${p['id']}')).toList()), icon: const Icon(Icons.checklist_rounded), label: Text('Imprimir seleccionados (${_seleccionados.length})'))),
-        const SizedBox(width: 8),
-        OutlinedButton.icon(onPressed: _cantidadCopias, icon: const Icon(Icons.copy_rounded), label: Text('$_copias copias')),
-      ]),
-      const SizedBox(height: 12),
-      TextField(onChanged: (v) => setState(() { _busqueda = v; _aplicarFiltros(); }), decoration: _field('Buscar producto o código').copyWith(prefixIcon: const Icon(Icons.search_rounded))),
-      const SizedBox(height: 10),
-      DropdownButtonFormField<String>(value: _categoria, decoration: _field('Categoría'), items: ['Todas', ..._categorias.map((e) => '${e['nombre'] ?? ''}')].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => setState(() { _categoria = v ?? 'Todas'; _aplicarFiltros(); })),
-      const SizedBox(height: 12),
-      if (_cargando) const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()))
-      else if (_filtrados.isEmpty) Padding(padding: const EdgeInsets.all(30), child: Center(child: Text('No hay productos para mostrar', style: TextStyle(color: AppColors.subtext(dark)))))
-      else ..._filtrados.map((p) => _productoCard(p, dark)),
-    ]);
-  }
-
-  Widget _disenoTab(bool dark) {
-    final demo = _filtrados.isNotEmpty
-        ? _filtrados.first
-        : <String, dynamic>{
-            'nombre': 'Zapatilla deportiva',
-            'codigo_barras': '7591020080804',
-            'precio_venta': 29.99,
-            'marca': 'NIKE',
-            'color': 'Negro',
-            'talla': '42',
-          };
-    final tiposDiseno = <Map<String, dynamic>>[
-      {'n': 'Tradicional', 'i': Icons.view_agenda_outlined, 'd': 'Clásica: nombre + código + precio.'},
-      {'n': 'QR', 'i': Icons.qr_code_2_rounded, 'd': 'QR protagonista para lectura rápida.'},
-      {'n': 'Compacta', 'i': Icons.crop_square_rounded, 'd': 'Mínima y densa para etiquetas pequeñas.'},
-      {'n': 'Logo', 'i': Icons.branding_watermark_outlined, 'd': 'Marca/logo destacado para calzado.'},
-    ];
-    final tamanos = <String, String>{
-      'Pequeña': '50 × 30 mm',
-      'Mediana': '70 × 40 mm',
-      'Grande': '90 × 50 mm',
-    };
-    final distribuciones = <int, String>{1: '1 etiqueta', 2: '2 etiquetas', 4: '4 etiquetas', 8: '8 etiquetas'};
-
-    return ListView(padding: const EdgeInsets.fromLTRB(14, 12, 14, 30), children: [
-      Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(gradient: AppColors.gradientPrimary, borderRadius: BorderRadius.circular(20)),
-        child: Row(children: [
-          Container(width: 44, height: 44, decoration: BoxDecoration(color: Colors.white.withValues(alpha: .15), borderRadius: BorderRadius.circular(14)), child: const Icon(Icons.design_services_rounded, color: Colors.white)),
-          const SizedBox(width: 12),
-          const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Diseñador de etiquetas', style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900)),
-            SizedBox(height: 3),
-            Text('Diseña una vez y la impresión respeta exactamente el formato elegido.', style: TextStyle(color: Colors.white70, fontSize: 10.5)),
-          ])),
-        ]),
-      ),
-      const SizedBox(height: 12),
-      Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.divider(dark))),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('1. Tipo de diseño', style: TextStyle(color: AppColors.text(dark), fontSize: 15, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 8),
-          ...tiposDiseno.map((d) => Padding(
-            padding: const EdgeInsets.only(bottom: 7),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(13),
-              onTap: () => setState(() => _tipoDiseno = d['n'] as String),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: _tipoDiseno == d['n'] ? AppColors.primary.withValues(alpha: .09) : AppColors.background(dark),
-                  borderRadius: BorderRadius.circular(13),
-                  border: Border.all(color: _tipoDiseno == d['n'] ? AppColors.primary : AppColors.divider(dark)),
-                ),
-                child: Row(children: [
-                  Icon(d['i'] as IconData, color: _tipoDiseno == d['n'] ? AppColors.primary : AppColors.subtext(dark), size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(d['n'] as String, style: TextStyle(color: AppColors.text(dark), fontSize: 12, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 2),
-                    Text(d['d'] as String, style: TextStyle(color: AppColors.subtext(dark), fontSize: 9.5)),
-                  ])),
-                  if (_tipoDiseno == d['n']) const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 19),
-                ]),
-              ),
-            ),
-          )),
-          const SizedBox(height: 7),
-          Text('2. Tipo de código', style: TextStyle(color: AppColors.text(dark), fontSize: 15, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 8),
-          Wrap(spacing: 7, runSpacing: 7, children: ['Code 128', 'EAN-13', 'Code 39', 'QR'].map((e) => ChoiceChip(label: Text(e), selected: _tipoCodigo == e, onSelected: (_) => setState(() => _tipoCodigo = e))).toList()),
-          const SizedBox(height: 13),
-          Row(children: [
-            Expanded(child: DropdownButtonFormField<String>(value: _tamano, decoration: _field('Tamaño físico'), items: tamanos.entries.map((e) => DropdownMenuItem(value: e.key, child: Text('${e.key} · ${e.value}'))).toList(), onChanged: (v) => setState(() => _tamano = v ?? 'Mediana'))),
-            const SizedBox(width: 9),
-            Expanded(child: DropdownButtonFormField<int>(value: _etiquetasPorHoja, decoration: _field('Distribución'), items: distribuciones.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(), onChanged: (v) => setState(() => _etiquetasPorHoja = v ?? 1))),
-          ]),
-          const SizedBox(height: 12),
-          Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: AppColors.background(dark), borderRadius: BorderRadius.circular(13)), child: Row(children: [
-            Container(width: 54, height: 54, padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(10), border: Border.all(color: AppColors.divider(dark))), child: _logo == null ? Icon(Icons.image_outlined, color: AppColors.subtext(dark)) : Image.memory(_logo!, fit: BoxFit.contain)),
-            const SizedBox(width: 10),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_logoNombre ?? 'Sin logo', style: TextStyle(color: AppColors.text(dark), fontSize: 12, fontWeight: FontWeight.w800)), const SizedBox(height: 3), Text('El logo se refleja en la vista y en la impresión.', style: TextStyle(color: AppColors.subtext(dark), fontSize: 9))])),
-            OutlinedButton.icon(onPressed: _seleccionarLogo, icon: const Icon(Icons.upload_rounded, size: 15), label: const Text('Logo')),
-          ])),
-          const SizedBox(height: 7),
-          _switch('Mostrar logo', _mostrarLogo, (v) => setState(() => _mostrarLogo = v), dark),
-          _switch('Nombre', _mostrarNombre, (v) => setState(() => _mostrarNombre = v), dark),
-          _switch('Código', _mostrarCodigo, (v) => setState(() => _mostrarCodigo = v), dark),
-          _switch('Precio', _mostrarPrecio, (v) => setState(() => _mostrarPrecio = v), dark),
-          _switch('Marca', _mostrarMarca, (v) => setState(() => _mostrarMarca = v), dark),
-          _switch('Color', _mostrarColor, (v) => setState(() => _mostrarColor = v), dark),
-          _switch('Talla', _mostrarTalla, (v) => setState(() => _mostrarTalla = v), dark),
-          const SizedBox(height: 4),
-          FilledButton.icon(onPressed: () async { await _guardarConfiguracion(); _snack('Diseño guardado', AppColors.success); }, icon: const Icon(Icons.save_rounded), label: const Text('Guardar diseño')),
-        ]),
-      ),
-      const SizedBox(height: 12),
-      _previewEtiqueta(demo, dark),
-    ]);
-  }
-
-  Widget _switch(String label, bool value, ValueChanged<bool> onChanged, bool dark) => SwitchListTile.adaptive(contentPadding: EdgeInsets.zero, dense: true, title: Text(label, style: TextStyle(color: AppColors.text(dark), fontSize: 12, fontWeight: FontWeight.w700)), value: value, onChanged: onChanged);
-
-  Widget _previewEtiqueta(Map<String, dynamic> p, bool dark) {
-    final codigo = '${p['codigo_barras'] ?? '7591020080804'}';
-    final marca = _valor(p, ['marca', 'brand']);
-    final color = _valor(p, ['color', 'color_nombre']);
-    final talla = _valor(p, ['talla', 'talla_nombre', 'size']);
-    final mm = {'Pequeña': [50.0, 30.0], 'Mediana': [70.0, 40.0], 'Grande': [90.0, 50.0]}[_tamano]!;
-    final qr = _tipoCodigo == 'QR' || _tipoDiseno == 'QR';
-    final count = _etiquetasPorHoja;
-    final columns = count <= 1 ? 1 : 2;
-    final rows = count <= 2 ? 1 : (count <= 4 ? 2 : 4);
-
-    Widget mini() => _previewInfo(p, codigo, marca, color, talla, qr, compact: true);
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.divider(dark))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(child: Text('Vista previa de impresión', style: TextStyle(color: AppColors.text(dark), fontSize: 16, fontWeight: FontWeight.w900))),
-          Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5), decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: .1), borderRadius: BorderRadius.circular(9)), child: Text('${mm[0].toInt()} × ${mm[1].toInt()} mm', style: const TextStyle(color: AppColors.primary, fontSize: 9, fontWeight: FontWeight.w900))),
-        ]),
-        const SizedBox(height: 6),
-        Wrap(spacing: 6, runSpacing: 6, children: [
-          _previewBadge(_tipoDiseno, Icons.style_rounded, dark),
-          _previewBadge(_tipoCodigo, Icons.qr_code_2_rounded, dark),
-          _previewBadge('$count por hoja', Icons.grid_view_rounded, dark),
-        ]),
-        const SizedBox(height: 13),
-        Text('Etiqueta real', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 6),
-        Center(child: LayoutBuilder(builder: (context, c) {
-          final maxW = c.maxWidth.clamp(260.0, 520.0).toDouble();
-          final aspect = mm[0] / mm[1];
-          return Container(
-            width: maxW,
-            constraints: const BoxConstraints(maxHeight: 260),
-            child: AspectRatio(aspectRatio: aspect, child: _previewLabelCard(p, codigo, marca, color, talla, qr, dark, compact: false)),
-          );
-        })),
-        const SizedBox(height: 13),
-        Text('Así quedará la hoja', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 6),
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(color: AppColors.background(dark), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.divider(dark))),
-          child: AspectRatio(aspectRatio: columns / rows.toDouble(), child: GridView.builder(physics: const NeverScrollableScrollPhysics(), gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: columns, crossAxisSpacing: 5, mainAxisSpacing: 5), itemCount: count, itemBuilder: (_, __) => _previewLabelCard(p, codigo, marca, color, talla, qr, dark, compact: true))),
+      child: Row(children: [
+        Checkbox(value: sel, onChanged: (v) => setState(() => v == true ? _seleccionados.add(id) : _seleccionados.remove(id)), activeColor: AppColors.primary),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('${p['nombre'] ?? 'Producto'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.text(dark), fontSize: 13, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 3),
+          Text(codigo.isEmpty ? 'Sin código · Stock $stock' : 'Código $codigo · Stock $stock', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10)),
+        ])),
+        if (codigo.isEmpty) IconButton(tooltip: 'Generar código', onPressed: () => _generar(p), icon: const Icon(Icons.auto_awesome_rounded, color: AppColors.primary, size: 19)),
+        PopupMenuButton<String>(
+          tooltip: 'Opciones',
+          onSelected: (v) { if (v == 'print') _imprimir([p]); if (v == 'generate') _generar(p); },
+          itemBuilder: (_) => [
+            if (codigo.isNotEmpty) const PopupMenuItem(value: 'print', child: Row(children: [Icon(Icons.print_outlined), SizedBox(width: 10), Text('Imprimir etiqueta')])),
+            if (codigo.isEmpty) const PopupMenuItem(value: 'generate', child: Row(children: [Icon(Icons.auto_awesome_outlined), SizedBox(width: 10), Text('Generar código')])),
+          ],
         ),
-        const SizedBox(height: 7),
-        Text('El formato seleccionado se usa también al generar el PDF de impresión.', style: TextStyle(color: AppColors.subtext(dark), fontSize: 9)),
       ]),
     );
   }
 
-  Widget _previewBadge(String text, IconData icon, bool dark) => Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5), decoration: BoxDecoration(color: AppColors.background(dark), borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.divider(dark))), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 12, color: AppColors.primary), const SizedBox(width: 4), Text(text, style: TextStyle(color: AppColors.text(dark), fontSize: 9, fontWeight: FontWeight.w800))]));
-
-  Widget _previewLabelCard(Map<String, dynamic> p, String codigo, String marca, String color, String talla, bool qr, bool dark, {required bool compact}) {
-    return Container(
-      padding: EdgeInsets.all(compact ? 5 : 10),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(compact ? 5 : 8), border: Border.all(color: Colors.black26)),
-      child: _tipoDiseno == 'Logo'
-          ? Row(children: [
-              if (_logo != null) Expanded(flex: 3, child: Padding(padding: const EdgeInsets.all(3), child: Image.memory(_logo!, fit: BoxFit.contain))),
-              Expanded(flex: 7, child: _previewInfo(p, codigo, marca, color, talla, qr, compact: compact)),
-            ])
-          : _previewInfo(p, codigo, marca, color, talla, qr, compact: compact),
+  Widget _designCard(String id, String title, String desc, IconData icon, bool dark) {
+    final on = _diseno == id;
+    return InkWell(
+      onTap: () => setState(() => _diseno = id),
+      borderRadius: BorderRadius.circular(18),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: on ? AppColors.primary.withValues(alpha: .08) : AppColors.card(dark), borderRadius: BorderRadius.circular(18), border: Border.all(color: on ? AppColors.primary : AppColors.divider(dark))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [Icon(icon, color: on ? AppColors.primary : AppColors.subtext(dark), size: 20), const Spacer(), if (on) const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 18)]),
+          const SizedBox(height: 10),
+          Text(title, style: TextStyle(color: AppColors.text(dark), fontSize: 14, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 3),
+          Text(desc, style: TextStyle(color: AppColors.subtext(dark), fontSize: 9.5, height: 1.3)),
+        ]),
+      ),
     );
   }
 
-  Widget _previewInfo(Map<String, dynamic> p, String codigo, String marca, String color, String talla, bool qr, {required bool compact}) {
-    return LayoutBuilder(builder: (context, c) => Column(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [
-      if (_tipoDiseno != 'Logo' && _mostrarLogo && _logo != null) SizedBox(height: compact ? 13 : 24, child: Image.memory(_logo!, fit: BoxFit.contain)),
-      if (_mostrarNombre) FittedBox(fit: BoxFit.scaleDown, child: Text('${p['nombre'] ?? 'Zapatilla deportiva'}', maxLines: 1, style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: compact ? 7 : 12))),
-      if (_mostrarMarca && marca.isNotEmpty) FittedBox(fit: BoxFit.scaleDown, child: Text(marca, style: TextStyle(color: Colors.black87, fontSize: compact ? 5.5 : 8))),
-      if (_mostrarColor || _mostrarTalla) FittedBox(fit: BoxFit.scaleDown, child: Text([if (_mostrarColor && color.isNotEmpty) color, if (_mostrarTalla && talla.isNotEmpty) 'Talla $talla'].join(' · '), style: TextStyle(color: Colors.black87, fontSize: compact ? 5 : 7))),
-      if (_mostrarCodigo) qr
-          ? Padding(padding: EdgeInsets.symmetric(vertical: compact ? 1 : 3), child: QrImageView(data: codigo, size: compact ? 30 : 58))
-          : SizedBox(height: compact ? 20 : 43, width: c.maxWidth, child: CustomPaint(painter: _PreviewBarcodePainter(codigo, _tipoCodigo))),
-      if (_mostrarPrecio) FittedBox(fit: BoxFit.scaleDown, child: Text('\$${p['precio_venta'] ?? p['precio'] ?? '29.99'}', style: TextStyle(color: Colors.black, fontSize: compact ? 7 : 14, fontWeight: FontWeight.w900))),
-    ]));
-  }
-
-  Widget _escanearTab(bool dark) {
-    final controller = TextEditingController();
-    return StatefulBuilder(builder: (context, setLocal) {
-      Map<String, dynamic>? encontrado;
-      void buscar() {
-        final q = controller.text.trim().toLowerCase();
-        encontrado = _productos.cast<Map<String, dynamic>?>().firstWhere((p) => p != null && ('${p['codigo_barras'] ?? ''}'.toLowerCase() == q || '${p['nombre'] ?? ''}'.toLowerCase().contains(q)), orElse: () => null);
-        setLocal(() {});
-      }
-      return ListView(padding: const EdgeInsets.all(16), children: [
-        Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(gradient: AppColors.gradientPrimary, borderRadius: BorderRadius.circular(20)), child: const Row(children: [Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 34), SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Escanear producto', style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900)), SizedBox(height: 4), Text('Cámara Android, lector externo o código manual', style: TextStyle(color: Colors.white70, fontSize: 11))]))])),
+  Widget _scanTab(bool dark) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 100),
+      children: [
+        Row(children: [
+          Expanded(child: Text('Escanear producto', style: TextStyle(color: AppColors.text(dark), fontSize: 17, fontWeight: FontWeight.w900))),
+          FilledButton.icon(
+            onPressed: () => setState(() => _camaraActiva = !_camaraActiva),
+            icon: Icon(_camaraActiva ? Icons.close_rounded : Icons.camera_alt_rounded),
+            label: Text(_camaraActiva ? 'Cerrar cámara' : 'Abrir cámara'),
+          ),
+        ]),
         const SizedBox(height: 12),
-        TextField(controller: controller, onSubmitted: (_) => buscar(), decoration: _field('Introducir código manual').copyWith(prefixIcon: const Icon(Icons.keyboard_rounded), suffixIcon: IconButton(onPressed: buscar, icon: const Icon(Icons.search_rounded)))),
-        const SizedBox(height: 12),
-        Material(
-          color: AppColors.primary,
-          borderRadius: BorderRadius.circular(16),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: () async {
-              final value = await showDialog<String>(
-                context: context,
-                barrierDismissible: false,
-                builder: (ctx) => Dialog(
-                  backgroundColor: Colors.transparent,
-                  insetPadding: const EdgeInsets.all(18),
-                  child: SizedBox(
-                    width: 560,
-                    height: 430,
-                    child: ScannerRapido(
-                      isDark: dark,
-                      onCodigoDetectado: (codigo) async => Navigator.pop(ctx, codigo),
-                      onCerrar: () => Navigator.pop(ctx),
-                    ),
-                  ),
-                ),
-              );
-              if (value != null && value.isNotEmpty) {
-                controller.text = value;
-                buscar();
-              }
-            },
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 15, horizontal: 16),
-              child: Row(children: [
-                Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 22),
-                SizedBox(width: 10),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Abrir scanner profesional', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900)),
-                  SizedBox(height: 3),
-                  Text('Cámara + EAN / UPC / Code 128 / QR / Code 39', style: TextStyle(color: Colors.white70, fontSize: 9)),
-                ])),
-                Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
-              ]),
-            ),
+        if (_camaraActiva)
+          Container(
+            height: 300,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(22), border: Border.all(color: AppColors.primary, width: 2)),
+            child: Stack(fit: StackFit.expand, children: [
+              MobileScanner(controller: _scanner, onDetect: _onDetect),
+              IgnorePointer(child: Center(child: Container(width: 250, height: 150, decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: Colors.white, width: 2))))),
+              Positioned(left: 16, right: 16, bottom: 14, child: Row(children: [
+                Expanded(child: Text('Centra el código dentro del marco', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700))),
+                IconButton(onPressed: () => _scanner.toggleTorch(), icon: const Icon(Icons.flashlight_on_rounded, color: Colors.white)),
+                IconButton(onPressed: () => _scanner.switchCamera(), icon: const Icon(Icons.cameraswitch_rounded, color: Colors.white)),
+              ])),
+            ]),
+          ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _manual,
+          onSubmitted: _procesarCodigo,
+          decoration: InputDecoration(
+            labelText: 'Código manual',
+            hintText: 'Escribe o pega el código de barras',
+            prefixIcon: const Icon(Icons.keyboard_alt_outlined),
+            suffixIcon: IconButton(onPressed: () => _procesarCodigo(_manual.text), icon: const Icon(Icons.search_rounded)),
+            filled: true, fillColor: AppColors.card(dark),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: AppColors.divider(dark))),
           ),
         ),
         const SizedBox(height: 16),
-        if (encontrado != null) Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.success)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${encontrado!['nombre'] ?? ''}', style: TextStyle(color: AppColors.text(dark), fontSize: 17, fontWeight: FontWeight.w900)), const SizedBox(height: 8), Text('Código: ${encontrado!['codigo_barras'] ?? ''}'), Text('Precio: ${encontrado!['precio_venta'] ?? encontrado!['precio'] ?? 0}'), Text('Stock: ${encontrado!['stock'] ?? 0}'), Text('Categoría: ${encontrado!['categoria'] ?? 'General'}'), const SizedBox(height: 10), FilledButton.icon(onPressed: () => _imprimir([encontrado!]), icon: const Icon(Icons.print_rounded), label: const Text('Imprimir etiqueta'))]))
-        else Padding(padding: const EdgeInsets.all(24), child: Text('Escanea o escribe un código para localizar el producto.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.subtext(dark)))),
-      ]);
-    });
+        if (_productoEscaneado != null)
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(20), border: Border.all(color: AppColors.primary.withValues(alpha: .35))),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 21), const SizedBox(width: 9), Text('Producto encontrado', style: TextStyle(color: AppColors.text(dark), fontSize: 14, fontWeight: FontWeight.w900))]),
+              const SizedBox(height: 14),
+              Text('${_productoEscaneado!['nombre'] ?? 'Producto'}', style: TextStyle(color: AppColors.text(dark), fontSize: 18, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 10),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                _dataChip('Precio', _money(_productoEscaneado!), dark),
+                _dataChip('Stock', '${_productoEscaneado!['stock'] ?? 0}', dark),
+                _dataChip('Categoría', '${_productoEscaneado!['categoria'] ?? 'General'}', dark),
+                _dataChip('Código', _codigoEncontrado, dark),
+              ]),
+            ]),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(20), border: Border.all(color: AppColors.divider(dark))),
+            child: Column(children: [Icon(Icons.qr_code_scanner_rounded, size: 42, color: AppColors.subtext(dark)), const SizedBox(height: 10), Text('Escanea o escribe un código para localizar el producto.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.subtext(dark), fontSize: 11))]),
+          ),
+      ],
+    );
+  }
+
+  Widget _dataChip(String label, String value, bool dark) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+    decoration: BoxDecoration(color: AppColors.background(dark), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.divider(dark))),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: TextStyle(color: AppColors.subtext(dark), fontSize: 8, fontWeight: FontWeight.w700)), const SizedBox(height: 2), Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.text(dark), fontSize: 10, fontWeight: FontWeight.w900))]),
+  );
+
+  Widget _labelsTab(bool dark) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 100),
+      children: [
+        Row(children: [
+          Expanded(child: TextField(onChanged: (v) { _q = v; _filtrar(); setState(() {}); }, decoration: InputDecoration(hintText: 'Buscar producto o código', prefixIcon: const Icon(Icons.search_rounded), filled: true, fillColor: AppColors.card(dark), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.divider(dark)))))),
+          const SizedBox(width: 10),
+          FilledButton.icon(onPressed: _seleccionados.isEmpty ? null : () => _imprimir(_productos.where((p) => _seleccionados.contains('${p['id']}')).toList()), icon: const Icon(Icons.print_rounded), label: const Text('Imprimir')),
+        ]),
+        const SizedBox(height: 20),
+        Text('DISEÑO DE ETIQUETA', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+        const SizedBox(height: 8),
+        Row(children: [Expanded(child: _designCard('A', 'Clásica', 'Logo · nombre · marca · talla/color · precio · código', Icons.label_outline_rounded, dark)), const SizedBox(width: 10), Expanded(child: _designCard('B', 'Minimal', 'Nombre · precio · código', Icons.view_compact_outlined, dark))]),
+        const SizedBox(height: 20),
+        Row(children: [Expanded(child: Text('${_filtrados.length} productos', style: TextStyle(color: AppColors.text(dark), fontSize: 15, fontWeight: FontWeight.w900))), Text('${_seleccionados.length} seleccionados', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10, fontWeight: FontWeight.w700))]),
+        const SizedBox(height: 8),
+        if (_cargando) const Center(child: CircularProgressIndicator(color: AppColors.primary))
+        else if (_filtrados.isEmpty) Padding(padding: const EdgeInsets.all(40), child: Center(child: Text('No hay productos para mostrar.', style: TextStyle(color: AppColors.subtext(dark)))))
+        else ..._filtrados.map((p) => _producto(p, dark)),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final dark = widget.modoOscuro;
-    return Scaffold(
-      backgroundColor: AppColors.background(dark),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(tooltip: 'Abrir menú', onPressed: widget.onAbrirSidebar, icon: Icon(Icons.menu_rounded, color: AppColors.text(dark))),
-        title: Text('Códigos de barras', style: TextStyle(color: AppColors.text(dark), fontWeight: FontWeight.w900)),
-        bottom: TabBar(controller: _tabs, labelColor: AppColors.primary, unselectedLabelColor: AppColors.subtext(dark), indicatorColor: AppColors.primary, tabs: const [Tab(icon: Icon(Icons.inventory_2_outlined), text: 'Productos'), Tab(icon: Icon(Icons.design_services_outlined), text: 'Diseño'), Tab(icon: Icon(Icons.qr_code_scanner_rounded), text: 'Escanear')]),
+    return Column(children: [
+      _header(dark),
+      Container(
+        margin: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+        decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.divider(dark))),
+        child: TabBar(controller: _tabs, labelColor: AppColors.primary, unselectedLabelColor: AppColors.subtext(dark), indicatorColor: AppColors.primary, tabs: const [Tab(icon: Icon(Icons.qr_code_scanner_rounded), text: 'Escanear producto'), Tab(icon: Icon(Icons.local_offer_outlined), text: 'Generar códigos')]),
       ),
-      body: TabBarView(controller: _tabs, children: [_catalogoTab(dark), _disenoTab(dark), _escanearTab(dark)]),
-    );
+      Expanded(child: TabBarView(controller: _tabs, children: [_scanTab(dark), _labelsTab(dark)])),
+    ]);
   }
-}
-
-class _PreviewBarcodePainter extends CustomPainter {
-  final String value;
-  final String type;
-  _PreviewBarcodePainter(this.value, this.type);
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.black;
-    final seed = (type + value).codeUnits.fold<int>(0, (a, b) => (a * 31 + b) & 0x7fffffff);
-    final bars = type == 'Code 39' ? 46 : (type == 'EAN-13' ? 59 : 67);
-    var x = 2.0;
-    for (var i = 0; i < bars && x < size.width - 2; i++) {
-      final wide = type == 'Code 39' ? ((seed + i * 13) % 4 == 0) : ((seed + i * 17) % 3 == 0);
-      final w = wide ? 2.2 : 1.0;
-      final top = type == 'EAN-13' && (i < 3 || (i > bars / 2 - 2 && i < bars / 2 + 2) || i > bars - 4) ? 1.0 : 4.0;
-      canvas.drawRect(Rect.fromLTWH(x, top, w, size.height - (type == 'EAN-13' ? 20 : 15)), paint);
-      x += w + ((seed + i * 7) % 3 + 1);
-    }
-    final tp = TextPainter(text: TextSpan(text: value, style: const TextStyle(color: Colors.black, fontSize: 9, letterSpacing: 1)), textDirection: ui.TextDirection.ltr, textAlign: TextAlign.center)..layout(maxWidth: size.width);
-    tp.paint(canvas, Offset((size.width - tp.width) / 2, size.height - 14));
-  }
-  @override
-  bool shouldRepaint(covariant _PreviewBarcodePainter oldDelegate) => oldDelegate.value != value || oldDelegate.type != type;
 }
 
 // ============================================
@@ -12778,23 +12286,29 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
             ],
           ),
           const SizedBox(height: 6),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(
-              'Mostrar logo en tickets',
-              style: TextStyle(color: text),
+          Material(
+            color: Colors.transparent,
+            child: SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                'Mostrar logo en tickets',
+                style: TextStyle(color: text),
+              ),
+              value: _mostrarLogo,
+              onChanged: (v) => setState(() => _mostrarLogo = v),
             ),
-            value: _mostrarLogo,
-            onChanged: (v) => setState(() => _mostrarLogo = v),
           ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(
-              'Mostrar código QR',
-              style: TextStyle(color: text),
+          Material(
+            color: Colors.transparent,
+            child: SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                'Mostrar código QR',
+                style: TextStyle(color: text),
+              ),
+              value: _mostrarQR,
+              onChanged: (v) => setState(() => _mostrarQR = v),
             ),
-            value: _mostrarQR,
-            onChanged: (v) => setState(() => _mostrarQR = v),
           ),
           const SizedBox(height: 6),
           SizedBox(
@@ -14358,116 +13872,39 @@ class _InventarioScreenState extends State<InventarioScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = widget.modoOscuro;
+    final ink = AppColors.text(isDark);
+    final muted = AppColors.subtext(isDark);
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          tooltip: 'Abrir menu',
-          onPressed: widget.onAbrirSidebar,
-          icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
-        ),
-        title: Row(children: [
-const SizedBox(width: 14),
-          Text('INVENTARIO',
-              style: TextStyle(
-                  color: AppColors.text(isDark),
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5)),
+        backgroundColor: AppColors.background(isDark), elevation: 0, scrolledUnderElevation: 0,
+        toolbarHeight: 76, titleSpacing: 0, leadingWidth: 64,
+        leading: Padding(padding: const EdgeInsets.only(left: 12, top: 14, bottom: 14), child: Material(color: isDark ? const Color(0xFF151B23) : Colors.white, borderRadius: BorderRadius.circular(16), child: InkWell(borderRadius: BorderRadius.circular(16), onTap: widget.onAbrirSidebar, child: const Icon(Icons.menu_rounded, color: AppColors.primary, size: 23)))),
+        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Inventario', style: TextStyle(color: ink, fontSize: 18, fontWeight: FontWeight.w900)), Text('Existencias y movimientos', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w600))]),
+        actions: [IconButton(onPressed: _cargarDatos, tooltip: 'Actualizar', icon: const Icon(Icons.refresh_rounded, color: AppColors.primary)), const SizedBox(width: 6)],
+      ),
+      body: SafeArea(child: Padding(padding: const EdgeInsets.fromLTRB(14, 0, 14, 14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(child: GestureDetector(onTap: () => setState(() => _tabActual = 0), child: _inventoryMode('Movimientos', Icons.swap_vert_rounded, _tabActual == 0, isDark))),
+          const SizedBox(width: 10),
+          Expanded(child: GestureDetector(onTap: () => setState(() => _tabActual = 1), child: _inventoryMode('Stock', Icons.inventory_2_outlined, _tabActual == 1, isDark))),
         ]),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.card(isDark),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Row(children: [
-                  _tab('Movimientos', 0, isDark, Icons.swap_vert_rounded),
-                  _tab('Stock', 1, isDark, Icons.inventory_2_outlined),
-                ]),
-              ),
-              const SizedBox(height: 16),
-              if (_cargando)
-                const Expanded(
-                    child: Center(
-                        child: CircularProgressIndicator(
-                            color: AppColors.primary)))
-              else
-                Expanded(
-                    child: _tabActual == 0
-                        ? _buildMovimientos(isDark)
-                        : _buildStock(isDark)),
-              if (_tabActual == 0)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Row(children: [
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: AppColors.gradientSuccess,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ElevatedButton.icon(
-                          onPressed: () => _registrarMovimiento('Entrada'),
-                          icon: const Icon(Icons.add_circle_outline,
-                              color: Colors.white),
-                          label: const Text('Entrada',
-                              style: TextStyle(color: Colors.white)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: AppColors.gradientWarning,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ElevatedButton.icon(
-                          onPressed: () => _registrarMovimiento('Salida'),
-                          icon: const Icon(Icons.remove_circle_outline,
-                              color: Colors.white),
-                          label: const Text('Salida',
-                              style: TextStyle(color: Colors.white)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ]),
-                ),
-            ],
-          ),
-        ),
-      ),
+        const SizedBox(height: 16),
+        if (_tabActual == 1 && _productos.isNotEmpty) Padding(padding: const EdgeInsets.only(bottom: 10), child: Row(children: [Text('${_productos.length}', style: TextStyle(color: ink, fontSize: 20, fontWeight: FontWeight.w900)), const SizedBox(width: 7), Text('productos en inventario', style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w600))])),
+        Expanded(child: _cargando ? const Center(child: CircularProgressIndicator(color: AppColors.primary)) : _tabActual == 0 ? _buildMovimientos(isDark) : _buildStock(isDark)),
+        if (_tabActual == 0) Padding(padding: const EdgeInsets.only(top: 12), child: Row(children: [
+          Expanded(child: FilledButton.icon(onPressed: () => _registrarMovimiento('Entrada'), icon: const Icon(Icons.add_rounded), label: const Text('Entrada'))),
+          const SizedBox(width: 10),
+          Expanded(child: OutlinedButton.icon(onPressed: () => _registrarMovimiento('Salida'), icon: const Icon(Icons.remove_rounded), label: const Text('Salida'))),
+        ])),
+      ]))),
     );
+  }
+
+  Widget _inventoryMode(String label, IconData icon, bool active, bool isDark) {
+    final ink = AppColors.text(isDark);
+    final muted = AppColors.subtext(isDark);
+    return AnimatedContainer(duration: const Duration(milliseconds: 180), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14), decoration: BoxDecoration(color: active ? AppColors.primary.withValues(alpha: .12) : Colors.transparent, border: Border(bottom: BorderSide(color: active ? AppColors.primary : AppColors.divider(isDark), width: active ? 2 : 1))), child: Row(children: [Icon(icon, color: active ? AppColors.primary : muted, size: 19), const SizedBox(width: 8), Text(label, style: TextStyle(color: active ? AppColors.primary : ink, fontSize: 12, fontWeight: FontWeight.w800))]));
   }
 }
 
@@ -14476,6 +13913,47 @@ const SizedBox(width: 14),
 // TIENDA VIRTUAL SINTHETIX PRO - V27
 // Catálogo universal + carrito + WhatsApp + favoritos + banners
 // ============================================
+
+class WhatsAppMark extends StatelessWidget {
+  final double size;
+  const WhatsAppMark({super.key, this.size = 26});
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: Size.square(size),
+      painter: _WhatsAppMarkPainter(),
+    );
+  }
+}
+
+class _WhatsAppMarkPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()..color = Colors.white..style = PaintingStyle.fill;
+    final c = Offset(size.width / 2, size.height / 2);
+    final r = size.shortestSide * .39;
+    canvas.drawCircle(c, r, p);
+    final phone = Paint()
+      ..color = AppColors.whatsapp
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.shortestSide * .115
+      ..strokeCap = StrokeCap.round;
+    final path = Path()
+      ..moveTo(c.dx - r * .30, c.dy - r * .10)
+      ..quadraticBezierTo(c.dx - r * .10, c.dy + r * .30, c.dx + r * .28, c.dy + r * .18)
+      ..quadraticBezierTo(c.dx + r * .40, c.dy + r * .14, c.dx + r * .30, c.dy - r * .02);
+    canvas.drawPath(path, phone);
+    final bubble = Path()
+      ..moveTo(c.dx - r * .54, c.dy + r * .56)
+      ..lineTo(c.dx - r * .40, c.dy + r * .34)
+      ..lineTo(c.dx - r * .20, c.dy + r * .47)
+      ..close();
+    canvas.drawPath(bubble, p);
+  }
+  @override
+  bool shouldRepaint(covariant _WhatsAppMarkPainter oldDelegate) => false;
+}
+
 class UniversalFlyCartStore extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
   const UniversalFlyCartStore({super.key, required this.onAbrirSidebar});
@@ -14496,7 +13974,7 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
   String _categoria = 'Todas';
   String _nombreTienda = 'SINTHETIX PRO';
   String _whatsapp = '';
-  String _publicUrl = 'https://synthetixapp17.github.io/mi_tienda/tienda.html';
+  String _publicUrl = 'https://synthetixapp17.github.io/mi_tienda/tienda/';
   String? _logo;
   int _bannerIndex = 0;
   bool _cargando = true;
@@ -14541,7 +14019,7 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
               cfg?['telefono'] ?? '')
           .toString();
       _publicUrl = (prefs.getString('sinthetix_store_public_url') ??
-              'https://synthetixapp17.github.io/mi_tienda/tienda.html')
+              'https://synthetixapp17.github.io/mi_tienda/tienda/')
           .toString();
       _nombreTienda = (cfg?['nombre_negocio'] ?? 'SINTHETIX PRO').toString();
       _logo = cfg?['logo_base64']?.toString();
@@ -14765,7 +14243,7 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
           : FloatingActionButton(
               onPressed: _whatsappConsulta,
               backgroundColor: AppColors.whatsapp,
-              child: const Icon(Icons.chat_rounded, color: Colors.white),
+              child: const WhatsAppMark(size: 28),
             ),
       body: _cargando
           ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
@@ -15293,7 +14771,7 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
   final _subtitle = TextEditingController();
   final _button = TextEditingController(text: 'Ver productos');
   final _whatsapp = TextEditingController();
-  final _publicUrl = TextEditingController(text: 'https://synthetixapp17.github.io/mi_tienda/tienda.html');
+  final _publicUrl = TextEditingController(text: 'https://synthetixapp17.github.io/mi_tienda/tienda/');
   List<Map<String, dynamic>> _banners = [];
   List<Map<String, dynamic>> _productos = [];
   List<Map<String, dynamic>> _categorias = [];
@@ -15318,7 +14796,7 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
       _productos = await db.getProductos();
       _categorias = await db.getCategorias();
       _whatsapp.text = prefs.getString('sinthetix_store_whatsapp') ?? '';
-      _publicUrl.text = prefs.getString('sinthetix_store_public_url') ?? 'https://synthetixapp17.github.io/mi_tienda/tienda.html';
+      _publicUrl.text = prefs.getString('sinthetix_store_public_url') ?? 'https://synthetixapp17.github.io/mi_tienda/tienda/';
     } catch (e) { debugPrint('Error administrador tienda: $e'); }
     if (mounted) setState(() => _loading = false);
   }
@@ -15416,21 +14894,50 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bg = const Color(0xFFF7F8FA);
+    final ink = const Color(0xFF101828);
+    final muted = const Color(0xFF667085);
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F7FC),
-      appBar: AppBar(backgroundColor: Colors.white, elevation: 0, leading: IconButton(onPressed: widget.onAbrirSidebar, icon: const Icon(Icons.menu_rounded)), title: const Text('Administrar tienda', style: TextStyle(fontWeight: FontWeight.w900)), actions: [IconButton(onPressed: _shareStore, icon: const Icon(Icons.share_outlined)), IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded))]),
-      body: _loading ? const Center(child: CircularProgressIndicator(color: AppColors.primary)) : ListView(padding: const EdgeInsets.all(14), children: [
-        Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(gradient: AppColors.gradientPrimary, borderRadius: BorderRadius.circular(22)), child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('TIENDA ONLINE', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)), SizedBox(height: 5), Text('Controla tu escaparate', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)), SizedBox(height: 4), Text('Productos y categorías vienen directamente del POS.', style: TextStyle(color: Colors.white70, fontSize: 11))])),
+      backgroundColor: bg,
+      appBar: AppBar(
+        backgroundColor: bg, elevation: 0, scrolledUnderElevation: 0, toolbarHeight: 76, titleSpacing: 0, leadingWidth: 64,
+        leading: Padding(padding: const EdgeInsets.only(left: 12, top: 14, bottom: 14), child: Material(color: Colors.white, borderRadius: BorderRadius.circular(16), child: InkWell(borderRadius: BorderRadius.circular(16), onTap: widget.onAbrirSidebar, child: const Icon(Icons.menu_rounded, color: AppColors.primary, size: 23)))),
+        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Tienda online', style: TextStyle(color: ink, fontSize: 18, fontWeight: FontWeight.w900)), Text('Escaparate, contacto y publicación', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w600))]),
+        actions: [IconButton(onPressed: _load, tooltip: 'Actualizar', icon: const Icon(Icons.refresh_rounded, color: AppColors.primary)), const SizedBox(width: 6)],
+      ),
+      body: _loading ? const Center(child: CircularProgressIndicator(color: AppColors.primary)) : ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 28), children: [
+        Container(padding: const EdgeInsets.fromLTRB(18, 18, 18, 20), decoration: BoxDecoration(gradient: AppColors.gradientPrimary, borderRadius: BorderRadius.circular(24)), child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('STORE CONTROL', style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.5)), SizedBox(height: 7), Text('Tu tienda, lista para vender', style: TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w900)), SizedBox(height: 5), Text('El POS sigue trabajando localmente. La tienda pública consulta el catálogo publicado.', style: TextStyle(color: Colors.white70, fontSize: 10.5, height: 1.35))])),
+        const SizedBox(height: 18),
+        _adminCard('Publicación', 'Enlace que compartirás con tus clientes.', Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          TextField(controller: _publicUrl, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Enlace público', prefixIcon: Icon(Icons.link_rounded))),
+          const SizedBox(height: 10),
+          Row(children: [Expanded(child: OutlinedButton.icon(onPressed: _openStore, icon: const Icon(Icons.open_in_new_rounded), label: const Text('Abrir tienda'))), const SizedBox(width: 9), Expanded(child: FilledButton.icon(onPressed: _saveSettings, icon: const Icon(Icons.save_rounded), label: const Text('Guardar')))]),
+          const SizedBox(height: 9),
+          SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _shareStore, icon: const Icon(Icons.share_rounded), label: const Text('Compartir enlace'))),
+        ])),
         const SizedBox(height: 12),
-        _adminCard('Contacto y enlace público', 'Estos datos se usan para compartir la tienda y para el botón flotante de WhatsApp.', Column(children: [TextField(controller: _whatsapp, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'WhatsApp de la tienda', hintText: 'Ej. 17865551234', prefixIcon: Icon(Icons.chat_rounded))), const SizedBox(height: 8), TextField(controller: _publicUrl, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Enlace público de la tienda', prefixIcon: Icon(Icons.link_rounded))), const SizedBox(height: 10), Row(children: [Expanded(child: OutlinedButton.icon(onPressed: _openStore, icon: const Icon(Icons.open_in_new_rounded), label: const Text('Ver tienda'))), const SizedBox(width: 8), Expanded(child: FilledButton.icon(onPressed: _saveSettings, icon: const Icon(Icons.save_rounded), label: const Text('Guardar')))]), const SizedBox(height: 8), SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _shareStore, icon: const Icon(Icons.share_rounded), label: const Text('Compartir tienda')))])),
+        _adminCard('WhatsApp', 'Número que recibirá las consultas y pedidos de la tienda.', Column(children: [TextField(controller: _whatsapp, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'WhatsApp de la tienda', hintText: 'Ej. 17865551234', prefixIcon: Icon(Icons.chat_rounded))), const SizedBox(height: 6), Align(alignment: Alignment.centerLeft, child: Text('Usa el número con código de país, sin espacios ni símbolos.', style: TextStyle(color: muted, fontSize: 9)))])),
         const SizedBox(height: 12),
-        _adminCard('Banners de portada', 'Sube promociones. La tienda los cambia automáticamente cada 5 segundos.', Column(children: [TextField(controller: _title, decoration: const InputDecoration(labelText: 'Título')), TextField(controller: _subtitle, decoration: const InputDecoration(labelText: 'Subtítulo')), TextField(controller: _button, decoration: const InputDecoration(labelText: 'Texto del botón')), const SizedBox(height: 10), Row(children: [Expanded(child: OutlinedButton.icon(onPressed: _pickBanner, icon: const Icon(Icons.image_outlined), label: Text(_bannerImage == null ? 'Subir banner' : 'Imagen seleccionada'))), const SizedBox(width: 8), FilledButton.icon(onPressed: _addBanner, icon: const Icon(Icons.add_rounded), label: const Text('Agregar'))]), if (_bannerImage != null) Padding(padding: const EdgeInsets.only(top: 10), child: ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.memory(base64Decode(_bannerImage!), height: 150, width: double.infinity, fit: BoxFit.cover)))])),
+        _adminCard('Portada', 'Banners de promoción. La tienda los rota automáticamente.', Column(children: [
+          Row(children: [Expanded(child: TextField(controller: _title, decoration: const InputDecoration(labelText: 'Título'))), const SizedBox(width: 9), Expanded(child: TextField(controller: _button, decoration: const InputDecoration(labelText: 'Botón')))]),
+          TextField(controller: _subtitle, decoration: const InputDecoration(labelText: 'Subtítulo')),
+          const SizedBox(height: 10),
+          Row(children: [Expanded(child: OutlinedButton.icon(onPressed: _pickBanner, icon: const Icon(Icons.image_outlined), label: Text(_bannerImage == null ? 'Seleccionar imagen' : 'Imagen seleccionada'))), const SizedBox(width: 9), FilledButton.icon(onPressed: _addBanner, icon: const Icon(Icons.add_rounded), label: const Text('Añadir'))]),
+          if (_bannerImage != null) Padding(padding: const EdgeInsets.only(top: 12), child: ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.memory(base64Decode(_bannerImage!), height: 145, width: double.infinity, fit: BoxFit.cover))),
+        ])),
         const SizedBox(height: 12),
-        ..._banners.asMap().entries.map((entry) { final index = entry.key; final banner = entry.value; final image = banner['image']?.toString() ?? ''; final active = banner['active'] ?? true; return Container(margin: const EdgeInsets.only(bottom: 9), padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFE5E7EB))), child: Row(children: [ClipRRect(borderRadius: BorderRadius.circular(12), child: image.isEmpty ? const SizedBox(width: 100, height: 64, child: Icon(Icons.image_outlined)) : Image.memory(base64Decode(image), width: 100, height: 64, fit: BoxFit.cover)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(banner['title']?.toString() ?? '', style: const TextStyle(fontWeight: FontWeight.w900)), Text(banner['subtitle']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: AppColors.subtextLight)), Text(active ? 'Visible en la tienda' : 'Oculto', style: TextStyle(fontSize: 9, color: active ? AppColors.success : AppColors.danger, fontWeight: FontWeight.w800))])), Switch(value: active, onChanged: (_) => _toggle(index)), IconButton(onPressed: () => _delete(index), icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger))])); }),
+        _adminCard('Catálogo conectado', 'La tienda utiliza los mismos productos y categorías del POS.', Row(children: [Expanded(child: _miniStat('${_productos.length}', 'Productos')), Expanded(child: _miniStat('${_categorias.length}', 'Categorías')), Expanded(child: _miniStat('${_productos.where((p) => (int.tryParse((p['destacado'] ?? 0).toString()) ?? 0) > 0).length}', 'Destacados'))])),
         const SizedBox(height: 12),
-        _adminCard('Catálogo conectado', 'Los productos y categorías son los mismos del POS.', Row(children: [Expanded(child: _miniStat('${_productos.length}', 'Productos')), Expanded(child: _miniStat('${_categorias.length}', 'Categorías')), Expanded(child: _miniStat('${_productos.where((p) => (int.tryParse((p['destacado'] ?? 0).toString()) ?? 0) > 0).length}', 'Destacados'))])),
-        const SizedBox(height: 12),
-        _adminCard('Publicación', 'El POS sigue siendo local. Genera el catálogo público y publícalo junto con tienda.html en GitHub Pages.', Column(children: [const ListTile(leading: Icon(Icons.cloud_done_rounded, color: AppColors.success), title: Text('Catálogo local conectado'), subtitle: Text('Los productos de esta pantalla salen del mismo inventario del POS.')), ListTile(leading: const Icon(Icons.info_outline_rounded, color: AppColors.primary), title: const Text('Cómo funciona'), subtitle: Text('El cliente nunca ve el POS. La página pública lee catalogo_tienda.json y solo muestra los datos que publicaste.')), const SizedBox(height: 4), SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _exportarCatalogoPublico, icon: const Icon(Icons.file_upload_outlined), label: const Text('Generar catálogo público')))])),
+        if (_banners.isNotEmpty) ...[
+          Padding(padding: const EdgeInsets.only(bottom: 8, left: 2), child: Text('Banners activos', style: TextStyle(color: ink, fontSize: 14, fontWeight: FontWeight.w900))),
+          ..._banners.asMap().entries.map((entry) { final index = entry.key; final banner = entry.value; final image = banner['image']?.toString() ?? ''; final active = banner['active'] ?? true; return Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFE4E7EC))), child: Row(children: [ClipRRect(borderRadius: BorderRadius.circular(12), child: image.isEmpty ? const SizedBox(width: 92, height: 62, child: Icon(Icons.image_outlined)) : Image.memory(base64Decode(image), width: 92, height: 62, fit: BoxFit.cover)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(banner['title']?.toString() ?? 'Banner', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11)), const SizedBox(height: 2), Text(active ? 'Visible en la tienda' : 'Oculto', style: TextStyle(fontSize: 8.5, color: active ? AppColors.success : AppColors.danger, fontWeight: FontWeight.w800))])), Switch(value: active, onChanged: (_) => _toggle(index)), IconButton(onPressed: () => _delete(index), tooltip: 'Eliminar', icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger))])); }),
+        ],
+        const SizedBox(height: 4),
+        _adminCard('Catálogo público', 'Genera una copia para respaldo. La publicación web usa tienda.html y el catálogo remoto.', Column(children: [
+          Row(children: [const Icon(Icons.cloud_done_rounded, color: AppColors.success, size: 19), const SizedBox(width: 9), Expanded(child: Text('Productos del POS → sincronización → tienda pública', style: TextStyle(color: ink, fontSize: 10, fontWeight: FontWeight.w700)))]),
+          const SizedBox(height: 11),
+          SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _exportarCatalogoPublico, icon: const Icon(Icons.file_download_outlined), label: const Text('Exportar catálogo'))),
+        ])),
       ]),
     );
   }
