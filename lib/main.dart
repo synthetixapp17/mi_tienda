@@ -1,6 +1,6 @@
-// ============================================
+﻿// ============================================
 // SINTHETIX PRO - V25 ESTADISTICAS + ETIQUETAS COMPACTAS
-// V25: métricas profesionales + impresión térmica compacta + diseño sincronizado
+// V25: mÃ©tricas profesionales + impresiÃ³n tÃ©rmica compacta + diseÃ±o sincronizado
 // ============================================
 
 import 'dart:async';
@@ -45,7 +45,7 @@ Map<String, String> simbolosMoneda = {'USD': '\$', 'COP': '\$', 'VES': 'Bs.'};
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 // ============================================
-// COLORES DE LA APLICACIÓN - DISEÑO PROFESIONAL
+// COLORES DE LA APLICACIÃ“N - DISEÃ‘O PROFESIONAL
 // ============================================
 class AppColors {
   static Color background(bool isDark) =>
@@ -398,7 +398,7 @@ class LocalDatabase {
         numero_copias INTEGER DEFAULT 1,
         usar_misma_impresora INTEGER DEFAULT 1,
         tamano_etiqueta TEXT DEFAULT '40x30mm',
-        mensaje_pie TEXT DEFAULT '¡Gracias por su compra!',
+        mensaje_pie TEXT DEFAULT 'Â¡Gracias por su compra!',
         mensaje_adicional TEXT,
         actualizado_en TEXT
       )
@@ -534,7 +534,7 @@ class LocalDatabase {
       });
       await db.insert('metodos_pago', {
         'id': 'mp_pago_movil',
-        'nombre': 'Pago Móvil',
+        'nombre': 'Pago MÃ³vil',
         'activo': 1,
         'creado_en': DateTime.now().toIso8601String(),
       });
@@ -562,7 +562,7 @@ class LocalDatabase {
         'Ropa',
         'Calzado',
         'Accesorios',
-        'Electrónica',
+        'ElectrÃ³nica',
         'Alimentos'
       ];
       for (var i = 0; i < categoriasDefault.length; i++) {
@@ -640,7 +640,7 @@ class LocalDatabase {
 }
 
 // ============================================
-// SERVICIO DE BASE DE DATOS - CORREGIDO CON GUARDADO AUTOMÁTICO
+// SERVICIO DE BASE DE DATOS - CORREGIDO CON GUARDADO AUTOMÃTICO
 // ============================================
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._();
@@ -704,7 +704,7 @@ class DatabaseService {
       if (result > 0) {
         productosVersion.value++;
         // LOCAL FIRST: el producto queda guardado inmediatamente aunque no haya
-        // internet. La sincronización con Supabase/Cloudinary continúa en segundo plano.
+        // internet. La sincronizaciÃ³n con Supabase/Cloudinary continÃºa en segundo plano.
         prod['sync_estado'] = 'pendiente';
         prod['sync_error'] = null;
         await _db.update('productos', {
@@ -736,7 +736,7 @@ class DatabaseService {
       final result = await _db.update('productos', prod, 'id = ?', [id]);
       debugPrint('Producto actualizado: $id, filas: $result');
       if (result > 0) {
-        // La edición también es local-first; no bloquea la pantalla si la nube está offline.
+        // La ediciÃ³n tambiÃ©n es local-first; no bloquea la pantalla si la nube estÃ¡ offline.
         unawaited(SupabaseSyncService.syncPendingProducts());
       }
       return result > 0;
@@ -779,10 +779,10 @@ class DatabaseService {
     }
   }
 
-  // ============ CATEGORÍAS ============
+  // ============ CATEGORÃAS ============
   Future<List<Map<String, dynamic>>> getCategorias() async {
     final result = await _db.getAll('categorias', orderBy: 'nombre');
-    debugPrint('Categorías cargadas: ${result.length}');
+    debugPrint('CategorÃ­as cargadas: ${result.length}');
     return result;
   }
 
@@ -792,9 +792,9 @@ class DatabaseService {
       categoria['creado_en'] = DateTime.now().toIso8601String();
       final result = await _db.insert('categorias', categoria);
       debugPrint(
-          'Categoría guardada: ${categoria['nombre']} - Resultado: $result');
+          'CategorÃ­a guardada: ${categoria['nombre']} - Resultado: $result');
     } catch (e) {
-      debugPrint('Error creando categoría: $e');
+      debugPrint('Error creando categorÃ­a: $e');
     }
   }
 
@@ -803,7 +803,7 @@ class DatabaseService {
     try {
       await _db.update('categorias', categoria, 'id = ?', [id]);
     } catch (e) {
-      debugPrint('Error actualizando categoría: $e');
+      debugPrint('Error actualizando categorÃ­a: $e');
     }
   }
 
@@ -811,11 +811,11 @@ class DatabaseService {
     try {
       await _db.delete('categorias', 'id = ?', [id]);
     } catch (e) {
-      debugPrint('Error eliminando categoría: $e');
+      debugPrint('Error eliminando categorÃ­a: $e');
     }
   }
 
-  // ============ MÉTODOS DE PAGO ============
+  // ============ MÃ‰TODOS DE PAGO ============
   Future<List<Map<String, dynamic>>> getMetodosPago() async {
     return await _db.getAll('metodos_pago', orderBy: 'nombre');
   }
@@ -825,9 +825,9 @@ class DatabaseService {
       metodo['id'] = metodo['id'] ?? _generateId();
       metodo['creado_en'] = DateTime.now().toIso8601String();
       await _db.insert('metodos_pago', metodo);
-      debugPrint('Método de pago guardado: ${metodo['nombre']}');
+      debugPrint('MÃ©todo de pago guardado: ${metodo['nombre']}');
     } catch (e) {
-      debugPrint('Error creando método de pago: $e');
+      debugPrint('Error creando mÃ©todo de pago: $e');
     }
   }
 
@@ -836,7 +836,7 @@ class DatabaseService {
     try {
       await _db.update('metodos_pago', metodo, 'id = ?', [id]);
     } catch (e) {
-      debugPrint('Error actualizando método de pago: $e');
+      debugPrint('Error actualizando mÃ©todo de pago: $e');
     }
   }
 
@@ -844,7 +844,7 @@ class DatabaseService {
     try {
       await _db.delete('metodos_pago', 'id = ?', [id]);
     } catch (e) {
-      debugPrint('Error eliminando método de pago: $e');
+      debugPrint('Error eliminando mÃ©todo de pago: $e');
     }
   }
 
@@ -980,8 +980,8 @@ class DatabaseService {
         return null;
       }
 
-      // Verificación real: evita mostrar una venta como exitosa si SQLite/Web
-      // no la dejó persistida.
+      // VerificaciÃ³n real: evita mostrar una venta como exitosa si SQLite/Web
+      // no la dejÃ³ persistida.
       final verificada = await _db.query(
         'SELECT * FROM ventas WHERE id = ?',
         [venta['id']],
@@ -1079,7 +1079,7 @@ class DatabaseService {
     return await _db.getAll('movimientos_inventario', orderBy: 'fecha DESC');
   }
 
-  // ============ CONFIGURACIÓN ============
+  // ============ CONFIGURACIÃ“N ============
   Future<Map<String, dynamic>?> getConfiguracion() async {
     final results = await _db.query('SELECT * FROM configuracion WHERE id = 1');
     if (results.isEmpty) return null;
@@ -1091,9 +1091,9 @@ class DatabaseService {
       config['id'] = 1;
       config['actualizado_en'] = DateTime.now().toIso8601String();
       await _db.insert('configuracion', config, replace: true);
-      debugPrint('Configuración guardada correctamente');
+      debugPrint('ConfiguraciÃ³n guardada correctamente');
     } catch (e) {
-      debugPrint('Error guardando configuración: $e');
+      debugPrint('Error guardando configuraciÃ³n: $e');
     }
   }
 
@@ -1109,9 +1109,9 @@ class DatabaseService {
       config['id'] = 1;
       config['actualizado_en'] = DateTime.now().toIso8601String();
       await _db.insert('configuracion_ticket', config, replace: true);
-      debugPrint('Configuración ticket guardada');
+      debugPrint('ConfiguraciÃ³n ticket guardada');
     } catch (e) {
-      debugPrint('Error guardando configuración ticket: $e');
+      debugPrint('Error guardando configuraciÃ³n ticket: $e');
     }
   }
 
@@ -1179,9 +1179,9 @@ class DatabaseService {
       promocion['id'] = promocion['id'] ?? _generateId();
       promocion['creado_en'] = DateTime.now().toIso8601String();
       await _db.insert('promociones', promocion);
-      debugPrint('Promoción guardada: ${promocion['nombre']}');
+      debugPrint('PromociÃ³n guardada: ${promocion['nombre']}');
     } catch (e) {
-      debugPrint('Error creando promoción: $e');
+      debugPrint('Error creando promociÃ³n: $e');
     }
   }
 
@@ -1190,7 +1190,7 @@ class DatabaseService {
     try {
       await _db.update('promociones', promocion, 'id = ?', [id]);
     } catch (e) {
-      debugPrint('Error actualizando promoción: $e');
+      debugPrint('Error actualizando promociÃ³n: $e');
     }
   }
 
@@ -1198,7 +1198,7 @@ class DatabaseService {
     try {
       await _db.delete('promociones', 'id = ?', [id]);
     } catch (e) {
-      debugPrint('Error eliminando promoción: $e');
+      debugPrint('Error eliminando promociÃ³n: $e');
     }
   }
 
@@ -1253,7 +1253,7 @@ class DatabaseService {
 }
 
 // ============================================
-// SERVICIO DE CÓDIGOS DE BARRAS
+// SERVICIO DE CÃ“DIGOS DE BARRAS
 // ============================================
 class BarcodeService {
   static final BarcodeService _instance = BarcodeService._();
@@ -1447,7 +1447,7 @@ class TicketService {
                 pw.SizedBox(height: 5),
                 pw.Center(
                   child: pw.Text(
-                    config?['mensaje_pie'] ?? '¡Gracias por su compra!',
+                    config?['mensaje_pie'] ?? 'Â¡Gracias por su compra!',
                     style: const pw.TextStyle(
                         fontSize: 10, fontWeight: pw.FontWeight.bold),
                   ),
@@ -1461,8 +1461,8 @@ class TicketService {
       final bytes = await pdf.save();
 
       // WEB: path_provider no implementa getTemporaryDirectory() en esta
-      // configuración del proyecto. En navegador entregamos el PDF mediante
-      // el plugin de impresión, que sí tiene implementación para Web.
+      // configuraciÃ³n del proyecto. En navegador entregamos el PDF mediante
+      // el plugin de impresiÃ³n, que sÃ­ tiene implementaciÃ³n para Web.
       if (kIsWeb) {
         await Printing.sharePdf(
           bytes: bytes,
@@ -1552,11 +1552,11 @@ class ImagenProducto extends StatelessWidget {
   }
 }
 // ============================================
-// CONTINUACIÓN - ETAPA 2 de 6
+// CONTINUACIÃ“N - ETAPA 2 de 6
 // ============================================
 
 // ============================================
-// WIDGET: SELECTOR DE TALLAS - DISEÑO PROFESIONAL
+// WIDGET: SELECTOR DE TALLAS - DISEÃ‘O PROFESIONAL
 // ============================================
 class SelectorTallas extends StatefulWidget {
   final List<Map<String, dynamic>> tallas;
@@ -1658,7 +1658,7 @@ class _SelectorTallasState extends State<SelectorTallas> {
 }
 
 // ============================================
-// WIDGET: SELECTOR DE COLORES - DISEÑO PROFESIONAL
+// WIDGET: SELECTOR DE COLORES - DISEÃ‘O PROFESIONAL
 // ============================================
 class SelectorColores extends StatefulWidget {
   final List<Map<String, dynamic>> colores;
@@ -1780,7 +1780,7 @@ class _SelectorColoresState extends State<SelectorColores> {
 }
 
 // ============================================
-// WIDGET: SCANNER RÁPIDO REUTILIZABLE
+// WIDGET: SCANNER RÃPIDO REUTILIZABLE
 // ============================================
 class ScannerRapido extends StatefulWidget {
   final bool isDark;
@@ -1987,7 +1987,7 @@ class _ScannerRapidoState extends State<ScannerRapido> with SingleTickerProvider
                     ),
                   ),
                   child: const Text(
-                    'Apunte la cámara al código de barras',
+                    'Apunte la cÃ¡mara al cÃ³digo de barras',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 12,
@@ -2067,7 +2067,7 @@ class _ScannerOverlayPainter extends CustomPainter {
 }
 
 // ============================================
-// SINCRONIZACIÓN ONLINE: SUPABASE + CLOUDINARY
+// SINCRONIZACIÃ“N ONLINE: SUPABASE + CLOUDINARY
 // ============================================
 class CloudinaryService {
   static const String cloudName = 'jn';
@@ -2115,18 +2115,18 @@ class SupabaseSyncService {
       final c = Supabase.instance.client;
       ready = true;
 
-      // El POS usa una sesión anónima para que RLS permita escribir
-      // productos/categorías sin exponer una service_role key.
+      // El POS usa una sesiÃ³n anÃ³nima para que RLS permita escribir
+      // productos/categorÃ­as sin exponer una service_role key.
       if (c.auth.currentSession == null) {
         try {
           await c.auth.signInAnonymously();
         } catch (authError) {
-          debugPrint('Supabase Auth anónimo no disponible: $authError');
+          debugPrint('Supabase Auth anÃ³nimo no disponible: $authError');
         }
       }
 
       final session = c.auth.currentSession;
-      debugPrint('Supabase inicializado. Sesión POS: ${session != null ? 'OK' : 'NO'}');
+      debugPrint('Supabase inicializado. SesiÃ³n POS: ${session != null ? 'OK' : 'NO'}');
     } catch (e) {
       ready = false;
       debugPrint('Supabase no disponible: $e');
@@ -2160,12 +2160,12 @@ class SupabaseSyncService {
     final c = client;
     if (c == null) return false;
     try {
-      // La escritura requiere sesión authenticated (anónima).
+      // La escritura requiere sesiÃ³n authenticated (anÃ³nima).
       if (c.auth.currentSession == null) {
         try { await c.auth.signInAnonymously(); } catch (_) {}
       }
       if (c.auth.currentSession == null) {
-        debugPrint('SYNC producto: sin sesión autenticada');
+        debugPrint('SYNC producto: sin sesiÃ³n autenticada');
         return false;
       }
 
@@ -2238,7 +2238,7 @@ class SupabaseSyncService {
       }
       return true;
     } catch (e) {
-      debugPrint('Supabase categoría pendiente: $e');
+      debugPrint('Supabase categorÃ­a pendiente: $e');
       return false;
     }
   }
@@ -2247,7 +2247,7 @@ class SupabaseSyncService {
     if (_syncing) return;
     _syncing = true;
     try {
-      // Si la app arrancó sin internet, reintentamos inicializar/auth al volver a tener red.
+      // Si la app arrancÃ³ sin internet, reintentamos inicializar/auth al volver a tener red.
       if (!ready) {
         await initialize();
       }
@@ -2257,7 +2257,7 @@ class SupabaseSyncService {
       for (final original in products) {
         final p = Map<String, dynamic>.from(original);
 
-        // 1) Si la imagen aún está solo en local, primero la subimos a Cloudinary.
+        // 1) Si la imagen aÃºn estÃ¡ solo en local, primero la subimos a Cloudinary.
         if ((p['imagen_url']?.toString() ?? '').trim().isEmpty &&
             (p['imagen_base64']?.toString() ?? '').trim().isNotEmpty) {
           final urlCloudinary = await uploadBase64(p['imagen_base64'].toString());
@@ -2271,7 +2271,7 @@ class SupabaseSyncService {
           }
         }
 
-        // 2) Solo después de tener la URL, sincronizamos el registro en Supabase.
+        // 2) Solo despuÃ©s de tener la URL, sincronizamos el registro en Supabase.
         final ok = await upsertProduct(p).timeout(const Duration(seconds: 15), onTimeout: () => false);
         await db.marcarProductoSincronizado(
           p['id'].toString(),
@@ -2291,7 +2291,7 @@ class SupabaseSyncService {
 // APP PRINCIPAL
 // ============================================
 
-/// Señal global para sincronizar automáticamente los productos en todas las pantallas.
+/// SeÃ±al global para sincronizar automÃ¡ticamente los productos en todas las pantallas.
 final ValueNotifier<int> productosVersion = ValueNotifier<int>(0);
 final ValueNotifier<int> ventasVersion = ValueNotifier<int>(0);
 
@@ -2312,7 +2312,7 @@ class _MiAppState extends State<MiApp> {
     showGeneralDialog(
       context: navContext,
       barrierDismissible: true,
-      barrierLabel: 'Cerrar menú',
+      barrierLabel: 'Cerrar menÃº',
       barrierColor: Colors.black.withValues(alpha: 0.48),
       transitionDuration: const Duration(milliseconds: 260),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
@@ -2545,7 +2545,7 @@ return content;
           ),
           bottomNavigationBar: LayoutBuilder(
             builder: (context, constraints) {
-              if (constraints.maxWidth >= 480) return const SizedBox.shrink();
+              if (constraints.maxWidth >= 600) return const SizedBox.shrink();
               return _buildMobileNav();
             },
           ),
@@ -2610,7 +2610,7 @@ return content;
                 child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(Icons.apps_rounded, size: 22, color: muted),
                   const SizedBox(height: 4),
-                  Text('Más', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w700)),
+                  Text('MÃ¡s', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w700)),
                 ]),
               )),
             ]),
@@ -2623,7 +2623,7 @@ return content;
 }
 
 // ============================================
-// MENÚ GLOBAL - PANEL FLOTANTE ELEVADO
+// MENÃš GLOBAL - PANEL FLOTANTE ELEVADO
 // ============================================
 class SidebarMenu extends StatefulWidget {
   final bool modoOscuro;
@@ -2754,7 +2754,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
                             children: [
                               Text('Administrador', style: TextStyle(color: text, fontWeight: FontWeight.w800, fontSize: 12)),
                               const SizedBox(height: 2),
-                              Text('Sesión activa · Local', style: TextStyle(color: muted, fontSize: 9)),
+                              Text('SesiÃ³n activa Â· Local', style: TextStyle(color: muted, fontSize: 9)),
                             ],
                           ),
                         ),
@@ -2775,31 +2775,31 @@ class _SidebarMenuState extends State<SidebarMenu> {
                     _menuItem('pos', Icons.point_of_sale_rounded, 'Punto de venta', 'Vender y cobrar', text, muted, border, violet, dark),
                     _menuItem('dashboard', Icons.grid_view_rounded, 'Dashboard', 'Resumen del negocio', text, muted, border, violet, dark),
                     const SizedBox(height: 12),
-                    _sectionLabel('OPERACIÓN', muted),
+                    _sectionLabel('OPERACIÃ“N', muted),
                     _menuItem('inventario', Icons.inventory_2_outlined, 'Inventario', 'Productos y existencias', text, muted, border, violet, dark),
-                    _menuItem('categorias', Icons.sell_outlined, 'Categorías', 'Organiza tu catálogo', text, muted, border, violet, dark),
+                    _menuItem('categorias', Icons.sell_outlined, 'CategorÃ­as', 'Organiza tu catÃ¡logo', text, muted, border, violet, dark),
                     _menuItem('clientes', Icons.groups_rounded, 'Clientes', 'Agenda y compradores', text, muted, border, violet, dark),
                     _menuItem('proveedores', Icons.local_shipping_outlined, 'Proveedores', 'Compras y abastecimiento', text, muted, border, violet, dark),
-                    _menuItem('compras', Icons.shopping_cart_checkout_rounded, 'Compras', 'Entradas de mercancía', text, muted, border, violet, dark),
+                    _menuItem('compras', Icons.shopping_cart_checkout_rounded, 'Compras', 'Entradas de mercancÃ­a', text, muted, border, violet, dark),
                     const SizedBox(height: 12),
                     _sectionLabel('CONTROL', muted),
                     _menuItem('caja', Icons.account_balance_wallet_outlined, 'Caja', 'Movimientos y cierre', text, muted, border, violet, dark),
                     _menuItem('reportes', Icons.bar_chart_rounded, 'Reportes', 'Ventas y rendimiento', text, muted, border, violet, dark),
-                    _menuItem('estadisticas', Icons.insights_rounded, 'Estadísticas', 'Indicadores del negocio', text, muted, border, violet, dark),
+                    _menuItem('estadisticas', Icons.insights_rounded, 'EstadÃ­sticas', 'Indicadores del negocio', text, muted, border, violet, dark),
                     const SizedBox(height: 12),
                     const SizedBox(height: 12),
                     _sectionLabel('TIENDA ONLINE', muted),
                     _menuItem('tienda', Icons.storefront_rounded, 'Tienda virtual', 'Vista de la tienda para clientes', text, muted, border, violet, dark),
                     _menuItem('tienda_admin', Icons.dashboard_customize_rounded, 'Administrar tienda', 'Banners, destacados y portada', text, muted, border, violet, dark),
-                    _sectionLabel('CONFIGURACIÓN POS', muted),
-                    _menuItem('impresora', Icons.print_outlined, 'Impresora', 'Prueba y conexión de impresión', text, muted, border, violet, dark),
-                    _menuItem('configurar_ticket', Icons.receipt_long_outlined, 'Configurar ticket', 'Empresa, impuestos y diseño', text, muted, border, violet, dark),
-                    _menuItem('codigos_barras', Icons.qr_code_2_rounded, 'Códigos de barras', 'Escanear, generar e imprimir etiquetas', text, muted, border, violet, dark),
+                    _sectionLabel('CONFIGURACIÃ“N POS', muted),
+                    _menuItem('impresora', Icons.print_outlined, 'Impresora', 'Prueba y conexiÃ³n de impresiÃ³n', text, muted, border, violet, dark),
+                    _menuItem('configurar_ticket', Icons.receipt_long_outlined, 'Configurar ticket', 'Empresa, impuestos y diseÃ±o', text, muted, border, violet, dark),
+                    _menuItem('codigos_barras', Icons.qr_code_2_rounded, 'CÃ³digos de barras', 'Escanear, generar e imprimir etiquetas', text, muted, border, violet, dark),
                     _menuItem('variantes', Icons.tune_rounded, 'Variantes', 'Tallas, colores y opciones', text, muted, border, violet, dark),
-                    _menuItem('metodos_pago', Icons.credit_card_rounded, 'Métodos de pago', 'Efectivo, tarjeta y transferencias', text, muted, border, violet, dark),
+                    _menuItem('metodos_pago', Icons.credit_card_rounded, 'MÃ©todos de pago', 'Efectivo, tarjeta y transferencias', text, muted, border, violet, dark),
                     const SizedBox(height: 12),
                     _sectionLabel('SISTEMA', muted),
-                    _menuItem('configuracion', Icons.settings_outlined, 'Configuración', 'Preferencias del sistema', text, muted, border, violet, dark),
+                    _menuItem('configuracion', Icons.settings_outlined, 'ConfiguraciÃ³n', 'Preferencias del sistema', text, muted, border, violet, dark),
                     _menuItem('perfil', Icons.manage_accounts_outlined, 'Perfil', 'Cuenta y datos', text, muted, border, violet, dark),
                     _menuItem('backup', Icons.cloud_sync_outlined, 'Copias de seguridad', 'Respaldo local', text, muted, border, violet, dark),
                     const SizedBox(height: 12),
@@ -2830,7 +2830,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
                 children: [
                   Icon(Icons.offline_bolt_rounded, color: violet, size: 17),
                   const SizedBox(width: 8),
-                  Expanded(child: Text('Offline + nube · SINTHETIX PRO', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w600))),
+                  Expanded(child: Text('Offline + nube Â· SINTHETIX PRO', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w600))),
                   Text('7.0', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w800)),
                 ],
               ),
@@ -3312,7 +3312,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
         _tallas = tallasActualizadas;
         _colores = coloresActualizados;
 
-        // Mantener búsqueda/filtros y reconstruir resultados con los datos nuevos.
+        // Mantener bÃºsqueda/filtros y reconstruir resultados con los datos nuevos.
         final q = _buscador.text.trim().toLowerCase();
         if (q.isNotEmpty) {
           busqueda = listaProductos.where((prod) {
@@ -3410,7 +3410,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
 
   void _cobrar() {
     if (carrito.isEmpty) {
-      _snack('Carrito vacío', AppColors.warning);
+      _snack('Carrito vacÃ­o', AppColors.warning);
       return;
     }
     showModalBottomSheet(
@@ -3456,7 +3456,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
         'ganancia_total': gananciaTotal,
         'metodo_pago': metodo,
         'moneda': 'USD',
-        'cliente_nombre': nombre.isNotEmpty ? nombre : 'Público General',
+        'cliente_nombre': nombre.isNotEmpty ? nombre : 'PÃºblico General',
         'cliente_telefono': telefono,
         'cliente_cedula': cedula,
         'estado': 'Pagada',
@@ -3539,7 +3539,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
         try {
           pdfPath = await _ticketService.generarPDFTicket(
             numeroFactura: fac,
-            clienteNombre: nombre.isNotEmpty ? nombre : 'Público General',
+            clienteNombre: nombre.isNotEmpty ? nombre : 'PÃºblico General',
             clienteTelefono: telefono,
             metodoPago: metodo,
             total: totalVenta,
@@ -3606,7 +3606,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
               ),
               SizedBox(height: isTablet ? 20 : 16),
               Text(
-                '¡VENTA EXITOSA!',
+                'Â¡VENTA EXITOSA!',
                 style: TextStyle(
                   color: AppColors.text(isDark),
                   fontSize: isTablet ? 22 : 18,
@@ -3633,7 +3633,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                     _buildDetalleVenta(
                       icon: Icons.person_outline_rounded,
                       label: 'Cliente',
-                      value: nombre.isEmpty ? 'Público General' : nombre,
+                      value: nombre.isEmpty ? 'PÃºblico General' : nombre,
                       isDark: isDark,
                     ),
                     const SizedBox(height: 8),
@@ -3804,20 +3804,20 @@ class _EscanerVentasState extends State<EscanerVentas> {
   void _enviarWhatsAppCliente(
       String nombre, String telefono, String factura, double totalVenta) {
     if (telefono.isEmpty) {
-      _snack('El cliente no tiene número de teléfono', AppColors.warning);
+      _snack('El cliente no tiene nÃºmero de telÃ©fono', AppColors.warning);
       return;
     }
     String phone = telefono.replaceAll(RegExp(r'[^0-9]'), '');
     if (phone.startsWith('0')) {
       phone = '58${phone.substring(1)}';
     }
-    String message = "🛍️ *SINTHETIX - COMPROBANTE DE VENTA*\n\n";
-    message += "📄 Factura: $factura\n";
-    message += "👤 Cliente: $nombre\n";
-    message += "💰 Total: \$${totalVenta.toStringAsFixed(2)}\n";
+    String message = "ðŸ›ï¸ *SINTHETIX - COMPROBANTE DE VENTA*\n\n";
+    message += "ðŸ“„ Factura: $factura\n";
+    message += "ðŸ‘¤ Cliente: $nombre\n";
+    message += "ðŸ’° Total: \$${totalVenta.toStringAsFixed(2)}\n";
     message +=
-        "📅 Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}\n\n";
-    message += "¡Gracias por su compra! 🎉";
+        "ðŸ“… Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}\n\n";
+    message += "Â¡Gracias por su compra! ðŸŽ‰";
 
     final whatsappUrl =
         "https://wa.me/$phone?text=${Uri.encodeComponent(message)}";
@@ -3926,19 +3926,19 @@ class _EscanerVentasState extends State<EscanerVentas> {
         Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
           Text('SINTHETIX PRO', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: ink, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: -.2)),
           const SizedBox(height: 3),
-          Row(children: [Container(width: 7, height: 7, decoration: const BoxDecoration(color: AppColors.success, shape: BoxShape.circle)), const SizedBox(width: 6), Flexible(child: Text('Punto de venta · Local', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 9.5, fontWeight: FontWeight.w600)))])
+          Row(children: [Container(width: 7, height: 7, decoration: const BoxDecoration(color: AppColors.success, shape: BoxShape.circle)), const SizedBox(width: 6), Flexible(child: Text('Punto de venta Â· Local', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 9.5, fontWeight: FontWeight.w600)))])
         ])),
       ]),
       actions: [
         IconButton(tooltip: 'Sincronizar', onPressed: () => SupabaseSyncService.syncPendingProducts(), icon: Icon(Icons.sync_rounded, color: muted, size: 21)),
-        PopupMenuButton<String>(tooltip: 'Más opciones', icon: Icon(Icons.more_vert_rounded, color: ink), onSelected: (v) {
+        PopupMenuButton<String>(tooltip: 'MÃ¡s opciones', icon: Icon(Icons.more_vert_rounded, color: ink), onSelected: (v) {
           if (v == 'dashboard') widget.onNavigateToDashboard();
           if (v == 'tienda') { Navigator.pop(context); }
           if (v == 'config') { Navigator.pop(context); widget.onAbrirSidebar(); }
         }, itemBuilder: (_) => const [
           PopupMenuItem(value: 'dashboard', child: ListTile(leading: Icon(Icons.dashboard_outlined), title: Text('Resumen'))),
           PopupMenuItem(value: 'tienda', child: ListTile(leading: Icon(Icons.storefront_outlined), title: Text('Tienda'))),
-          PopupMenuItem(value: 'config', child: ListTile(leading: Icon(Icons.settings_outlined), title: Text('Configuración'))),
+          PopupMenuItem(value: 'config', child: ListTile(leading: Icon(Icons.settings_outlined), title: Text('ConfiguraciÃ³n'))),
         ]),
         const SizedBox(width: 8),
       ],
@@ -4147,12 +4147,12 @@ class _EscanerVentasState extends State<EscanerVentas> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Catálogo',
+                      'CatÃ¡logo',
                       style: TextStyle(color: ink, fontSize: 19, fontWeight: FontWeight.w900),
                     ),
                   ),
                   Text(
-                    '${listaProductos.length} artículos',
+                    '${listaProductos.length} artÃ­culos',
                     style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w700),
                   ),
                 ],
@@ -4241,7 +4241,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                   onPressed: _limpiarBusqueda,
                   icon: Icon(Icons.close_rounded, color: muted, size: 18),
                 ),
-          hintText: 'Buscar producto, código o nombre...',
+          hintText: 'Buscar producto, cÃ³digo o nombre...',
           hintStyle: TextStyle(color: muted, fontSize: 11),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 14),
@@ -4473,7 +4473,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                           Text(
                             carrito.isEmpty
                                 ? 'Agrega productos al pedido'
-                                : '$units unidades · ${carrito.length} líneas',
+                                : '$units unidades Â· ${carrito.length} lÃ­neas',
                             style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w600),
                           ),
                         ],
@@ -4509,12 +4509,12 @@ class _EscanerVentasState extends State<EscanerVentas> {
                             ),
                             const SizedBox(height: 14),
                             Text(
-                              'La venta está vacía',
+                              'La venta estÃ¡ vacÃ­a',
                               style: TextStyle(color: ink, fontSize: 14, fontWeight: FontWeight.w900),
                             ),
                             const SizedBox(height: 5),
                             Text(
-                              'Selecciona productos del catálogo',
+                              'Selecciona productos del catÃ¡logo',
                               style: TextStyle(color: muted, fontSize: 10),
                             ),
                           ],
@@ -4747,7 +4747,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '$units unidades · revisar venta',
+                            '$units unidades Â· revisar venta',
                             style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w700),
                           ),
                           Text(
@@ -4875,11 +4875,11 @@ class _EscanerVentasState extends State<EscanerVentas> {
 
 }
 // ============================================
-// CONTINUACIÓN - ETAPA 4 de 6
+// CONTINUACIÃ“N - ETAPA 4 de 6
 // ============================================
 
 // ============================================
-// PANTALLA DE COBRO - DISEÑO PROFESIONAL
+// PANTALLA DE COBRO - DISEÃ‘O PROFESIONAL
 // ============================================
 class PantallaCobro extends StatefulWidget {
   final List<Map<String, dynamic>> carrito;
@@ -4920,13 +4920,13 @@ class _PantallaCobroState extends State<PantallaCobro> {
     try {
       final metodos = await _db.getMetodosPago();
       if (metodos.isNotEmpty) { _metodosPago = metodos; _metodo = (metodos.first['nombre'] ?? 'Efectivo').toString(); }
-    } catch (e) { debugPrint('Error cargando métodos de pago: $e'); }
+    } catch (e) { debugPrint('Error cargando mÃ©todos de pago: $e'); }
     if (mounted) setState(() => _cargandoMetodos = false);
   }
 
   Future<void> _buscarClientePorCedula() async {
     final cedula = _cedulaCtrl.text.trim();
-    if (cedula.isEmpty) { _mostrarSnackbar('Escribe la identificación del cliente', Colors.orange); return; }
+    if (cedula.isEmpty) { _mostrarSnackbar('Escribe la identificaciÃ³n del cliente', Colors.orange); return; }
     setState(() => _buscandoCliente = true);
     try {
       final cliente = await _db.buscarClientePorCedula(cedula);
@@ -4935,7 +4935,7 @@ class _PantallaCobroState extends State<PantallaCobro> {
         _mostrarSnackbar('Cliente encontrado', Colors.green);
       } else {
         setState(() => _clienteEncontrado = false);
-        _mostrarSnackbar('Cliente nuevo: se registrará al confirmar', violet);
+        _mostrarSnackbar('Cliente nuevo: se registrarÃ¡ al confirmar', violet);
       }
     } catch (e) { _mostrarSnackbar('No se pudo buscar el cliente', Colors.red); }
     if (mounted) setState(() => _buscandoCliente = false);
@@ -4981,18 +4981,18 @@ class _PantallaCobroState extends State<PantallaCobro> {
         Padding(padding: const EdgeInsets.fromLTRB(22, 14, 14, 14), child: Row(children: [
           Container(width: 46, height: 46, decoration: BoxDecoration(gradient: const LinearGradient(colors: [violet, violet2]), borderRadius: BorderRadius.circular(15)), child: const Icon(Icons.credit_score_rounded, color: Colors.white, size: 23)),
           const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Finalizar venta', style: TextStyle(color: text, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -.4)), const SizedBox(height: 3), Text('${widget.carrito.length} productos · ${widget.formatearPrecio(widget.total)}', style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w600))])),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Finalizar venta', style: TextStyle(color: text, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -.4)), const SizedBox(height: 3), Text('${widget.carrito.length} productos Â· ${widget.formatearPrecio(widget.total)}', style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w600))])),
           Material(color: dark ? Colors.white.withValues(alpha: .06) : const Color(0xFFF0EEF5), borderRadius: BorderRadius.circular(13), child: InkWell(onTap: () => Navigator.of(context).pop(), borderRadius: BorderRadius.circular(13), child: const SizedBox(width: 44, height: 44, child: Icon(Icons.close_rounded, size: 20)))),
         ])),
         Divider(height: 1, color: border),
         Expanded(child: LayoutBuilder(builder: (context, constraints) {
           final desktop = constraints.maxWidth >= 980;
           final form = SingleChildScrollView(padding: EdgeInsets.fromLTRB(desktop ? 24 : 18, 18, desktop ? 12 : 18, 22), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _sectionHeader('Cliente', 'Identifica al comprador o usa Público general', Icons.person_outline_rounded, text, muted),
+            _sectionHeader('Cliente', 'Identifica al comprador o usa PÃºblico general', Icons.person_outline_rounded, text, muted),
             const SizedBox(height: 10),
             _buildClienteCard(dark, card, soft, text, muted, border),
             const SizedBox(height: 18),
-            _sectionHeader('Pago', 'Elige cómo se registra esta venta', Icons.payments_outlined, text, muted),
+            _sectionHeader('Pago', 'Elige cÃ³mo se registra esta venta', Icons.payments_outlined, text, muted),
             const SizedBox(height: 10),
             _buildCurrencyAndPayment(dark, card, soft, text, muted, border),
             const SizedBox(height: 18),
@@ -5014,13 +5014,13 @@ class _PantallaCobroState extends State<PantallaCobro> {
 
   Widget _buildClienteCard(bool dark, Color card, Color soft, Color text, Color muted, Color border) {
     return Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(20), border: Border.all(color: border), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: dark ? .12 : .035), blurRadius: 18, offset: const Offset(0, 8))]), child: Column(children: [
-      Row(children: [Container(width: 44, height: 44, decoration: BoxDecoration(gradient: const LinearGradient(colors: [violet, violet2]), borderRadius: BorderRadius.circular(14)), child: Icon(_clienteEncontrado ? Icons.person_rounded : Icons.groups_rounded, color: Colors.white, size: 22)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_clienteEncontrado ? 'Cliente identificado' : 'Público general', style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(_clienteEncontrado ? _nombreCtrl.text : 'Venta sin datos de cliente', style: TextStyle(color: muted, fontSize: 9.5, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)])), TextButton(onPressed: () { setState(() { _clienteEncontrado = false; _cedulaCtrl.clear(); _nombreCtrl.clear(); _telefonoCtrl.clear(); _direccionCtrl.clear(); }); }, child: Text('Limpiar', style: TextStyle(color: violet, fontWeight: FontWeight.w800, fontSize: 10)))]),
+      Row(children: [Container(width: 44, height: 44, decoration: BoxDecoration(gradient: const LinearGradient(colors: [violet, violet2]), borderRadius: BorderRadius.circular(14)), child: Icon(_clienteEncontrado ? Icons.person_rounded : Icons.groups_rounded, color: Colors.white, size: 22)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_clienteEncontrado ? 'Cliente identificado' : 'PÃºblico general', style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(_clienteEncontrado ? _nombreCtrl.text : 'Venta sin datos de cliente', style: TextStyle(color: muted, fontSize: 9.5, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)])), TextButton(onPressed: () { setState(() { _clienteEncontrado = false; _cedulaCtrl.clear(); _nombreCtrl.clear(); _telefonoCtrl.clear(); _direccionCtrl.clear(); }); }, child: Text('Limpiar', style: TextStyle(color: violet, fontWeight: FontWeight.w800, fontSize: 10)))]),
       const SizedBox(height: 13),
-      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: _field(_cedulaCtrl, 'Identificación', Icons.badge_outlined, dark, text, muted, border, onSubmitted: (_) => _buscarClientePorCedula())), const SizedBox(width: 8), SizedBox(width: 50, height: 50, child: Material(color: violet, borderRadius: BorderRadius.circular(14), child: InkWell(onTap: _buscandoCliente ? null : _buscarClientePorCedula, borderRadius: BorderRadius.circular(14), child: Center(child: _buscandoCliente ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.search_rounded, color: Colors.white, size: 21))))) ]),
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: _field(_cedulaCtrl, 'IdentificaciÃ³n', Icons.badge_outlined, dark, text, muted, border, onSubmitted: (_) => _buscarClientePorCedula())), const SizedBox(width: 8), SizedBox(width: 50, height: 50, child: Material(color: violet, borderRadius: BorderRadius.circular(14), child: InkWell(onTap: _buscandoCliente ? null : _buscarClientePorCedula, borderRadius: BorderRadius.circular(14), child: Center(child: _buscandoCliente ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.search_rounded, color: Colors.white, size: 21))))) ]),
       const SizedBox(height: 9),
       _field(_nombreCtrl, 'Nombre completo', Icons.person_outline_rounded, dark, text, muted, border),
       const SizedBox(height: 9),
-      Row(children: [Expanded(child: _field(_telefonoCtrl, 'Teléfono', Icons.phone_outlined, dark, text, muted, border, keyboardType: TextInputType.phone)), const SizedBox(width: 9), Expanded(child: _field(_direccionCtrl, 'Dirección', Icons.location_on_outlined, dark, text, muted, border))]),
+      Row(children: [Expanded(child: _field(_telefonoCtrl, 'TelÃ©fono', Icons.phone_outlined, dark, text, muted, border, keyboardType: TextInputType.phone)), const SizedBox(width: 9), Expanded(child: _field(_direccionCtrl, 'DirecciÃ³n', Icons.location_on_outlined, dark, text, muted, border))]),
     ]));
   }
 
@@ -5169,7 +5169,7 @@ class _PantallaCobroState extends State<PantallaCobro> {
   Widget _buildSummaryCard(bool dark, Color card, Color soft, Color text, Color muted, Color border) {
     return Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(22), border: Border.all(color: border), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: dark ? .12 : .04), blurRadius: 22, offset: const Offset(0, 10))]), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [Container(width: 38, height: 38, decoration: BoxDecoration(color: violet.withValues(alpha: .10), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.receipt_long_rounded, color: violet, size: 19)), const SizedBox(width: 10), Expanded(child: Text('Resumen del pedido', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w900)))]), const SizedBox(height: 14),
-      ...widget.carrito.map((item) { final q=(item['cantidad'] as num?)?.toInt()??1; final p=(item['precio'] as num?)?.toDouble()??0; return Padding(padding: const EdgeInsets.only(bottom: 10), child: Row(children: [Container(width: 36, height: 36, decoration: BoxDecoration(color: soft, borderRadius: BorderRadius.circular(10)), clipBehavior: Clip.antiAlias, child: ImagenProducto(imagenBase64: item['imagen_base64']?.toString(), width: 36, height: 36, fit: BoxFit.cover)), const SizedBox(width: 8), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(item['nombre']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 10, fontWeight: FontWeight.w800)), const SizedBox(height: 2), Text('$q × ${widget.formatearPrecio(p)}', style: TextStyle(color: muted, fontSize: 9))])), Text(widget.formatearPrecio(p*q), style: TextStyle(color: text, fontSize: 10, fontWeight: FontWeight.w900))])); }),
+      ...widget.carrito.map((item) { final q=(item['cantidad'] as num?)?.toInt()??1; final p=(item['precio'] as num?)?.toDouble()??0; return Padding(padding: const EdgeInsets.only(bottom: 10), child: Row(children: [Container(width: 36, height: 36, decoration: BoxDecoration(color: soft, borderRadius: BorderRadius.circular(10)), clipBehavior: Clip.antiAlias, child: ImagenProducto(imagenBase64: item['imagen_base64']?.toString(), width: 36, height: 36, fit: BoxFit.cover)), const SizedBox(width: 8), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(item['nombre']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 10, fontWeight: FontWeight.w800)), const SizedBox(height: 2), Text('$q Ã— ${widget.formatearPrecio(p)}', style: TextStyle(color: muted, fontSize: 9))])), Text(widget.formatearPrecio(p*q), style: TextStyle(color: text, fontSize: 10, fontWeight: FontWeight.w900))])); }),
       Divider(color: border), const SizedBox(height: 8), Row(children: [Text('Total', style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w800)), const Spacer(), Text('${simbolosMoneda[_moneda] ?? '\$'} ${_totalEnMoneda().toStringAsFixed(2)}', style: TextStyle(color: text, fontSize: 23, fontWeight: FontWeight.w900))]), const SizedBox(height: 8), Container(width: double.infinity, padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: violet.withValues(alpha: .07), borderRadius: BorderRadius.circular(12)), child: Row(children: [const Icon(Icons.lock_outline_rounded, color: violet, size: 16), const SizedBox(width: 7), Expanded(child: Text('Venta local y segura', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w700)))])),
     ]));
   }
@@ -5692,7 +5692,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       ),
                                     ),
                                     const SizedBox(width: 6),
-                                    Text('ONLINE · LOCAL', style: TextStyle(
+                                    Text('ONLINE Â· LOCAL', style: TextStyle(
                                       color: AppColors.subtext(isDark),
                                       fontSize: 9,
                                       fontWeight: FontWeight.w700,
@@ -5711,7 +5711,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ),
                                 const SizedBox(height: 5),
                                 Text(
-                                  'Todo lo importante de tu operación en una sola vista.',
+                                  'Todo lo importante de tu operaciÃ³n en una sola vista.',
                                   style: TextStyle(
                                     color: AppColors.subtext(isDark),
                                     fontSize: 12,
@@ -5751,7 +5751,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ],
                       ),
                       const SizedBox(height: 20),
-                      // Acciones rápidas.
+                      // Acciones rÃ¡pidas.
                       LayoutBuilder(builder: (context, c) {
                         final twoColumns = c.maxWidth >= 680;
                         final items = [
@@ -5778,7 +5778,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // KPIs grandes, con jerarquía más marcada.
+                // KPIs grandes, con jerarquÃ­a mÃ¡s marcada.
                 LayoutBuilder(builder: (context, c) {
                   final count = desktop ? 4 : 2;
                   final gap = 10.0;
@@ -5787,21 +5787,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     _executiveMetric('Ventas', '\$${totalVentasHoy.toStringAsFixed(2)}', '$cantidadVentasHoy transacciones', Icons.trending_up_rounded, AppColors.primary, isDark),
                     _executiveMetric('Ganancia', '\$${gananciaTotalVentas.toStringAsFixed(2)}', 'Margen ${_margenPorcentaje.toStringAsFixed(1)}%', Icons.savings_rounded, AppColors.success, isDark),
                     _executiveMetric('Este mes', '\$${totalVentasMes.toStringAsFixed(2)}', 'Acumulado mensual', Icons.calendar_today_rounded, AppColors.secondary, isDark),
-                    _executiveMetric('Ticket medio', '\$${_ticketPromedio.toStringAsFixed(2)}', 'Por operación', Icons.receipt_long_rounded, AppColors.info, isDark),
+                    _executiveMetric('Ticket medio', '\$${_ticketPromedio.toStringAsFixed(2)}', 'Por operaciÃ³n', Icons.receipt_long_rounded, AppColors.info, isDark),
                   ];
                   return Wrap(spacing: gap, runSpacing: gap, children: cards.map((x) => SizedBox(width: w, child: x)).toList());
                 }),
                 const SizedBox(height: 14),
 
-                // Zona analítica principal.
+                // Zona analÃ­tica principal.
                 if (desktop)
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Expanded(flex: 7, child: _panel(isDark, title: 'Rendimiento de ventas', subtitle: 'Ingresos distribuidos durante el día', icon: Icons.multiline_chart_rounded, child: SizedBox(height: 290, child: _graficoVentasHora(isDark, ventasHora, maxHora)))),
+                    Expanded(flex: 7, child: _panel(isDark, title: 'Rendimiento de ventas', subtitle: 'Ingresos distribuidos durante el dÃ­a', icon: Icons.multiline_chart_rounded, child: SizedBox(height: 290, child: _graficoVentasHora(isDark, ventasHora, maxHora)))),
                     const SizedBox(width: 12),
                     Expanded(flex: 4, child: _inventarioPanel(isDark)),
                   ])
                 else ...[
-                  _panel(isDark, title: 'Rendimiento de ventas', subtitle: 'Ingresos distribuidos durante el día', icon: Icons.multiline_chart_rounded, child: SizedBox(height: 255, child: _graficoVentasHora(isDark, ventasHora, maxHora))),
+                  _panel(isDark, title: 'Rendimiento de ventas', subtitle: 'Ingresos distribuidos durante el dÃ­a', icon: Icons.multiline_chart_rounded, child: SizedBox(height: 255, child: _graficoVentasHora(isDark, ventasHora, maxHora))),
                   const SizedBox(height: 12),
                   _inventarioPanel(isDark),
                 ],
@@ -5824,7 +5824,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _panel(
                   isDark,
                   title: 'Centro operativo',
-                  subtitle: 'Salud actual de inventario y operación',
+                  subtitle: 'Salud actual de inventario y operaciÃ³n',
                   icon: Icons.radar_rounded,
                   child: Wrap(
                     spacing: 10,
@@ -6128,7 +6128,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return _panel(
       isDark,
-      title: 'Catálogo e inventario',
+      title: 'CatÃ¡logo e inventario',
       subtitle: 'Cantidad y estado de tus productos',
       icon: Icons.inventory_2_outlined,
       child: Column(
@@ -6140,7 +6140,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ]),
           const SizedBox(height: 8),
           Row(children: [
-            Expanded(child: _dashboardCount('Categorías', '$categoriasActivas', Icons.category_rounded, AppColors.info, isDark)),
+            Expanded(child: _dashboardCount('CategorÃ­as', '$categoriasActivas', Icons.category_rounded, AppColors.info, isDark)),
             const SizedBox(width: 8),
             Expanded(child: _dashboardCount('Unidades', '$unidades', Icons.all_inbox_rounded, AppColors.secondary, isDark)),
           ]),
@@ -6237,11 +6237,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _topProductosPanel(bool isDark) {
     return _panel(
       isDark,
-      title: 'Productos más vendidos',
+      title: 'Productos mÃ¡s vendidos',
       subtitle: 'Los productos con mayor movimiento',
       icon: Icons.local_fire_department_outlined,
       child: productosMasVendidos.isEmpty
-          ? _emptyDashboard('Aún no hay ventas registradas', isDark)
+          ? _emptyDashboard('AÃºn no hay ventas registradas', isDark)
           : Column(
               children: productosMasVendidos.take(7).toList().asMap().entries.map((entry) {
                 final index = entry.key;
@@ -6278,11 +6278,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final total = metodos.fold<double>(0, (sum, e) => sum + e.value);
     return _panel(
       isDark,
-      title: 'Métodos de pago',
-      subtitle: 'Distribución de las ventas de hoy',
+      title: 'MÃ©todos de pago',
+      subtitle: 'DistribuciÃ³n de las ventas de hoy',
       icon: Icons.payments_outlined,
       child: metodos.isEmpty
-          ? _emptyDashboard('Todavía no hay pagos registrados', isDark)
+          ? _emptyDashboard('TodavÃ­a no hay pagos registrados', isDark)
           : Column(
               children: [
                 SizedBox(
@@ -6485,7 +6485,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(prod['nombre']?.toString() ?? 'Sin nombre', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: ink, fontSize: 11, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 4),
-                    Text('${prod['codigo_barras'] ?? 'Sin código'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 8, fontWeight: FontWeight.w600)),
+                    Text('${prod['codigo_barras'] ?? 'Sin cÃ³digo'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 8, fontWeight: FontWeight.w600)),
                     const Spacer(),
                     Row(children: [
                       Expanded(child: Text(_precioDashboard(price), style: TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w900))),
@@ -6507,14 +6507,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             mostrarDialogoProducto(productoEditar: prod);
                           } else if (action == 'copy') {
                             Clipboard.setData(ClipboardData(text: (prod['codigo_barras'] ?? '').toString()));
-                            mostrarSnackBar('Código copiado', AppColors.primary);
+                            mostrarSnackBar('CÃ³digo copiado', AppColors.primary);
                           } else if (action == 'delete') {
                             eliminarProducto(prod['id'].toString());
                           }
                         },
                         itemBuilder: (_) => const [
                           PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18), SizedBox(width: 10), Text('Editar') ])),
-                          PopupMenuItem(value: 'copy', child: Row(children: [Icon(Icons.content_copy_outlined, size: 18), SizedBox(width: 10), Text('Copiar código') ])),
+                          PopupMenuItem(value: 'copy', child: Row(children: [Icon(Icons.content_copy_outlined, size: 18), SizedBox(width: 10), Text('Copiar cÃ³digo') ])),
                           PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 18, color: AppColors.danger), SizedBox(width: 10), Text('Eliminar') ])),
                         ],
                       ),
@@ -6539,7 +6539,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('Productos', style: TextStyle(color: ink, fontSize: desktop ? 24 : 20, fontWeight: FontWeight.w900, letterSpacing: -.6)),
               const SizedBox(height: 3),
-              Text('Catálogo, existencias y rentabilidad en una sola vista.', style: TextStyle(color: muted, fontSize: 10.5)),
+              Text('CatÃ¡logo, existencias y rentabilidad en una sola vista.', style: TextStyle(color: muted, fontSize: 10.5)),
             ])),
             Material(color: AppColors.primary, borderRadius: BorderRadius.circular(13), child: InkWell(borderRadius: BorderRadius.circular(13), onTap: () => mostrarDialogoProducto(), child: const Padding(padding: EdgeInsets.symmetric(horizontal: 13, vertical: 11), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.add_rounded, color: Colors.white, size: 18), SizedBox(width: 6), Text('Nuevo producto', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900))])))),
           ]),
@@ -6561,14 +6561,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: border)),
             child: Column(children: [
               Row(children: [
-                Expanded(child: Container(height: 44, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)), child: TextField(onChanged: (v) => setState(() => searchQuery = v), style: TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w600), decoration: InputDecoration(border: InputBorder.none, prefixIcon: Icon(Icons.search_rounded, color: muted, size: 19), hintText: 'Buscar por nombre, código o marca...', hintStyle: TextStyle(color: muted, fontSize: 10), contentPadding: const EdgeInsets.symmetric(vertical: 13))))),
+                Expanded(child: Container(height: 44, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)), child: TextField(onChanged: (v) => setState(() => searchQuery = v), style: TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w600), decoration: InputDecoration(border: InputBorder.none, prefixIcon: Icon(Icons.search_rounded, color: muted, size: 19), hintText: 'Buscar por nombre, cÃ³digo o marca...', hintStyle: TextStyle(color: muted, fontSize: 10), contentPadding: const EdgeInsets.symmetric(vertical: 13))))),
                 const SizedBox(width: 8),
                 SizedBox(width: 155, child: _buildFiltroDropdown(_filtroCategoria, ['Todas', ..._categorias.map((c) => c['nombre'].toString())], (v) => setState(() => _filtroCategoria = v ?? 'Todas'), isDark)),
                 const SizedBox(width: 8),
                 SizedBox(width: 145, child: _buildFiltroDropdown(_filtroStock, ['Todos', 'Con Stock', 'Stock Bajo', 'Agotados'], (v) => setState(() => _filtroStock = v ?? 'Todos'), isDark)),
               ]),
               const SizedBox(height: 8),
-              Row(children: [Icon(Icons.tune_rounded, size: 13, color: AppColors.primary), const SizedBox(width: 5), Text('${filtrados.length} resultados', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w800)), const Spacer(), Text('Vista catálogo', style: TextStyle(color: muted, fontSize: 8.5, fontWeight: FontWeight.w700))]),
+              Row(children: [Icon(Icons.tune_rounded, size: 13, color: AppColors.primary), const SizedBox(width: 5), Text('${filtrados.length} resultados', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w800)), const Spacer(), Text('Vista catÃ¡logo', style: TextStyle(color: muted, fontSize: 8.5, fontWeight: FontWeight.w700))]),
             ]),
           ),
           const SizedBox(height: 12),
@@ -6654,7 +6654,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final values = [
             _buildSalesKpi('Ventas hoy', '\$${totalVentasHoy.toStringAsFixed(2)}', '$cantidadVentasHoy operaciones', Icons.trending_up_rounded, AppColors.success, isDark),
             _buildSalesKpi('Este mes', '\$${totalVentasMes.toStringAsFixed(2)}', 'Acumulado mensual', Icons.calendar_month_rounded, AppColors.primary, isDark),
-            _buildSalesKpi('Ticket medio', '\$${_ticketPromedio.toStringAsFixed(2)}', 'Por operación', Icons.receipt_long_rounded, AppColors.info, isDark),
+            _buildSalesKpi('Ticket medio', '\$${_ticketPromedio.toStringAsFixed(2)}', 'Por operaciÃ³n', Icons.receipt_long_rounded, AppColors.info, isDark),
             _buildSalesKpi('Margen', '${_margenPorcentaje.toStringAsFixed(1)}%', 'Rentabilidad estimada', Icons.savings_rounded, AppColors.secondary, isDark),
           ];
           if (!compact) return Row(children: [for (int i = 0; i < values.length; i++) ...[Expanded(child: values[i]), if (i < values.length - 1) const SizedBox(width: 12)]]);
@@ -6665,14 +6665,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const SizedBox(height: 12),
         Container(decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: border)), clipBehavior: Clip.antiAlias, child: Column(children: [
           Container(padding: const EdgeInsets.fromLTRB(15, 13, 15, 12), color: isDark ? Colors.white.withValues(alpha: .025) : const Color(0xFFF7F9FB), child: Row(children: [Expanded(child: Text('Historial de operaciones', style: TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w900))), Text('${ventasFiltradas.length} registros', style: TextStyle(color: muted, fontSize: 8.5, fontWeight: FontWeight.w800))])),
-          if (ventasFiltradas.isEmpty) Padding(padding: const EdgeInsets.symmetric(vertical: 65), child: Column(children: [Icon(Icons.receipt_long_outlined, size: 44, color: muted), const SizedBox(height: 12), Text('No hay ventas', style: TextStyle(color: ink, fontSize: 14, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text('Las operaciones aparecerán aquí.', style: TextStyle(color: muted, fontSize: 10))]))
+          if (ventasFiltradas.isEmpty) Padding(padding: const EdgeInsets.symmetric(vertical: 65), child: Column(children: [Icon(Icons.receipt_long_outlined, size: 44, color: muted), const SizedBox(height: 12), Text('No hay ventas', style: TextStyle(color: ink, fontSize: 14, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text('Las operaciones aparecerÃ¡n aquÃ­.', style: TextStyle(color: muted, fontSize: 10))]))
           else ...ventasFiltradas.asMap().entries.map((entry) {
             final i = entry.key; final v = entry.value;
             final fecha = v['fecha'] != null ? DateTime.tryParse(v['fecha'].toString()) ?? DateTime.now() : DateTime.now();
             final totalVenta = (v['total'] as num?)?.toDouble() ?? 0;
-            final cliente = (v['cliente_nombre'] ?? 'Público General').toString();
+            final cliente = (v['cliente_nombre'] ?? 'PÃºblico General').toString();
             final factura = (v['numero_factura'] ?? 'Venta #${v['id']}').toString();
-            return Material(color: Colors.transparent, child: InkWell(onTap: () => _mostrarDetalleVenta(v), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11), child: Column(children: [Row(children: [Container(width: 42, height: 42, decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: .10), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.receipt_long_rounded, color: AppColors.primary, size: 19)), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(factura, style: TextStyle(color: ink, fontSize: 11, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(cliente, style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w700)), const SizedBox(height: 2), Text(DateFormat('dd/MM/yyyy · HH:mm').format(fecha), style: TextStyle(color: muted, fontSize: 8))])), Column(crossAxisAlignment: CrossAxisAlignment.end, children: [Text('\$${totalVenta.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Icon(Icons.chevron_right_rounded, color: muted, size: 17)])]), if (i < ventasFiltradas.length - 1) Padding(padding: const EdgeInsets.only(top: 11), child: Divider(height: 1, color: border))]))));
+            return Material(color: Colors.transparent, child: InkWell(onTap: () => _mostrarDetalleVenta(v), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11), child: Column(children: [Row(children: [Container(width: 42, height: 42, decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: .10), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.receipt_long_rounded, color: AppColors.primary, size: 19)), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(factura, style: TextStyle(color: ink, fontSize: 11, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(cliente, style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w700)), const SizedBox(height: 2), Text(DateFormat('dd/MM/yyyy Â· HH:mm').format(fecha), style: TextStyle(color: muted, fontSize: 8))])), Column(crossAxisAlignment: CrossAxisAlignment.end, children: [Text('\$${totalVenta.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Icon(Icons.chevron_right_rounded, color: muted, size: 17)])]), if (i < ventasFiltradas.length - 1) Padding(padding: const EdgeInsets.only(top: 11), child: Divider(height: 1, color: border))]))));
           }),
         ])),
       ]);
@@ -6683,7 +6683,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final isDark = widget.modoOscuro;
     final detalle = await _db.getDetalleVenta(venta['id'].toString());
     final totalVenta = (venta['total'] as num).toDouble();
-    final nombreCliente = venta['cliente_nombre'] ?? 'Público General';
+    final nombreCliente = venta['cliente_nombre'] ?? 'PÃºblico General';
     final telefonoCliente = venta['cliente_telefono'] ?? '';
     final factura = venta['numero_factura'] ?? 'Venta #${venta['id']}';
 
@@ -6838,20 +6838,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       String nombre, String telefono, String factura, double totalVenta) {
     if (telefono.isEmpty) {
       mostrarSnackBar(
-          'El cliente no tiene número de teléfono', AppColors.warning);
+          'El cliente no tiene nÃºmero de telÃ©fono', AppColors.warning);
       return;
     }
     String phone = telefono.replaceAll(RegExp(r'[^0-9]'), '');
     if (phone.startsWith('0')) {
       phone = '58${phone.substring(1)}';
     }
-    String message = "🛍️ *SINTHETIX - COMPROBANTE DE VENTA*\n\n";
-    message += "📄 Factura: $factura\n";
-    message += "👤 Cliente: $nombre\n";
-    message += "💰 Total: \$${totalVenta.toStringAsFixed(2)}\n";
+    String message = "ðŸ›ï¸ *SINTHETIX - COMPROBANTE DE VENTA*\n\n";
+    message += "ðŸ“„ Factura: $factura\n";
+    message += "ðŸ‘¤ Cliente: $nombre\n";
+    message += "ðŸ’° Total: \$${totalVenta.toStringAsFixed(2)}\n";
     message +=
-        "📅 Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}\n\n";
-    message += "¡Gracias por su compra! 🎉";
+        "ðŸ“… Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}\n\n";
+    message += "Â¡Gracias por su compra! ðŸŽ‰";
 
     final whatsappUrl =
         "https://wa.me/$phone?text=${Uri.encodeComponent(message)}";
@@ -6868,7 +6868,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: Text('Eliminar producto',
             style: TextStyle(
                 color: AppColors.text(isDark), fontWeight: FontWeight.w700)),
-        content: Text('¿Estás seguro de eliminar este producto?',
+        content: Text('Â¿EstÃ¡s seguro de eliminar este producto?',
             style: TextStyle(color: AppColors.subtext(isDark))),
         actions: [
           TextButton(
@@ -6948,14 +6948,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   subiendo = false;
                 });
                 if (cloudUrl == null) {
-                  mostrarSnackBar('Imagen guardada localmente. Se subirá cuando haya conexión.', AppColors.warning);
+                  mostrarSnackBar('Imagen guardada localmente. Se subirÃ¡ cuando haya conexiÃ³n.', AppColors.warning);
                 }
               } catch (e) {
                 setDialogState(() => subiendo = false);
               }
             }
 
-            // FUNCIÓN PARA ESCANEAR CÓDIGO
+            // FUNCIÃ“N PARA ESCANEAR CÃ“DIGO
             Future<void> escanearCodigo() async {
               final codigo = await showDialog<String>(
                 context: dialogContext,
@@ -7006,7 +7006,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // SECCIÓN IMAGEN
+                      // SECCIÃ“N IMAGEN
                       ValueListenableBuilder<String>(
                         valueListenable: imagenNotifier,
                         builder: (context, base64, child) {
@@ -7080,7 +7080,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   },
                             icon: const Icon(Icons.photo_library,
                                 color: AppColors.primary, size: 20),
-                            label: const Text('Galería',
+                            label: const Text('GalerÃ­a',
                                 style: TextStyle(
                                     color: AppColors.primary, fontSize: 13)),
                             style: OutlinedButton.styleFrom(
@@ -7098,7 +7098,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(height: 16),
                       Divider(color: AppColors.divider(isDark)),
                       const SizedBox(height: 8),
-                      // SECCIÓN INFORMACIÓN BÁSICA
+                      // SECCIÃ“N INFORMACIÃ“N BÃSICA
                       TextField(
                         controller: nombreCtrl,
                         style: TextStyle(color: AppColors.text(isDark)),
@@ -7112,7 +7112,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             controller: codigoCtrl,
                             style: TextStyle(color: AppColors.text(isDark)),
                             decoration: _inputDecoration(
-                                'Código de Barras', Icons.qr_code, isDark),
+                                'CÃ³digo de Barras', Icons.qr_code, isDark),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -7127,7 +7127,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             icon: const Icon(Icons.qr_code_scanner_rounded,
                                 color: Colors.white, size: 22),
                             onPressed: escanearCodigo,
-                            tooltip: 'Escanear código',
+                            tooltip: 'Escanear cÃ³digo',
                           ),
                         ),
                         const SizedBox(width: 4),
@@ -7148,7 +7148,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 codigoCtrl.text = codigo;
                               });
                             },
-                            tooltip: 'Generar código',
+                            tooltip: 'Generar cÃ³digo',
                           ),
                         ),
                       ]),
@@ -7240,7 +7240,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ]),
                       const SizedBox(height: 12),
-                      // SECCIÓN PRECIOS
+                      // SECCIÃ“N PRECIOS
                       Row(children: [
                         Expanded(
                           child: TextField(
@@ -7268,7 +7268,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ]),
                       const SizedBox(height: 12),
-                      // SECCIÓN STOCK
+                      // SECCIÃ“N STOCK
                       Row(children: [
                         Expanded(
                           child: TextField(
@@ -7286,7 +7286,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             style: TextStyle(color: AppColors.text(isDark)),
                             keyboardType: TextInputType.number,
                             decoration: _inputDecoration(
-                                'Stock Mínimo', Icons.warning_amber, isDark),
+                                'Stock MÃ­nimo', Icons.warning_amber, isDark),
                           ),
                         ),
                       ]),
@@ -7295,11 +7295,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         controller: descCtrl,
                         style: TextStyle(color: AppColors.text(isDark)),
                         decoration: _inputDecoration(
-                            'Descripción', Icons.description_outlined, isDark),
+                            'DescripciÃ³n', Icons.description_outlined, isDark),
                         maxLines: 2,
                       ),
                       const SizedBox(height: 12),
-                      // SECCIÓN VARIANTES
+                      // SECCIÃ“N VARIANTES
                       if (_tallas.isNotEmpty) ...[
                         Text('TALLA',
                             style: TextStyle(
@@ -7334,7 +7334,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         const SizedBox(height: 12),
                       ],
-                      // SECCIÓN CONFIGURACIÓN
+                      // SECCIÃ“N CONFIGURACIÃ“N
                       Material(
   color: Colors.transparent,
   child: SwitchListTile(
@@ -7470,7 +7470,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               mostrarSnackBar(
                                 synced
                                     ? 'Producto creado y sincronizado en Supabase'
-                                    : 'Producto guardado localmente. Quedó pendiente de sincronización.',
+                                    : 'Producto guardado localmente. QuedÃ³ pendiente de sincronizaciÃ³n.',
                                 synced ? AppColors.success : AppColors.warning,
                               );
                               return;
@@ -7575,7 +7575,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('DASHBOARD', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: ink, fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: .2)),
             const SizedBox(height: 2),
-            Text('${productos.length} productos · ${cantidadVentasHoy} ventas hoy', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 9.5, fontWeight: FontWeight.w600)),
+            Text('${productos.length} productos Â· ${cantidadVentasHoy} ventas hoy', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 9.5, fontWeight: FontWeight.w600)),
           ])),
         ]),
         actions: [
@@ -7606,11 +7606,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 // ============================================
-// CONTINUACIÓN - ETAPA 5 de 6
+// CONTINUACIÃ“N - ETAPA 5 de 6
 // ============================================
 
 // ============================================
-// FUNCIÓN MAIN
+// FUNCIÃ“N MAIN
 // ============================================
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -7632,7 +7632,7 @@ void main() async {
 }
 
 // ============================================
-// PANTALLA: CONFIGURACIÓN (MI NEGOCIO) - DISEÑO PROFESIONAL
+// PANTALLA: CONFIGURACIÃ“N (MI NEGOCIO) - DISEÃ‘O PROFESIONAL
 // ============================================
 class ConfiguracionScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -7678,7 +7678,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
       _tasaCOPCtrl.text = (prefs.getDouble('tasa_cop') ?? 4500.0).toString();
       _tasaVESCtrl.text = (prefs.getDouble('tasa_ves') ?? 60.0).toString();
     } catch (e) {
-      debugPrint('Error cargando configuración: $e');
+      debugPrint('Error cargando configuraciÃ³n: $e');
     }
     setState(() => _cargando = false);
   }
@@ -7724,7 +7724,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Configuración guardada exitosamente',
+            content: const Text('ConfiguraciÃ³n guardada exitosamente',
                 style: TextStyle(color: Colors.white)),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
@@ -7734,7 +7734,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
         );
       }
     } catch (e) {
-      debugPrint('Error guardando configuración: $e');
+      debugPrint('Error guardando configuraciÃ³n: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -7851,15 +7851,15 @@ const SizedBox(width: 14),
                     const SizedBox(height: 20),
                     _buildTextField(_nombreCtrl, 'Nombre del Negocio', isDark),
                     const SizedBox(height: 12),
-                    _buildTextField(_rifCtrl, 'RIF / Cédula', isDark),
+                    _buildTextField(_rifCtrl, 'RIF / CÃ©dula', isDark),
                     const SizedBox(height: 12),
-                    _buildTextField(_direccionCtrl, 'Dirección', isDark,
+                    _buildTextField(_direccionCtrl, 'DirecciÃ³n', isDark,
                         maxLines: 2),
                     const SizedBox(height: 12),
-                    _buildTextField(_telefonoCtrl, 'Teléfono', isDark,
+                    _buildTextField(_telefonoCtrl, 'TelÃ©fono', isDark,
                         keyboardType: TextInputType.phone),
                     const SizedBox(height: 12),
-                    _buildTextField(_correoCtrl, 'Correo Electrónico', isDark,
+                    _buildTextField(_correoCtrl, 'Correo ElectrÃ³nico', isDark,
                         keyboardType: TextInputType.emailAddress),
                     const SizedBox(height: 24),
                     Text('TIPO DE CAMBIO',
@@ -7956,7 +7956,7 @@ const SizedBox(width: 14),
 }
 
 // ============================================
-// PANTALLA: CATEGORÍAS - CON GUARDADO AUTOMÁTICO
+// PANTALLA: CATEGORÃAS - CON GUARDADO AUTOMÃTICO
 // ============================================
 class CategoriasScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -7982,9 +7982,9 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
     setState(() => _cargando = true);
     try {
       _categorias = await _db.getCategorias();
-      debugPrint('Categorías cargadas: ${_categorias.length}');
+      debugPrint('CategorÃ­as cargadas: ${_categorias.length}');
     } catch (e) {
-      debugPrint('Error cargando categorías: $e');
+      debugPrint('Error cargando categorÃ­as: $e');
       _categorias = [];
     }
     setState(() => _cargando = false);
@@ -8007,7 +8007,7 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text(
-            categoria != null ? 'Editar Categoría' : 'Nueva Categoría',
+            categoria != null ? 'Editar CategorÃ­a' : 'Nueva CategorÃ­a',
             style: TextStyle(
                 color: AppColors.text(isDark), fontWeight: FontWeight.w700),
           ),
@@ -8037,7 +8037,7 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
                   controller: descCtrl,
                   style: TextStyle(color: AppColors.text(isDark)),
                   decoration: InputDecoration(
-                    labelText: 'Descripción',
+                    labelText: 'DescripciÃ³n',
                     labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                     filled: true,
                     fillColor: AppColors.background(isDark),
@@ -8084,8 +8084,8 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
                         await _cargarCategorias();
                         _mostrarSnackbar(
                             categoria != null
-                                ? 'Categoría actualizada'
-                                : 'Categoría creada exitosamente',
+                                ? 'CategorÃ­a actualizada'
+                                : 'CategorÃ­a creada exitosamente',
                             AppColors.success);
                       } catch (e) {
                         setDialogState(() => guardando = false);
@@ -8145,7 +8145,7 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
         ),
         title: Row(children: [
 const SizedBox(width: 14),
-          Text('CATEGORÍAS',
+          Text('CATEGORÃAS',
               style: TextStyle(
                   color: AppColors.text(isDark),
                   fontSize: 18,
@@ -8186,12 +8186,12 @@ const SizedBox(width: 14),
                         Icon(Icons.category_outlined,
                             size: 60, color: AppColors.subtext(isDark)),
                         const SizedBox(height: 16),
-                        Text('No hay categorías',
+                        Text('No hay categorÃ­as',
                             style: TextStyle(
                                 color: AppColors.subtext(isDark),
                                 fontSize: 16)),
                         const SizedBox(height: 4),
-                        Text('Agrega tu primera categoría',
+                        Text('Agrega tu primera categorÃ­a',
                             style: TextStyle(
                                 color: AppColors.subtext(isDark),
                                 fontSize: 12)),
@@ -8265,7 +8265,7 @@ const SizedBox(width: 14),
                               await _db.eliminarCategoria(cat['id'].toString());
                               await _cargarCategorias();
                               _mostrarSnackbar(
-                                  'Categoría eliminada', AppColors.danger);
+                                  'CategorÃ­a eliminada', AppColors.danger);
                             },
                           ),
                         ]),
@@ -8290,7 +8290,7 @@ const SizedBox(width: 14),
                   onPressed: () => _mostrarDialogo(),
                   icon: const Icon(Icons.add_rounded,
                       color: Colors.white, size: 24),
-                  label: const Text('AGREGAR CATEGORÍA',
+                  label: const Text('AGREGAR CATEGORÃA',
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 14,
@@ -8313,7 +8313,7 @@ const SizedBox(width: 14),
 }
 
 // ============================================
-// PANTALLA: MÉTODOS DE PAGO - CON GUARDADO AUTOMÁTICO
+// PANTALLA: MÃ‰TODOS DE PAGO - CON GUARDADO AUTOMÃTICO
 // ============================================
 class MetodosPagoScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -8340,7 +8340,7 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
     try {
       _metodos = await _db.getMetodosPago();
     } catch (e) {
-      debugPrint('Error cargando métodos de pago: $e');
+      debugPrint('Error cargando mÃ©todos de pago: $e');
       _metodos = [];
     }
     setState(() => _cargando = false);
@@ -8356,30 +8356,30 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
     final titular = TextEditingController(text: metodo?['titular'] ?? '');
     final datos = TextEditingController(text: metodo?['datos_adicionales'] ?? '');
     bool guardando=false;
-    final tipos=['Efectivo','Tarjeta','Transferencia','Pago Móvil','Otro'];
+    final tipos=['Efectivo','Tarjeta','Transferencia','Pago MÃ³vil','Otro'];
 
     showDialog(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setD)=>AlertDialog(
       backgroundColor:AppColors.card(dark),
       shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24)),
-      title:Row(children:[Container(width:42,height:42,decoration:BoxDecoration(color:AppColors.primary.withValues(alpha:.10),borderRadius:BorderRadius.circular(13)),child:const Icon(Icons.account_balance_wallet_outlined,color:AppColors.primary)),const SizedBox(width:12),Expanded(child:Text(metodo==null?'Agregar método de pago':'Editar método de pago',style:TextStyle(color:AppColors.text(dark),fontWeight:FontWeight.w900,fontSize:18)))]),
+      title:Row(children:[Container(width:42,height:42,decoration:BoxDecoration(color:AppColors.primary.withValues(alpha:.10),borderRadius:BorderRadius.circular(13)),child:const Icon(Icons.account_balance_wallet_outlined,color:AppColors.primary)),const SizedBox(width:12),Expanded(child:Text(metodo==null?'Agregar mÃ©todo de pago':'Editar mÃ©todo de pago',style:TextStyle(color:AppColors.text(dark),fontWeight:FontWeight.w900,fontSize:18)))]),
       content:SizedBox(width:520,child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text('TIPO',style:TextStyle(color:AppColors.subtext(dark),fontSize:10,fontWeight:FontWeight.w900,letterSpacing:1)),const SizedBox(height:7),
-        DropdownButtonFormField<String>(value:tipos.contains(tipo)?tipo:'Otro',decoration:_field('Método'),items:tipos.map((x)=>DropdownMenuItem(value:x,child:Text(x))).toList(),onChanged:(v){setD(()=>tipo=v??'Otro');if(metodo==null)nombre.text=tipo;}),
+        DropdownButtonFormField<String>(value:tipos.contains(tipo)?tipo:'Otro',decoration:_field('MÃ©todo'),items:tipos.map((x)=>DropdownMenuItem(value:x,child:Text(x))).toList(),onChanged:(v){setD(()=>tipo=v??'Otro');if(metodo==null)nombre.text=tipo;}),
         const SizedBox(height:16),
         TextField(controller:nombre,decoration:_field('Nombre visible')),
         const SizedBox(height:14),
         if(tipo=='Efectivo') _infoMetodo('No necesita datos bancarios. Solo se registra el pago recibido y el vuelto.',Icons.payments_outlined,dark),
         if(tipo=='Tarjeta') ...[
-          _infoMetodo('Registra únicamente los datos que tu negocio necesite para identificar la operación.',Icons.credit_card_outlined,dark),
+          _infoMetodo('Registra Ãºnicamente los datos que tu negocio necesite para identificar la operaciÃ³n.',Icons.credit_card_outlined,dark),
           const SizedBox(height:10),TextField(controller:datos,decoration:_field('Terminal / referencia (opcional)')),
         ],
         if(tipo=='Transferencia') ...[
           TextField(controller:banco,decoration:_field('Banco')),
-          const SizedBox(height:10),TextField(controller:cuenta,decoration:_field('Número de cuenta / referencia')),
+          const SizedBox(height:10),TextField(controller:cuenta,decoration:_field('NÃºmero de cuenta / referencia')),
           const SizedBox(height:10),TextField(controller:titular,decoration:_field('Titular')),
         ],
-        if(tipo=='Pago Móvil') ...[
-          TextField(controller:telefono,keyboardType:TextInputType.phone,decoration:_field('Teléfono')),
+        if(tipo=='Pago MÃ³vil') ...[
+          TextField(controller:telefono,keyboardType:TextInputType.phone,decoration:_field('TelÃ©fono')),
           const SizedBox(height:10),TextField(controller:banco,decoration:_field('Banco')),
           const SizedBox(height:10),TextField(controller:titular,decoration:_field('Titular')),
         ],
@@ -8387,7 +8387,7 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
           TextField(controller:datos,maxLines:3,decoration:_field('Instrucciones / datos adicionales')),
         ],
       ]))),
-      actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:Text('Cancelar',style:TextStyle(color:AppColors.subtext(dark)))),FilledButton(onPressed:guardando?null:()async{if(nombre.text.trim().isEmpty)return;setD(()=>guardando=true);final data={'nombre':nombre.text.trim(),'tipo':tipo,'banco':banco.text.trim(),'numero_cuenta':cuenta.text.trim(),'telefono_pago_movil':telefono.text.trim(),'titular':titular.text.trim(),'datos_adicionales':datos.text.trim()};if(metodo!=null){await _db.actualizarMetodoPago(metodo['id'].toString(),data);}else{await _db.crearMetodoPago({...data,'activo':1});}if(ctx.mounted)Navigator.pop(ctx);await _cargarMetodos();},child:Text(guardando?'Guardando…':'Guardar'))],
+      actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:Text('Cancelar',style:TextStyle(color:AppColors.subtext(dark)))),FilledButton(onPressed:guardando?null:()async{if(nombre.text.trim().isEmpty)return;setD(()=>guardando=true);final data={'nombre':nombre.text.trim(),'tipo':tipo,'banco':banco.text.trim(),'numero_cuenta':cuenta.text.trim(),'telefono_pago_movil':telefono.text.trim(),'titular':titular.text.trim(),'datos_adicionales':datos.text.trim()};if(metodo!=null){await _db.actualizarMetodoPago(metodo['id'].toString(),data);}else{await _db.crearMetodoPago({...data,'activo':1});}if(ctx.mounted)Navigator.pop(ctx);await _cargarMetodos();},child:Text(guardando?'Guardandoâ€¦':'Guardar'))],
     )));
   }
 
@@ -8419,7 +8419,7 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
         ),
         title: Row(children: [
 const SizedBox(width: 14),
-          Text('MÉTODOS DE PAGO',
+          Text('MÃ‰TODOS DE PAGO',
               style: TextStyle(
                   color: AppColors.text(isDark),
                   fontSize: 18,
@@ -8460,7 +8460,7 @@ const SizedBox(width: 14),
                         Icon(Icons.payment_outlined,
                             size: 60, color: AppColors.subtext(isDark)),
                         const SizedBox(height: 16),
-                        Text('No hay métodos de pago',
+                        Text('No hay mÃ©todos de pago',
                             style: TextStyle(
                                 color: AppColors.subtext(isDark),
                                 fontSize: 16)),
@@ -8599,7 +8599,7 @@ const SizedBox(width: 14),
                   onPressed: () => _mostrarDialogo(),
                   icon: const Icon(Icons.add_rounded,
                       color: Colors.white, size: 24),
-                  label: const Text('AGREGAR MÉTODO',
+                  label: const Text('AGREGAR MÃ‰TODO',
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 14,
@@ -8622,7 +8622,7 @@ const SizedBox(width: 14),
 }
 
 // ============================================
-// PANTALLA: VENDEDORES - CON GUARDADO AUTOMÁTICO
+// PANTALLA: VENDEDORES - CON GUARDADO AUTOMÃTICO
 // ============================================
 class VendedoresScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -8702,7 +8702,7 @@ class _VendedoresScreenState extends State<VendedoresScreen> {
                 style: TextStyle(color: AppColors.text(isDark)),
                 keyboardType: TextInputType.phone,
                 decoration: InputDecoration(
-                  labelText: 'Teléfono',
+                  labelText: 'TelÃ©fono',
                   labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                   filled: true,
                   fillColor: AppColors.background(isDark),
@@ -8721,7 +8721,7 @@ class _VendedoresScreenState extends State<VendedoresScreen> {
                 style: TextStyle(color: AppColors.text(isDark)),
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: 'Comisión (%)',
+                  labelText: 'ComisiÃ³n (%)',
                   labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                   filled: true,
                   fillColor: AppColors.background(isDark),
@@ -8893,7 +8893,7 @@ const SizedBox(width: 14),
                                         color: AppColors.text(isDark),
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600)),
-                                Text('Comisión: $comision%',
+                                Text('ComisiÃ³n: $comision%',
                                     style: TextStyle(
                                         color: AppColors.subtext(isDark),
                                         fontSize: 11)),
@@ -8959,7 +8959,7 @@ const SizedBox(width: 14),
 }
 
 // ============================================
-// PANTALLA: CLIENTES - CON GUARDADO AUTOMÁTICO
+// PANTALLA: CLIENTES - CON GUARDADO AUTOMÃTICO
 // ============================================
 class ClientesScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -9045,7 +9045,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
                   style: TextStyle(color: AppColors.text(isDark)),
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
-                    labelText: 'Cédula',
+                    labelText: 'CÃ©dula',
                     labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                     filled: true,
                     fillColor: AppColors.background(isDark),
@@ -9064,7 +9064,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
                   style: TextStyle(color: AppColors.text(isDark)),
                   keyboardType: TextInputType.phone,
                   decoration: InputDecoration(
-                    labelText: 'Teléfono',
+                    labelText: 'TelÃ©fono',
                     labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                     filled: true,
                     fillColor: AppColors.background(isDark),
@@ -9101,7 +9101,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
                   controller: direccionCtrl,
                   style: TextStyle(color: AppColors.text(isDark)),
                   decoration: InputDecoration(
-                    labelText: 'Dirección',
+                    labelText: 'DirecciÃ³n',
                     labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                     filled: true,
                     fillColor: AppColors.background(isDark),
@@ -9245,7 +9245,7 @@ const SizedBox(width: 14),
                   style: TextStyle(color: AppColors.text(isDark)),
                   onChanged: (v) => setState(() => _busqueda = v),
                   decoration: InputDecoration(
-                    hintText: 'Buscar por nombre, teléfono o cédula...',
+                    hintText: 'Buscar por nombre, telÃ©fono o cÃ©dula...',
                     hintStyle: TextStyle(color: AppColors.subtext(isDark)),
                     prefixIcon: Icon(Icons.search_rounded,
                         color: AppColors.subtext(isDark)),
@@ -9427,11 +9427,11 @@ const SizedBox(width: 14),
   }
 }
 // ============================================
-// CONTINUACIÓN - ETAPA 6 de 6 (FINAL)
+// CONTINUACIÃ“N - ETAPA 6 de 6 (FINAL)
 // ============================================
 
 // ============================================
-// PANTALLA: CONFIGURAR TICKET - DISEÑO PROFESIONAL
+// PANTALLA: CONFIGURAR TICKET - DISEÃ‘O PROFESIONAL
 // ============================================
 class ConfigurarTicketScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -9490,7 +9490,7 @@ class _ConfigurarTicketScreenState extends State<ConfigurarTicketScreen> {
         _telefonoCtrl.text = config['telefono'] ?? '';
         _emailCtrl.text = config['email'] ?? '';
         _mensajePieCtrl.text =
-            config['mensaje_pie'] ?? '¡Gracias por su compra!';
+            config['mensaje_pie'] ?? 'Â¡Gracias por su compra!';
         _mensajeAdicionalCtrl.text = config['mensaje_adicional'] ?? '';
         _logoBase64 = config['logo_base64'];
         _mostrarLogo =
@@ -9512,7 +9512,7 @@ class _ConfigurarTicketScreenState extends State<ConfigurarTicketScreen> {
         _numeroCopias = config['numero_copias'] ?? 1;
       }
     } catch (e) {
-      debugPrint('Error cargando configuración ticket: $e');
+      debugPrint('Error cargando configuraciÃ³n ticket: $e');
     }
     setState(() => _cargando = false);
   }
@@ -9561,7 +9561,7 @@ class _ConfigurarTicketScreenState extends State<ConfigurarTicketScreen> {
       };
       await _db.guardarConfiguracionTicket(config);
       _mostrarSnackbar(
-          'Configuración guardada exitosamente', AppColors.success);
+          'ConfiguraciÃ³n guardada exitosamente', AppColors.success);
     } catch (e) {
       debugPrint('Error guardando ticket: $e');
       _mostrarSnackbar('Error: $e', AppColors.danger);
@@ -9623,7 +9623,7 @@ const SizedBox(width: 14),
                       ],
                     ),
                     child: Row(children: [
-                      _tab('Configuración', 0, isDark, Icons.settings_rounded),
+                      _tab('ConfiguraciÃ³n', 0, isDark, Icons.settings_rounded),
                       _tab('Vista Previa', 1, isDark, Icons.preview_rounded),
                     ]),
                   ),
@@ -9681,7 +9681,7 @@ const SizedBox(width: 14),
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('INFORMACIÓN DEL NEGOCIO',
+        Text('INFORMACIÃ“N DEL NEGOCIO',
             style: TextStyle(
                 color: AppColors.subtext(isDark),
                 fontSize: 11,
@@ -9748,9 +9748,9 @@ const SizedBox(width: 14),
         const SizedBox(height: 10),
         _buildTextField(_rifCtrl, 'RIF', isDark),
         const SizedBox(height: 10),
-        _buildTextField(_direccionCtrl, 'Dirección', isDark, maxLines: 2),
+        _buildTextField(_direccionCtrl, 'DirecciÃ³n', isDark, maxLines: 2),
         const SizedBox(height: 10),
-        _buildTextField(_telefonoCtrl, 'Teléfono', isDark,
+        _buildTextField(_telefonoCtrl, 'TelÃ©fono', isDark,
             keyboardType: TextInputType.phone),
         const SizedBox(height: 10),
         _buildTextField(_emailCtrl, 'Email', isDark,
@@ -9777,9 +9777,9 @@ const SizedBox(width: 14),
                   (v) => setState(() => _mostrarEslogan = v), isDark),
               _buildSwitch('Mostrar RIF', _mostrarRif,
                   (v) => setState(() => _mostrarRif = v), isDark),
-              _buildSwitch('Mostrar Dirección', _mostrarDireccion,
+              _buildSwitch('Mostrar DirecciÃ³n', _mostrarDireccion,
                   (v) => setState(() => _mostrarDireccion = v), isDark),
-              _buildSwitch('Mostrar Teléfono', _mostrarTelefono,
+              _buildSwitch('Mostrar TelÃ©fono', _mostrarTelefono,
                   (v) => setState(() => _mostrarTelefono = v), isDark),
               _buildSwitch('Mostrar Email', _mostrarEmail,
                   (v) => setState(() => _mostrarEmail = v), isDark),
@@ -9809,7 +9809,7 @@ const SizedBox(width: 14),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Tamaño de papel',
+                  Text('TamaÃ±o de papel',
                       style: TextStyle(
                           color: AppColors.text(isDark), fontSize: 14)),
                   DropdownButton<String>(
@@ -9830,7 +9830,7 @@ const SizedBox(width: 14),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Número de copias',
+                  Text('NÃºmero de copias',
                       style: TextStyle(
                           color: AppColors.text(isDark), fontSize: 14)),
                   Row(
@@ -9900,7 +9900,7 @@ const SizedBox(width: 14),
                         strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.save_rounded, color: Colors.white),
             label: Text(
-              _guardando ? 'GUARDANDO...' : 'GUARDAR CONFIGURACIÓN',
+              _guardando ? 'GUARDANDO...' : 'GUARDAR CONFIGURACIÃ“N',
               style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
@@ -10057,7 +10057,7 @@ const SizedBox(width: 14),
                   'Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
                   style: const TextStyle(fontSize: 8, color: Colors.black54)),
               if (_mostrarCliente) ...[
-                const Text('Cliente: Público General',
+                const Text('Cliente: PÃºblico General',
                     style: TextStyle(fontSize: 10, color: Colors.black)),
               ],
               const Divider(color: Colors.black26, height: 20),
@@ -10088,7 +10088,7 @@ const SizedBox(width: 14),
               Center(
                 child: Text(
                   _mensajePieCtrl.text.isEmpty
-                      ? '¡Gracias por su compra!'
+                      ? 'Â¡Gracias por su compra!'
                       : _mensajePieCtrl.text,
                   style: const TextStyle(
                       fontSize: 10,
@@ -10119,7 +10119,7 @@ const SizedBox(width: 14),
 }
 
 // ============================================
-// PANTALLA: CONFIGURACIÓN DE VARIANTES (TALLAS Y COLORES)
+// PANTALLA: CONFIGURACIÃ“N DE VARIANTES (TALLAS Y COLORES)
 // ============================================
 class ConfiguracionVariantesScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -10760,7 +10760,7 @@ class _EAN13Painter extends CustomPainter {
 }
 
 // ============================================
-// PANTALLA: CÓDIGOS DE BARRAS
+// PANTALLA: CÃ“DIGOS DE BARRAS
 // ============================================
 class CodigosBarrasScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -10821,7 +10821,7 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
       _productos = await _db.getProductos();
       _filtrar();
     } catch (e) {
-      debugPrint('Error cargando códigos: $e');
+      debugPrint('Error cargando cÃ³digos: $e');
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -10858,7 +10858,7 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
       _camaraActiva = false;
     });
     if (p == null) {
-      _snack('Código $clean no está asociado a un producto.', AppColors.warning);
+      _snack('CÃ³digo $clean no estÃ¡ asociado a un producto.', AppColors.warning);
     } else {
       _snack('Producto encontrado: ${p['nombre']}', AppColors.success);
     }
@@ -10879,11 +10879,11 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
     final c = await _barcode.generarCodigoEAN13();
     final ok = await _db.actualizarProducto('${p['id']}', {'codigo_barras': c});
     if (!ok) {
-      _snack('No se pudo guardar el código.', AppColors.danger);
+      _snack('No se pudo guardar el cÃ³digo.', AppColors.danger);
       return;
     }
     await _cargar();
-    _snack('Código generado: $c', AppColors.success);
+    _snack('CÃ³digo generado: $c', AppColors.success);
   }
 
   Future<void> _imprimir(List<Map<String, dynamic>> items) async {
@@ -10910,7 +10910,7 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
           pageFormat: PdfPageFormat(70 * PdfPageFormat.mm, 40 * PdfPageFormat.mm),
           margin: const pw.EdgeInsets.all(5),
           build: (_) {
-            final details = [if (marca.isNotEmpty) marca, if (color.isNotEmpty) color, if (talla.isNotEmpty) talla].join(' · ');
+            final details = [if (marca.isNotEmpty) marca, if (color.isNotEmpty) color, if (talla.isNotEmpty) talla].join(' Â· ');
             if (_diseno == 'A') {
               return pw.Column(
                 mainAxisAlignment: pw.MainAxisAlignment.center,
@@ -10965,7 +10965,7 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
           ),
           const SizedBox(width: 14),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Códigos de barras', style: TextStyle(color: AppColors.text(dark), fontSize: 21, fontWeight: FontWeight.w900)),
+            Text('CÃ³digos de barras', style: TextStyle(color: AppColors.text(dark), fontSize: 21, fontWeight: FontWeight.w900)),
             const SizedBox(height: 3),
             Text('Escanea, genera y prepara etiquetas profesionales', style: TextStyle(color: AppColors.subtext(dark), fontSize: 11)),
           ])),
@@ -10991,15 +10991,15 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('${p['nombre'] ?? 'Producto'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.text(dark), fontSize: 13, fontWeight: FontWeight.w900)),
           const SizedBox(height: 3),
-          Text(codigo.isEmpty ? 'Sin código · Stock $stock' : 'Código $codigo · Stock $stock', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10)),
+          Text(codigo.isEmpty ? 'Sin cÃ³digo Â· Stock $stock' : 'CÃ³digo $codigo Â· Stock $stock', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10)),
         ])),
-        if (codigo.isEmpty) IconButton(tooltip: 'Generar código', onPressed: () => _generar(p), icon: const Icon(Icons.auto_awesome_rounded, color: AppColors.primary, size: 19)),
+        if (codigo.isEmpty) IconButton(tooltip: 'Generar cÃ³digo', onPressed: () => _generar(p), icon: const Icon(Icons.auto_awesome_rounded, color: AppColors.primary, size: 19)),
         PopupMenuButton<String>(
           tooltip: 'Opciones',
           onSelected: (v) { if (v == 'print') _imprimir([p]); if (v == 'generate') _generar(p); },
           itemBuilder: (_) => [
             if (codigo.isNotEmpty) const PopupMenuItem(value: 'print', child: Row(children: [Icon(Icons.print_outlined), SizedBox(width: 10), Text('Imprimir etiqueta')])),
-            if (codigo.isEmpty) const PopupMenuItem(value: 'generate', child: Row(children: [Icon(Icons.auto_awesome_outlined), SizedBox(width: 10), Text('Generar código')])),
+            if (codigo.isEmpty) const PopupMenuItem(value: 'generate', child: Row(children: [Icon(Icons.auto_awesome_outlined), SizedBox(width: 10), Text('Generar cÃ³digo')])),
           ],
         ),
       ]),
@@ -11035,7 +11035,7 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
           FilledButton.icon(
             onPressed: () => setState(() => _camaraActiva = !_camaraActiva),
             icon: Icon(_camaraActiva ? Icons.close_rounded : Icons.camera_alt_rounded),
-            label: Text(_camaraActiva ? 'Cerrar cámara' : 'Abrir cámara'),
+            label: Text(_camaraActiva ? 'Cerrar cÃ¡mara' : 'Abrir cÃ¡mara'),
           ),
         ]),
         const SizedBox(height: 12),
@@ -11048,7 +11048,7 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
               MobileScanner(controller: _scanner, onDetect: _onDetect),
               IgnorePointer(child: Center(child: Container(width: 250, height: 150, decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: Colors.white, width: 2))))),
               Positioned(left: 16, right: 16, bottom: 14, child: Row(children: [
-                Expanded(child: Text('Centra el código dentro del marco', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700))),
+                Expanded(child: Text('Centra el cÃ³digo dentro del marco', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700))),
                 IconButton(onPressed: () => _scanner.toggleTorch(), icon: const Icon(Icons.flashlight_on_rounded, color: Colors.white)),
                 IconButton(onPressed: () => _scanner.switchCamera(), icon: const Icon(Icons.cameraswitch_rounded, color: Colors.white)),
               ])),
@@ -11059,8 +11059,8 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
           controller: _manual,
           onSubmitted: _procesarCodigo,
           decoration: InputDecoration(
-            labelText: 'Código manual',
-            hintText: 'Escribe o pega el código de barras',
+            labelText: 'CÃ³digo manual',
+            hintText: 'Escribe o pega el cÃ³digo de barras',
             prefixIcon: const Icon(Icons.keyboard_alt_outlined),
             suffixIcon: IconButton(onPressed: () => _procesarCodigo(_manual.text), icon: const Icon(Icons.search_rounded)),
             filled: true, fillColor: AppColors.card(dark),
@@ -11080,8 +11080,8 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
               Wrap(spacing: 8, runSpacing: 8, children: [
                 _dataChip('Precio', _money(_productoEscaneado!), dark),
                 _dataChip('Stock', '${_productoEscaneado!['stock'] ?? 0}', dark),
-                _dataChip('Categoría', '${_productoEscaneado!['categoria'] ?? 'General'}', dark),
-                _dataChip('Código', _codigoEncontrado, dark),
+                _dataChip('CategorÃ­a', '${_productoEscaneado!['categoria'] ?? 'General'}', dark),
+                _dataChip('CÃ³digo', _codigoEncontrado, dark),
               ]),
             ]),
           )
@@ -11089,7 +11089,7 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
           Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(20), border: Border.all(color: AppColors.divider(dark))),
-            child: Column(children: [Icon(Icons.qr_code_scanner_rounded, size: 42, color: AppColors.subtext(dark)), const SizedBox(height: 10), Text('Escanea o escribe un código para localizar el producto.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.subtext(dark), fontSize: 11))]),
+            child: Column(children: [Icon(Icons.qr_code_scanner_rounded, size: 42, color: AppColors.subtext(dark)), const SizedBox(height: 10), Text('Escanea o escribe un cÃ³digo para localizar el producto.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.subtext(dark), fontSize: 11))]),
           ),
       ],
     );
@@ -11106,14 +11106,14 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 100),
       children: [
         Row(children: [
-          Expanded(child: TextField(onChanged: (v) { _q = v; _filtrar(); setState(() {}); }, decoration: InputDecoration(hintText: 'Buscar producto o código', prefixIcon: const Icon(Icons.search_rounded), filled: true, fillColor: AppColors.card(dark), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.divider(dark)))))),
+          Expanded(child: TextField(onChanged: (v) { _q = v; _filtrar(); setState(() {}); }, decoration: InputDecoration(hintText: 'Buscar producto o cÃ³digo', prefixIcon: const Icon(Icons.search_rounded), filled: true, fillColor: AppColors.card(dark), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.divider(dark)))))),
           const SizedBox(width: 10),
           FilledButton.icon(onPressed: _seleccionados.isEmpty ? null : () => _imprimir(_productos.where((p) => _seleccionados.contains('${p['id']}')).toList()), icon: const Icon(Icons.print_rounded), label: const Text('Imprimir')),
         ]),
         const SizedBox(height: 20),
-        Text('DISEÑO DE ETIQUETA', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+        Text('DISEÃ‘O DE ETIQUETA', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
         const SizedBox(height: 8),
-        Row(children: [Expanded(child: _designCard('A', 'Clásica', 'Logo · nombre · marca · talla/color · precio · código', Icons.label_outline_rounded, dark)), const SizedBox(width: 10), Expanded(child: _designCard('B', 'Minimal', 'Nombre · precio · código', Icons.view_compact_outlined, dark))]),
+        Row(children: [Expanded(child: _designCard('A', 'ClÃ¡sica', 'Logo Â· nombre Â· marca Â· talla/color Â· precio Â· cÃ³digo', Icons.label_outline_rounded, dark)), const SizedBox(width: 10), Expanded(child: _designCard('B', 'Minimal', 'Nombre Â· precio Â· cÃ³digo', Icons.view_compact_outlined, dark))]),
         const SizedBox(height: 20),
         Row(children: [Expanded(child: Text('${_filtrados.length} productos', style: TextStyle(color: AppColors.text(dark), fontSize: 15, fontWeight: FontWeight.w900))), Text('${_seleccionados.length} seleccionados', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10, fontWeight: FontWeight.w700))]),
         const SizedBox(height: 8),
@@ -11132,7 +11132,7 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
       Container(
         margin: const EdgeInsets.fromLTRB(20, 14, 20, 0),
         decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.divider(dark))),
-        child: TabBar(controller: _tabs, labelColor: AppColors.primary, unselectedLabelColor: AppColors.subtext(dark), indicatorColor: AppColors.primary, tabs: const [Tab(icon: Icon(Icons.qr_code_scanner_rounded), text: 'Escanear producto'), Tab(icon: Icon(Icons.local_offer_outlined), text: 'Generar códigos')]),
+        child: TabBar(controller: _tabs, labelColor: AppColors.primary, unselectedLabelColor: AppColors.subtext(dark), indicatorColor: AppColors.primary, tabs: const [Tab(icon: Icon(Icons.qr_code_scanner_rounded), text: 'Escanear producto'), Tab(icon: Icon(Icons.local_offer_outlined), text: 'Generar cÃ³digos')]),
       ),
       Expanded(child: TabBarView(controller: _tabs, children: [_scanTab(dark), _labelsTab(dark)])),
     ]);
@@ -11434,7 +11434,7 @@ const SizedBox(width: 14),
                           ),
                         ]),
                         const SizedBox(height: 12),
-                        Text('Ventas del período',
+                        Text('Ventas del perÃ­odo',
                             style: TextStyle(
                                 color: AppColors.text(isDark),
                                 fontSize: 14,
@@ -11567,7 +11567,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
         _mostrarQR = prefs.getBool('impresora_qr') ?? false;
       });
     } catch (e) {
-      debugPrint('Error cargando configuración impresora: $e');
+      debugPrint('Error cargando configuraciÃ³n impresora: $e');
     }
   }
 
@@ -11577,9 +11577,9 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
       final prefs = await SharedPreferences.getInstance();
 
       // En Web el navegador no permite a Flutter enumerar las impresoras
-      // instaladas de forma fiable. La impresión se hace mediante el diálogo
+      // instaladas de forma fiable. La impresiÃ³n se hace mediante el diÃ¡logo
       // nativo del navegador/sistema. No llamamos a pickPrinter/listPrinters
-      // en esta plataforma para evitar el UnimplementedError que se veía en
+      // en esta plataforma para evitar el UnimplementedError que se veÃ­a en
       // Chrome/Android.
       if (kIsWeb) {
         final savedName = prefs.getString('impresora_nombre');
@@ -11655,7 +11655,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
   }
 
   Future<void> _abrirSelectorNativo() async {
-    // Web: abre directamente el diálogo real de impresión del navegador.
+    // Web: abre directamente el diÃ¡logo real de impresiÃ³n del navegador.
     if (kIsWeb) {
       await _probarImpresion();
       return;
@@ -11685,7 +11685,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
     final direccion = (cfg?['direccion'] ?? '').toString();
     final telefono = (cfg?['telefono'] ?? '').toString();
     final email = (cfg?['email'] ?? '').toString();
-    final mensajePie = (cfg?['mensaje_pie'] ?? '¡Gracias por su compra!').toString();
+    final mensajePie = (cfg?['mensaje_pie'] ?? 'Â¡Gracias por su compra!').toString();
     final mensajeAdicional = (cfg?['mensaje_adicional'] ?? '').toString();
     final mostrarLogo = cfg == null ? _mostrarLogo : (cfg?['mostrar_logo'] == 1 || cfg?['mostrar_logo'] == true);
     final mostrarEslogan = cfg == null ? true : (cfg?['mostrar_eslogan'] == 1 || cfg?['mostrar_eslogan'] == true);
@@ -11778,7 +11778,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
       await prefs.setString('impresora_tamano', _tamanoPapel);
       await prefs.setBool('impresora_logo', _mostrarLogo);
       await prefs.setBool('impresora_qr', _mostrarQR);
-      _mostrarMensaje('Configuración guardada', true);
+      _mostrarMensaje('ConfiguraciÃ³n guardada', true);
     } catch (e) {
       _mostrarMensaje('No se pudo guardar: $e', false);
     }
@@ -11810,7 +11810,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          tooltip: 'Abrir menú',
+          tooltip: 'Abrir menÃº',
           onPressed: widget.onAbrirSidebar,
           icon: Icon(Icons.menu_rounded, color: text, size: 24),
         ),
@@ -11874,7 +11874,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Centro de impresión',
+                              'Centro de impresiÃ³n',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 20,
@@ -11954,7 +11954,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
               children: [
                 Text(
                   kIsWeb
-                      ? 'Impresión del navegador'
+                      ? 'ImpresiÃ³n del navegador'
                       : _seleccionada == null
                       ? 'Sin impresora seleccionada'
                       : _seleccionada!.name,
@@ -11971,7 +11971,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                       ? 'Selector del navegador / sistema'
                       : canList
                       ? 'Lista de impresoras disponible'
-                      : 'El sistema usa el selector de impresión',
+                      : 'El sistema usa el selector de impresiÃ³n',
                   style: TextStyle(color: sub, fontSize: 11),
                 ),
               ],
@@ -12119,7 +12119,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                   Expanded(
                     child: Text(
                       kIsWeb
-                          ? 'En Web Chrome no permite enumerar las impresoras. Pulsa "Seleccionar impresora" para abrir el diálogo del sistema y elegirla.'
+                          ? 'En Web Chrome no permite enumerar las impresoras. Pulsa "Seleccionar impresora" para abrir el diÃ¡logo del sistema y elegirla.'
                           : 'No hay impresoras enumerables en esta plataforma. Usa "Elegir impresora" para abrir el selector del sistema.',
                       style: TextStyle(color: sub, fontSize: 11),
                     ),
@@ -12177,7 +12177,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                                       printer.model!,
                                     if ((printer.location ?? '').isNotEmpty)
                                       printer.location!,
-                                  ].join(' · '),
+                                  ].join(' Â· '),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -12221,7 +12221,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Opciones de impresión',
+            'Opciones de impresiÃ³n',
             style: TextStyle(
               color: text,
               fontSize: 15,
@@ -12244,11 +12244,11 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                   items: const [
                     DropdownMenuItem(
                       value: '58mm',
-                      child: Text('58 mm térmico'),
+                      child: Text('58 mm tÃ©rmico'),
                     ),
                     DropdownMenuItem(
                       value: '80mm',
-                      child: Text('80 mm térmico'),
+                      child: Text('80 mm tÃ©rmico'),
                     ),
                   ],
                   onChanged: (v) {
@@ -12303,7 +12303,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
             child: SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(
-                'Mostrar código QR',
+                'Mostrar cÃ³digo QR',
                 style: TextStyle(color: text),
               ),
               value: _mostrarQR,
@@ -12316,7 +12316,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
             child: ElevatedButton.icon(
               onPressed: _guardarConfiguracion,
               icon: const Icon(Icons.save_rounded),
-              label: const Text('Guardar configuración'),
+              label: const Text('Guardar configuraciÃ³n'),
             ),
           ),
         ],
@@ -12731,7 +12731,7 @@ class _CajaScreenState extends State<CajaScreen> {
               controller: descCtrl,
               style: TextStyle(color: AppColors.text(isDark)),
               decoration: InputDecoration(
-                labelText: 'Descripción',
+                labelText: 'DescripciÃ³n',
                 labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                 filled: true,
                 fillColor: AppColors.background(isDark),
@@ -12838,7 +12838,7 @@ class _CajaScreenState extends State<CajaScreen> {
             Icon(Icons.point_of_sale,
                 size: 64, color: AppColors.subtext(isDark)),
             const SizedBox(height: 16),
-            Text('La caja está cerrada',
+            Text('La caja estÃ¡ cerrada',
                 style:
                     TextStyle(color: AppColors.subtext(isDark), fontSize: 16)),
             const SizedBox(height: 24),
@@ -13326,7 +13326,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card(isDark),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Cambiar Contraseña',
+        title: Text('Cambiar ContraseÃ±a',
             style: TextStyle(
                 color: AppColors.text(isDark), fontWeight: FontWeight.w700)),
         content: Column(
@@ -13337,7 +13337,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
               obscureText: true,
               style: TextStyle(color: AppColors.text(isDark)),
               decoration: InputDecoration(
-                labelText: 'Nueva Contraseña',
+                labelText: 'Nueva ContraseÃ±a',
                 labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                 filled: true,
                 fillColor: AppColors.background(isDark),
@@ -13356,7 +13356,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
               obscureText: true,
               style: TextStyle(color: AppColors.text(isDark)),
               decoration: InputDecoration(
-                labelText: 'Confirmar Contraseña',
+                labelText: 'Confirmar ContraseÃ±a',
                 labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                 filled: true,
                 fillColor: AppColors.background(isDark),
@@ -13381,7 +13381,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
               if (ctrl1.text != ctrl2.text) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                      content: Text('Las contraseñas no coinciden'),
+                      content: Text('Las contraseÃ±as no coinciden'),
                       backgroundColor: AppColors.danger),
                 );
                 return;
@@ -13389,7 +13389,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
               if (ctrl1.text.length < 6) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                      content: Text('Mínimo 6 caracteres'),
+                      content: Text('MÃ­nimo 6 caracteres'),
                       backgroundColor: AppColors.danger),
                 );
                 return;
@@ -13398,7 +13398,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                 await _db.actualizarPerfil({'password_hash': ctrl1.text});
                 Navigator.pop(ctx);
               } catch (e) {
-                debugPrint('Error cambiando contraseña: $e');
+                debugPrint('Error cambiando contraseÃ±a: $e');
               }
             },
             style: ElevatedButton.styleFrom(
@@ -13525,7 +13525,7 @@ const SizedBox(width: 14),
                         ListTile(
                           leading: Icon(Icons.lock,
                               color: AppColors.subtext(isDark), size: 22),
-                          title: Text('Cambiar Contraseña',
+                          title: Text('Cambiar ContraseÃ±a',
                               style: TextStyle(
                                   color: AppColors.text(isDark), fontSize: 14)),
                           trailing: Icon(Icons.chevron_right,
@@ -13847,7 +13847,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
                           color: AppColors.text(isDark),
                           fontSize: 14,
                           fontWeight: FontWeight.w600)),
-                  Text('Código: ${prod['codigo_barras']}',
+                  Text('CÃ³digo: ${prod['codigo_barras']}',
                       style: TextStyle(
                           color: AppColors.subtext(isDark), fontSize: 11)),
                 ],
@@ -13911,7 +13911,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
 // ============================================
 // ============================================
 // TIENDA VIRTUAL SINTHETIX PRO - V27
-// Catálogo universal + carrito + WhatsApp + favoritos + banners
+// CatÃ¡logo universal + carrito + WhatsApp + favoritos + banners
 // ============================================
 
 class WhatsAppMark extends StatelessWidget {
@@ -14140,7 +14140,7 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
       (sum, item) => sum + _precio(item) * ((item['_qty'] as int?) ?? 0),
     );
     final buffer = StringBuffer()
-      ..writeln('🛍️🛍️ PEDIDO - $_nombreTienda')
+      ..writeln('ðŸ›ï¸ðŸ›ï¸ PEDIDO - $_nombreTienda')
       ..writeln()
       ..writeln('Hola, quiero realizar este pedido:')
       ..writeln();
@@ -14177,7 +14177,7 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
 
   Future<void> _compartirTienda() async {
     await Share.share(
-      '🛍️ Visita $_nombreTienda\n$_publicUrl',
+      'ðŸ›ï¸ Visita $_nombreTienda\n$_publicUrl',
       subject: 'Tienda online - $_nombreTienda',
     );
   }
@@ -14256,7 +14256,7 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
                     controller: _search,
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
-                      hintText: 'Buscar productos, marcas o códigos...',
+                      hintText: 'Buscar productos, marcas o cÃ³digos...',
                       prefixIcon: const Icon(Icons.search_rounded),
                       suffixIcon: _search.text.isEmpty
                           ? null
@@ -14311,7 +14311,7 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
                   const SizedBox(height: 14),
                   Row(
                     children: [
-                      const Expanded(child: Text('Categorías', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.dark))),
+                      const Expanded(child: Text('CategorÃ­as', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.dark))),
                       Text('${_filtrados.length} productos', style: const TextStyle(fontSize: 11, color: AppColors.subtextLight)),
                     ],
                   ),
@@ -14418,7 +14418,7 @@ class _StoreHero extends StatelessWidget {
             const SizedBox(height: 7),
             Text(nombre, style: const TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.w900)),
             const SizedBox(height: 5),
-            const Text('Compra fácil, rápido y desde cualquier dispositivo.', style: TextStyle(color: Colors.white70, fontSize: 11)),
+            const Text('Compra fÃ¡cil, rÃ¡pido y desde cualquier dispositivo.', style: TextStyle(color: Colors.white70, fontSize: 11)),
           ],
         ),
       );
@@ -14623,7 +14623,7 @@ class _StoreProductDetailState extends State<_StoreProductDetail> {
           Text('\$${price.toStringAsFixed(2)}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppColors.dark)),
           if ((p['descuento'] ?? 0).toString() != '0') Text('Descuento ${p['descuento']}%', style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.w800)),
           const SizedBox(height: 18),
-          const Text('Descripción', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.dark)),
+          const Text('DescripciÃ³n', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.dark)),
           const SizedBox(height: 6),
           Text((p['descripcion'] ?? 'Producto disponible en nuestra tienda.').toString(), style: const TextStyle(color: AppColors.subtextLight, height: 1.5)),
           const SizedBox(height: 14),
@@ -14725,7 +14725,7 @@ class _StoreCartSheet extends StatelessWidget {
             Padding(padding: const EdgeInsets.fromLTRB(18, 16, 10, 10), child: Row(children: [const Expanded(child: Text('Mi carrito', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900))), IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded))])),
             Expanded(
               child: items.isEmpty
-                  ? const Center(child: Text('Tu carrito está vacío.'))
+                  ? const Center(child: Text('Tu carrito estÃ¡ vacÃ­o.'))
                   : ListView.separated(
                       controller: scrollController,
                       padding: const EdgeInsets.fromLTRB(14, 4, 14, 20),
@@ -14825,7 +14825,7 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selecciona una imagen para el banner.')));
       return;
     }
-    final banner = <String, dynamic>{'id': DateTime.now().millisecondsSinceEpoch.toString(), 'image': image, 'title': _title.text.trim().isEmpty ? 'Nueva promoción' : _title.text.trim(), 'subtitle': _subtitle.text.trim(), 'button': _button.text.trim(), 'active': true};
+    final banner = <String, dynamic>{'id': DateTime.now().millisecondsSinceEpoch.toString(), 'image': image, 'title': _title.text.trim().isEmpty ? 'Nueva promociÃ³n' : _title.text.trim(), 'subtitle': _subtitle.text.trim(), 'button': _button.text.trim(), 'active': true};
     setState(() => _banners.add(banner));
     await _save();
     _title.clear(); _subtitle.clear();
@@ -14837,12 +14837,12 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
 
   Future<void> _saveSettings() async {
     await _save();
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Configuración de la tienda guardada.')));
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ConfiguraciÃ³n de la tienda guardada.')));
   }
 
   Future<void> _shareStore() async {
     await _save();
-    await Share.share('🛍️ Visita nuestra tienda online\n${_publicUrl.text.trim()}', subject: 'Tienda online');
+    await Share.share('ðŸ›ï¸ Visita nuestra tienda online\n${_publicUrl.text.trim()}', subject: 'Tienda online');
   }
 
   Future<void> _openStore() async {
@@ -14885,7 +14885,7 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
         text: 'Catalogo publico de ${payload['store']['name']}. Reemplaza catalogo_tienda.json en la carpeta publica de la tienda.',
       );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo exportar el catálogo: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo exportar el catÃ¡logo: $e')));
     }
   }
 
@@ -14902,41 +14902,41 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
       appBar: AppBar(
         backgroundColor: bg, elevation: 0, scrolledUnderElevation: 0, toolbarHeight: 76, titleSpacing: 0, leadingWidth: 64,
         leading: Padding(padding: const EdgeInsets.only(left: 12, top: 14, bottom: 14), child: Material(color: Colors.white, borderRadius: BorderRadius.circular(16), child: InkWell(borderRadius: BorderRadius.circular(16), onTap: widget.onAbrirSidebar, child: const Icon(Icons.menu_rounded, color: AppColors.primary, size: 23)))),
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Tienda online', style: TextStyle(color: ink, fontSize: 18, fontWeight: FontWeight.w900)), Text('Escaparate, contacto y publicación', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w600))]),
+        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Tienda online', style: TextStyle(color: ink, fontSize: 18, fontWeight: FontWeight.w900)), Text('Escaparate, contacto y publicaciÃ³n', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w600))]),
         actions: [IconButton(onPressed: _load, tooltip: 'Actualizar', icon: const Icon(Icons.refresh_rounded, color: AppColors.primary)), const SizedBox(width: 6)],
       ),
       body: _loading ? const Center(child: CircularProgressIndicator(color: AppColors.primary)) : ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 28), children: [
-        Container(padding: const EdgeInsets.fromLTRB(18, 18, 18, 20), decoration: BoxDecoration(gradient: AppColors.gradientPrimary, borderRadius: BorderRadius.circular(24)), child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('STORE CONTROL', style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.5)), SizedBox(height: 7), Text('Tu tienda, lista para vender', style: TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w900)), SizedBox(height: 5), Text('El POS sigue trabajando localmente. La tienda pública consulta el catálogo publicado.', style: TextStyle(color: Colors.white70, fontSize: 10.5, height: 1.35))])),
+        Container(padding: const EdgeInsets.fromLTRB(18, 18, 18, 20), decoration: BoxDecoration(gradient: AppColors.gradientPrimary, borderRadius: BorderRadius.circular(24)), child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('STORE CONTROL', style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.5)), SizedBox(height: 7), Text('Tu tienda, lista para vender', style: TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w900)), SizedBox(height: 5), Text('El POS sigue trabajando localmente. La tienda pÃºblica consulta el catÃ¡logo publicado.', style: TextStyle(color: Colors.white70, fontSize: 10.5, height: 1.35))])),
         const SizedBox(height: 18),
-        _adminCard('Publicación', 'Enlace que compartirás con tus clientes.', Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          TextField(controller: _publicUrl, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Enlace público', prefixIcon: Icon(Icons.link_rounded))),
+        _adminCard('PublicaciÃ³n', 'Enlace que compartirÃ¡s con tus clientes.', Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          TextField(controller: _publicUrl, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Enlace pÃºblico', prefixIcon: Icon(Icons.link_rounded))),
           const SizedBox(height: 10),
           Row(children: [Expanded(child: OutlinedButton.icon(onPressed: _openStore, icon: const Icon(Icons.open_in_new_rounded), label: const Text('Abrir tienda'))), const SizedBox(width: 9), Expanded(child: FilledButton.icon(onPressed: _saveSettings, icon: const Icon(Icons.save_rounded), label: const Text('Guardar')))]),
           const SizedBox(height: 9),
           SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _shareStore, icon: const Icon(Icons.share_rounded), label: const Text('Compartir enlace'))),
         ])),
         const SizedBox(height: 12),
-        _adminCard('WhatsApp', 'Número que recibirá las consultas y pedidos de la tienda.', Column(children: [TextField(controller: _whatsapp, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'WhatsApp de la tienda', hintText: 'Ej. 17865551234', prefixIcon: Icon(Icons.chat_rounded))), const SizedBox(height: 6), Align(alignment: Alignment.centerLeft, child: Text('Usa el número con código de país, sin espacios ni símbolos.', style: TextStyle(color: muted, fontSize: 9)))])),
+        _adminCard('WhatsApp', 'NÃºmero que recibirÃ¡ las consultas y pedidos de la tienda.', Column(children: [TextField(controller: _whatsapp, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'WhatsApp de la tienda', hintText: 'Ej. 17865551234', prefixIcon: Icon(Icons.chat_rounded))), const SizedBox(height: 6), Align(alignment: Alignment.centerLeft, child: Text('Usa el nÃºmero con cÃ³digo de paÃ­s, sin espacios ni sÃ­mbolos.', style: TextStyle(color: muted, fontSize: 9)))])),
         const SizedBox(height: 12),
-        _adminCard('Portada', 'Banners de promoción. La tienda los rota automáticamente.', Column(children: [
-          Row(children: [Expanded(child: TextField(controller: _title, decoration: const InputDecoration(labelText: 'Título'))), const SizedBox(width: 9), Expanded(child: TextField(controller: _button, decoration: const InputDecoration(labelText: 'Botón')))]),
-          TextField(controller: _subtitle, decoration: const InputDecoration(labelText: 'Subtítulo')),
+        _adminCard('Portada', 'Banners de promociÃ³n. La tienda los rota automÃ¡ticamente.', Column(children: [
+          Row(children: [Expanded(child: TextField(controller: _title, decoration: const InputDecoration(labelText: 'TÃ­tulo'))), const SizedBox(width: 9), Expanded(child: TextField(controller: _button, decoration: const InputDecoration(labelText: 'BotÃ³n')))]),
+          TextField(controller: _subtitle, decoration: const InputDecoration(labelText: 'SubtÃ­tulo')),
           const SizedBox(height: 10),
-          Row(children: [Expanded(child: OutlinedButton.icon(onPressed: _pickBanner, icon: const Icon(Icons.image_outlined), label: Text(_bannerImage == null ? 'Seleccionar imagen' : 'Imagen seleccionada'))), const SizedBox(width: 9), FilledButton.icon(onPressed: _addBanner, icon: const Icon(Icons.add_rounded), label: const Text('Añadir'))]),
+          Row(children: [Expanded(child: OutlinedButton.icon(onPressed: _pickBanner, icon: const Icon(Icons.image_outlined), label: Text(_bannerImage == null ? 'Seleccionar imagen' : 'Imagen seleccionada'))), const SizedBox(width: 9), FilledButton.icon(onPressed: _addBanner, icon: const Icon(Icons.add_rounded), label: const Text('AÃ±adir'))]),
           if (_bannerImage != null) Padding(padding: const EdgeInsets.only(top: 12), child: ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.memory(base64Decode(_bannerImage!), height: 145, width: double.infinity, fit: BoxFit.cover))),
         ])),
         const SizedBox(height: 12),
-        _adminCard('Catálogo conectado', 'La tienda utiliza los mismos productos y categorías del POS.', Row(children: [Expanded(child: _miniStat('${_productos.length}', 'Productos')), Expanded(child: _miniStat('${_categorias.length}', 'Categorías')), Expanded(child: _miniStat('${_productos.where((p) => (int.tryParse((p['destacado'] ?? 0).toString()) ?? 0) > 0).length}', 'Destacados'))])),
+        _adminCard('CatÃ¡logo conectado', 'La tienda utiliza los mismos productos y categorÃ­as del POS.', Row(children: [Expanded(child: _miniStat('${_productos.length}', 'Productos')), Expanded(child: _miniStat('${_categorias.length}', 'CategorÃ­as')), Expanded(child: _miniStat('${_productos.where((p) => (int.tryParse((p['destacado'] ?? 0).toString()) ?? 0) > 0).length}', 'Destacados'))])),
         const SizedBox(height: 12),
         if (_banners.isNotEmpty) ...[
           Padding(padding: const EdgeInsets.only(bottom: 8, left: 2), child: Text('Banners activos', style: TextStyle(color: ink, fontSize: 14, fontWeight: FontWeight.w900))),
           ..._banners.asMap().entries.map((entry) { final index = entry.key; final banner = entry.value; final image = banner['image']?.toString() ?? ''; final active = banner['active'] ?? true; return Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFE4E7EC))), child: Row(children: [ClipRRect(borderRadius: BorderRadius.circular(12), child: image.isEmpty ? const SizedBox(width: 92, height: 62, child: Icon(Icons.image_outlined)) : Image.memory(base64Decode(image), width: 92, height: 62, fit: BoxFit.cover)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(banner['title']?.toString() ?? 'Banner', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11)), const SizedBox(height: 2), Text(active ? 'Visible en la tienda' : 'Oculto', style: TextStyle(fontSize: 8.5, color: active ? AppColors.success : AppColors.danger, fontWeight: FontWeight.w800))])), Switch(value: active, onChanged: (_) => _toggle(index)), IconButton(onPressed: () => _delete(index), tooltip: 'Eliminar', icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger))])); }),
         ],
         const SizedBox(height: 4),
-        _adminCard('Catálogo público', 'Genera una copia para respaldo. La publicación web usa tienda.html y el catálogo remoto.', Column(children: [
-          Row(children: [const Icon(Icons.cloud_done_rounded, color: AppColors.success, size: 19), const SizedBox(width: 9), Expanded(child: Text('Productos del POS → sincronización → tienda pública', style: TextStyle(color: ink, fontSize: 10, fontWeight: FontWeight.w700)))]),
+        _adminCard('CatÃ¡logo pÃºblico', 'Genera una copia para respaldo. La publicaciÃ³n web usa tienda.html y el catÃ¡logo remoto.', Column(children: [
+          Row(children: [const Icon(Icons.cloud_done_rounded, color: AppColors.success, size: 19), const SizedBox(width: 9), Expanded(child: Text('Productos del POS â†’ sincronizaciÃ³n â†’ tienda pÃºblica', style: TextStyle(color: ink, fontSize: 10, fontWeight: FontWeight.w700)))]),
           const SizedBox(height: 11),
-          SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _exportarCatalogoPublico, icon: const Icon(Icons.file_download_outlined), label: const Text('Exportar catálogo'))),
+          SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _exportarCatalogoPublico, icon: const Icon(Icons.file_download_outlined), label: const Text('Exportar catÃ¡logo'))),
         ])),
       ]),
     );
@@ -15044,7 +15044,7 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
                   style: TextStyle(color: AppColors.text(isDark)),
                   keyboardType: TextInputType.phone,
                   decoration: InputDecoration(
-                    labelText: 'Teléfono',
+                    labelText: 'TelÃ©fono',
                     labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                     filled: true,
                     fillColor: AppColors.background(isDark),
@@ -15343,7 +15343,7 @@ class _PromocionesScreenState extends State<PromocionesScreen> {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text(
-            promocion != null ? 'Editar Promoción' : 'Nueva Promoción',
+            promocion != null ? 'Editar PromociÃ³n' : 'Nueva PromociÃ³n',
             style: TextStyle(
                 color: AppColors.text(isDark), fontWeight: FontWeight.w700),
           ),
@@ -15447,7 +15447,7 @@ class _PromocionesScreenState extends State<PromocionesScreen> {
                         _cargarPromociones();
                       } catch (e) {
                         setDialogState(() => guardando = false);
-                        debugPrint('Error guardando promoción: $e');
+                        debugPrint('Error guardando promociÃ³n: $e');
                       }
                     },
               icon: guardando
@@ -15622,7 +15622,7 @@ const SizedBox(width: 14),
                   onPressed: () => _mostrarDialogo(),
                   icon: const Icon(Icons.add_rounded,
                       color: Colors.white, size: 24),
-                  label: const Text('AGREGAR PROMOCIÓN',
+                  label: const Text('AGREGAR PROMOCIÃ“N',
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 14,
@@ -15906,7 +15906,7 @@ class _RolesScreenState extends State<RolesScreen> {
                 obscureText: true,
                 decoration: InputDecoration(
                   labelText:
-                      usuario != null ? 'Nueva Contraseña' : 'Contraseña *',
+                      usuario != null ? 'Nueva ContraseÃ±a' : 'ContraseÃ±a *',
                   labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                   filled: true,
                   fillColor: AppColors.background(isDark),
@@ -16243,9 +16243,9 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
       late DateTime inicio;
       if (_periodo == 'Hoy') {
         inicio = DateTime(ahora.year, ahora.month, ahora.day);
-      } else if (_periodo == '7 días') {
+      } else if (_periodo == '7 dÃ­as') {
         inicio = DateTime(ahora.year, ahora.month, ahora.day).subtract(const Duration(days: 6));
-      } else if (_periodo == '30 días') {
+      } else if (_periodo == '30 dÃ­as') {
         inicio = DateTime(ahora.year, ahora.month, ahora.day).subtract(const Duration(days: 29));
       } else {
         inicio = DateTime(ahora.year, ahora.month, 1);
@@ -16261,7 +16261,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
       }
       _porMetodo = mapa;
     } catch (e) {
-      debugPrint('Error cargando estadísticas profesionales: $e');
+      debugPrint('Error cargando estadÃ­sticas profesionales: $e');
       _ventas = []; _masVendidos = []; _porMetodo = {}; _gastos = 0;
     } finally {
       if (mounted) setState(() => _cargando = false);
@@ -16292,7 +16292,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
   }
 
   Widget _paymentChart(bool dark) {
-    if (_porMetodo.isEmpty) return Center(child: Padding(padding: const EdgeInsets.all(18), child: Text('Aún no hay pagos registrados en este periodo.', style: TextStyle(color: AppColors.subtext(dark), fontSize: 11))));
+    if (_porMetodo.isEmpty) return Center(child: Padding(padding: const EdgeInsets.all(18), child: Text('AÃºn no hay pagos registrados en este periodo.', style: TextStyle(color: AppColors.subtext(dark), fontSize: 11))));
     final entries = _porMetodo.entries.toList()..sort((a,b)=>b.value.compareTo(a.value));
     final total = _ventasTotal <= 0 ? 1 : _ventasTotal;
     final colors = [AppColors.primary, AppColors.info, AppColors.success, AppColors.warning, AppColors.secondary, AppColors.danger];
@@ -16314,7 +16314,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
   }
 
   Widget _topProducts(bool dark) {
-    if (_masVendidos.isEmpty) return Text('Sin productos vendidos todavía.', style: TextStyle(color: AppColors.subtext(dark), fontSize: 11));
+    if (_masVendidos.isEmpty) return Text('Sin productos vendidos todavÃ­a.', style: TextStyle(color: AppColors.subtext(dark), fontSize: 11));
     final top=_masVendidos.take(6).toList();
     final max=top.fold<double>(1,(m,p)=>_num(p['cantidad'])>m?_num(p['cantidad']):m);
     return Column(children:[for(final p in top) Padding(padding:const EdgeInsets.symmetric(vertical:5),child:Row(children:[Expanded(flex:3,child:Text('${p['nombre']??''}',maxLines:1,overflow:TextOverflow.ellipsis,style:TextStyle(color:AppColors.text(dark),fontSize:10,fontWeight:FontWeight.w700))),Expanded(flex:4,child:Padding(padding:const EdgeInsets.symmetric(horizontal:8),child:ClipRRect(borderRadius:BorderRadius.circular(8),child:LinearProgressIndicator(value:_num(p['cantidad'])/max,minHeight:8,backgroundColor:AppColors.divider(dark),valueColor:AlwaysStoppedAnimation(AppColors.primary))))),SizedBox(width:55,child:Text('${p['cantidad']} uds',textAlign:TextAlign.right,style:TextStyle(color:AppColors.subtext(dark),fontSize:9,fontWeight:FontWeight.w700))) ]))]);
@@ -16324,20 +16324,20 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
   Widget build(BuildContext context) {
     final dark=widget.modoOscuro;
     final fecha=DateFormat('dd MMM yyyy', 'es').format(DateTime.now());
-    return Scaffold(backgroundColor:AppColors.background(dark),appBar:AppBar(backgroundColor:Colors.transparent,elevation:0,leading:IconButton(onPressed:widget.onAbrirSidebar,tooltip:'Abrir menú',icon:Icon(Icons.menu_rounded,color:AppColors.text(dark))),title:Text('Estadísticas y métricas',style:TextStyle(color:AppColors.text(dark),fontSize:18,fontWeight:FontWeight.w900))),body:_cargando?const Center(child:CircularProgressIndicator(color:AppColors.primary)):RefreshIndicator(onRefresh:_cargarDatos,child:ListView(padding:const EdgeInsets.fromLTRB(14,4,14,28),children:[
+    return Scaffold(backgroundColor:AppColors.background(dark),appBar:AppBar(backgroundColor:Colors.transparent,elevation:0,leading:IconButton(onPressed:widget.onAbrirSidebar,tooltip:'Abrir menÃº',icon:Icon(Icons.menu_rounded,color:AppColors.text(dark))),title:Text('EstadÃ­sticas y mÃ©tricas',style:TextStyle(color:AppColors.text(dark),fontSize:18,fontWeight:FontWeight.w900))),body:_cargando?const Center(child:CircularProgressIndicator(color:AppColors.primary)):RefreshIndicator(onRefresh:_cargarDatos,child:ListView(padding:const EdgeInsets.fromLTRB(14,4,14,28),children:[
       Row(children:[Expanded(child:Text('Resumen del negocio',style:TextStyle(color:AppColors.text(dark),fontSize:20,fontWeight:FontWeight.w900))),Container(padding:const EdgeInsets.symmetric(horizontal:9,vertical:5),decoration:BoxDecoration(color:AppColors.primary.withValues(alpha:.08),borderRadius:BorderRadius.circular(10)),child:Text(fecha,style:TextStyle(color:AppColors.primary,fontSize:9,fontWeight:FontWeight.w800)))]),
       const SizedBox(height:10),
-      SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(children:[for(final p in ['Hoy','7 días','30 días','Mes']) Padding(padding:const EdgeInsets.only(right:7),child:ChoiceChip(label:Text(p),selected:_periodo==p,onSelected:(_){if(_){setState(()=>_periodo=p);_cargarDatos();}}))])),
+      SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(children:[for(final p in ['Hoy','7 dÃ­as','30 dÃ­as','Mes']) Padding(padding:const EdgeInsets.only(right:7),child:ChoiceChip(label:Text(p),selected:_periodo==p,onSelected:(_){if(_){setState(()=>_periodo=p);_cargarDatos();}}))])),
       const SizedBox(height:10),
       LayoutBuilder(builder:(ctx,c)=>GridView.count(crossAxisCount:c.maxWidth>700?4:2,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),crossAxisSpacing:8,mainAxisSpacing:8,childAspectRatio:c.maxWidth>700?2.5:1.8,children:[_card(title:'Ventas',value:_money(_ventasTotal),icon:Icons.point_of_sale_outlined,detail:'Ingresos por ventas',dark:dark),_card(title:'Transacciones',value:'${_ventas.length}',icon:Icons.receipt_long_outlined,detail:'Tickets procesados',dark:dark),_card(title:'Ticket promedio',value:_money(_ticketPromedio),icon:Icons.analytics_outlined,detail:'Venta media',dark:dark),_card(title:'Ganancia',value:_money(_ganancia),icon:Icons.trending_up_rounded,detail:'Utilidad registrada',dark:dark)])),
       const SizedBox(height:10),
-      _section('Dinero recogido',Row(children:[Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(_money(_ventasTotal),style:TextStyle(color:AppColors.text(dark),fontSize:25,fontWeight:FontWeight.w900)),Text('Total cobrado en ventas',style:TextStyle(color:AppColors.subtext(dark),fontSize:10)),const SizedBox(height:9),Row(children:[Expanded(child:Text('Efectivo\n${_money(_efectivo)}',style:TextStyle(color:AppColors.text(dark),fontSize:11,fontWeight:FontWeight.w800))),Expanded(child:Text('Digital\n${_money(_digital)}',style:TextStyle(color:AppColors.text(dark),fontSize:11,fontWeight:FontWeight.w800))),Expanded(child:Text('Gastos\n${_money(_gastos)}',style:TextStyle(color:AppColors.danger,fontSize:11,fontWeight:FontWeight.w800)))])])),Container(width:95,height:95,decoration:BoxDecoration(shape:BoxShape.circle,color:AppColors.success.withValues(alpha:.10)),child:Icon(Icons.account_balance_wallet_rounded,color:AppColors.success,size:42))]),dark,subtitle:'Cuánto dinero entró y cuánto salió durante el periodo.'),
+      _section('Dinero recogido',Row(children:[Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(_money(_ventasTotal),style:TextStyle(color:AppColors.text(dark),fontSize:25,fontWeight:FontWeight.w900)),Text('Total cobrado en ventas',style:TextStyle(color:AppColors.subtext(dark),fontSize:10)),const SizedBox(height:9),Row(children:[Expanded(child:Text('Efectivo\n${_money(_efectivo)}',style:TextStyle(color:AppColors.text(dark),fontSize:11,fontWeight:FontWeight.w800))),Expanded(child:Text('Digital\n${_money(_digital)}',style:TextStyle(color:AppColors.text(dark),fontSize:11,fontWeight:FontWeight.w800))),Expanded(child:Text('Gastos\n${_money(_gastos)}',style:TextStyle(color:AppColors.danger,fontSize:11,fontWeight:FontWeight.w800)))])])),Container(width:95,height:95,decoration:BoxDecoration(shape:BoxShape.circle,color:AppColors.success.withValues(alpha:.10)),child:Icon(Icons.account_balance_wallet_rounded,color:AppColors.success,size:42))]),dark,subtitle:'CuÃ¡nto dinero entrÃ³ y cuÃ¡nto saliÃ³ durante el periodo.'),
       const SizedBox(height:10),
-      _section('Pagos por método',_paymentChart(dark),dark,subtitle:'Monto recaudado por cada forma de pago.'),
+      _section('Pagos por mÃ©todo',_paymentChart(dark),dark,subtitle:'Monto recaudado por cada forma de pago.'),
       const SizedBox(height:10),
-      _section('Ventas por hora',_hourChart(dark),dark,subtitle:'Distribución de ingresos durante el día.'),
+      _section('Ventas por hora',_hourChart(dark),dark,subtitle:'DistribuciÃ³n de ingresos durante el dÃ­a.'),
       const SizedBox(height:10),
-      _section('Productos más vendidos',_topProducts(dark),dark,subtitle:'Unidades vendidas y ranking del catálogo.'),
+      _section('Productos mÃ¡s vendidos',_topProducts(dark),dark,subtitle:'Unidades vendidas y ranking del catÃ¡logo.'),
       const SizedBox(height:10),
       _section('Indicadores adicionales',Column(children:[_metricRow('Efectivo recaudado',_money(_efectivo),Icons.payments_outlined,dark),_metricRow('Pagos digitales',_money(_digital),Icons.credit_card_outlined,dark),_metricRow('Gastos registrados',_money(_gastos),Icons.remove_circle_outline,dark),_metricRow('Margen de ganancia',_ventasTotal<=0?'0%':'${(_ganancia/_ventasTotal*100).toStringAsFixed(1)}%',Icons.percent_rounded,dark)]),dark),
     ])));
@@ -16383,4 +16383,5 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
 
   Widget _metricRow(String label,String value,IconData icon,bool dark)=>Container(padding:const EdgeInsets.symmetric(vertical:9),decoration:BoxDecoration(border:Border(bottom:BorderSide(color:AppColors.divider(dark)))),child:Row(children:[Icon(icon,color:AppColors.primary,size:18),const SizedBox(width:10),Expanded(child:Text(label,style:TextStyle(color:AppColors.text(dark),fontSize:11,fontWeight:FontWeight.w700))),Text(value,style:TextStyle(color:AppColors.text(dark),fontSize:12,fontWeight:FontWeight.w900))]));
 }
+
 
