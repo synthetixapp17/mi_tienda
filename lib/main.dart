@@ -1,11 +1,12 @@
-﻿// ============================================
+// SINTHETIX PRO V37 - PARCHE INTEGRAL
+// Navbar morado + tarjetas POS/TIENDA mejoradas.
+// ============================================
 // SINTHETIX PRO - V25 ESTADISTICAS + ETIQUETAS COMPACTAS
-// V25: mÃ©tricas profesionales + impresiÃ³n tÃ©rmica compacta + diseÃ±o sincronizado
+// V25: métricas profesionales + impresión térmica compacta + diseño sincronizado
 // ============================================
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -23,7 +24,6 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:path_provider/path_provider.dart';
 import 'package:curved_labeled_navigation_bar/curved_navigation_bar.dart';
 import 'package:curved_labeled_navigation_bar/curved_navigation_bar_item.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -31,6 +31,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
@@ -45,7 +46,7 @@ Map<String, String> simbolosMoneda = {'USD': '\$', 'COP': '\$', 'VES': 'Bs.'};
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 // ============================================
-// COLORES DE LA APLICACIÃ“N - DISEÃ‘O PROFESIONAL
+// COLORES DE LA APLICACIÓN - DISEÑO PROFESIONAL
 // ============================================
 class AppColors {
   static Color background(bool isDark) =>
@@ -61,14 +62,14 @@ class AppColors {
   static Color divider(bool isDark) =>
       isDark ? Colors.white10 : const Color(0xFFE2E8F0);
   static Color shadow(bool isDark) =>
-      isDark ? Colors.black : const Color(0xFFF0B90B).withValues(alpha: 0.05);
+      isDark ? Colors.black : AppColors.primary.withValues(alpha: 0.05);
 
   // Paleta profesional
-  static const Color primary = Color(0xFFF0B90B);
-  static const Color primaryDark = Color(0xFFD99F00);
-  static const Color secondary = Color(0xFFF8D33A);
+  static const Color primary = Color(0xFF4A176B);
+  static const Color primaryDark = Color(0xFF32104B);
+  static const Color secondary = Color(0xFF7C3AED);
   static const Color success = Color(0xFF0ECB81);
-  static const Color warning = Color(0xFFF0B90B);
+  static const Color warning = AppColors.primary;
   static const Color danger = Color(0xFFF6465D);
   static const Color info = Color(0xFF3861FB);
   static const Color whatsapp = Color(0xFF25D366);
@@ -77,7 +78,7 @@ class AppColors {
 
   // Gradientes profesionales
   static const LinearGradient gradientPrimary = LinearGradient(
-    colors: [Color(0xFFF0B90B), Color(0xFFF8D33A)],
+    colors: [Color(0xFF4A176B), Color(0xFF7C3AED)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -101,13 +102,13 @@ class AppColors {
   );
 
   static const LinearGradient gradientWarning = LinearGradient(
-    colors: [Color(0xFFF59E0B), Color(0xFFB45309)],
+    colors: [AppColors.primary, AppColors.info],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const LinearGradient gradientVioleta = LinearGradient(
-    colors: [Color(0xFFF8D33A), Color(0xFFD99F00)],
+    colors: [Color(0xFF4A176B), Color(0xFF7C3AED)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -197,7 +198,7 @@ class LocalDatabase {
       return await databaseFactory.openDatabase(
         'sinthetix_pro_web.db',
         options: OpenDatabaseOptions(
-          version: 3,
+          version: 4,
           onCreate: _createTables,
           onUpgrade: (db, oldVersion, newVersion) async {
             if (oldVersion < 3) {
@@ -207,6 +208,9 @@ class LocalDatabase {
                 "ALTER TABLE productos ADD COLUMN sync_estado TEXT DEFAULT 'pendiente'",
                 'ALTER TABLE productos ADD COLUMN sync_error TEXT',
               ]) { try { await db.execute(sql); } catch (_) {} }
+            }
+            if (oldVersion < 4) {
+              try { await db.execute('ALTER TABLE productos ADD COLUMN opciones_json TEXT'); } catch (_) {}
             }
           },
         ),
@@ -219,7 +223,7 @@ class LocalDatabase {
 
     return await openDatabase(
       dbPath,
-      version: 3,
+      version: 4,
       onCreate: _createTables,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 3) {
@@ -229,6 +233,9 @@ class LocalDatabase {
             "ALTER TABLE productos ADD COLUMN sync_estado TEXT DEFAULT 'pendiente'",
             'ALTER TABLE productos ADD COLUMN sync_error TEXT',
           ]) { try { await db.execute(sql); } catch (_) {} }
+        }
+        if (oldVersion < 4) {
+          try { await db.execute('ALTER TABLE productos ADD COLUMN opciones_json TEXT'); } catch (_) {}
         }
       },
     );
@@ -258,6 +265,7 @@ class LocalDatabase {
         color TEXT,
         color_hex TEXT,
         tiene_variantes INTEGER DEFAULT 0,
+        opciones_json TEXT,
         descuento REAL DEFAULT 0,
         margen REAL DEFAULT 0,
         creado_en TEXT,
@@ -398,7 +406,7 @@ class LocalDatabase {
         numero_copias INTEGER DEFAULT 1,
         usar_misma_impresora INTEGER DEFAULT 1,
         tamano_etiqueta TEXT DEFAULT '40x30mm',
-        mensaje_pie TEXT DEFAULT 'Â¡Gracias por su compra!',
+        mensaje_pie TEXT DEFAULT '¡Gracias por su compra!',
         mensaje_adicional TEXT,
         actualizado_en TEXT
       )
@@ -534,7 +542,7 @@ class LocalDatabase {
       });
       await db.insert('metodos_pago', {
         'id': 'mp_pago_movil',
-        'nombre': 'Pago MÃ³vil',
+        'nombre': 'Pago Móvil',
         'activo': 1,
         'creado_en': DateTime.now().toIso8601String(),
       });
@@ -562,7 +570,7 @@ class LocalDatabase {
         'Ropa',
         'Calzado',
         'Accesorios',
-        'ElectrÃ³nica',
+        'Electrónica',
         'Alimentos'
       ];
       for (var i = 0; i < categoriasDefault.length; i++) {
@@ -640,7 +648,7 @@ class LocalDatabase {
 }
 
 // ============================================
-// SERVICIO DE BASE DE DATOS - CORREGIDO CON GUARDADO AUTOMÃTICO
+// SERVICIO DE BASE DE DATOS - CORREGIDO CON GUARDADO AUTOMÁTICO
 // ============================================
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._();
@@ -704,7 +712,7 @@ class DatabaseService {
       if (result > 0) {
         productosVersion.value++;
         // LOCAL FIRST: el producto queda guardado inmediatamente aunque no haya
-        // internet. La sincronizaciÃ³n con Supabase/Cloudinary continÃºa en segundo plano.
+        // internet. La sincronización con Supabase/Cloudinary continúa en segundo plano.
         prod['sync_estado'] = 'pendiente';
         prod['sync_error'] = null;
         await _db.update('productos', {
@@ -736,7 +744,7 @@ class DatabaseService {
       final result = await _db.update('productos', prod, 'id = ?', [id]);
       debugPrint('Producto actualizado: $id, filas: $result');
       if (result > 0) {
-        // La ediciÃ³n tambiÃ©n es local-first; no bloquea la pantalla si la nube estÃ¡ offline.
+        // La edición también es local-first; no bloquea la pantalla si la nube está offline.
         unawaited(SupabaseSyncService.syncPendingProducts());
       }
       return result > 0;
@@ -779,10 +787,10 @@ class DatabaseService {
     }
   }
 
-  // ============ CATEGORÃAS ============
+  // ============ CATEGORÍAS ============
   Future<List<Map<String, dynamic>>> getCategorias() async {
     final result = await _db.getAll('categorias', orderBy: 'nombre');
-    debugPrint('CategorÃ­as cargadas: ${result.length}');
+    debugPrint('Categorías cargadas: ${result.length}');
     return result;
   }
 
@@ -792,9 +800,9 @@ class DatabaseService {
       categoria['creado_en'] = DateTime.now().toIso8601String();
       final result = await _db.insert('categorias', categoria);
       debugPrint(
-          'CategorÃ­a guardada: ${categoria['nombre']} - Resultado: $result');
+          'Categoría guardada: ${categoria['nombre']} - Resultado: $result');
     } catch (e) {
-      debugPrint('Error creando categorÃ­a: $e');
+      debugPrint('Error creando categoría: $e');
     }
   }
 
@@ -803,7 +811,7 @@ class DatabaseService {
     try {
       await _db.update('categorias', categoria, 'id = ?', [id]);
     } catch (e) {
-      debugPrint('Error actualizando categorÃ­a: $e');
+      debugPrint('Error actualizando categoría: $e');
     }
   }
 
@@ -811,11 +819,11 @@ class DatabaseService {
     try {
       await _db.delete('categorias', 'id = ?', [id]);
     } catch (e) {
-      debugPrint('Error eliminando categorÃ­a: $e');
+      debugPrint('Error eliminando categoría: $e');
     }
   }
 
-  // ============ MÃ‰TODOS DE PAGO ============
+  // ============ MÉTODOS DE PAGO ============
   Future<List<Map<String, dynamic>>> getMetodosPago() async {
     return await _db.getAll('metodos_pago', orderBy: 'nombre');
   }
@@ -825,9 +833,9 @@ class DatabaseService {
       metodo['id'] = metodo['id'] ?? _generateId();
       metodo['creado_en'] = DateTime.now().toIso8601String();
       await _db.insert('metodos_pago', metodo);
-      debugPrint('MÃ©todo de pago guardado: ${metodo['nombre']}');
+      debugPrint('Método de pago guardado: ${metodo['nombre']}');
     } catch (e) {
-      debugPrint('Error creando mÃ©todo de pago: $e');
+      debugPrint('Error creando método de pago: $e');
     }
   }
 
@@ -836,7 +844,7 @@ class DatabaseService {
     try {
       await _db.update('metodos_pago', metodo, 'id = ?', [id]);
     } catch (e) {
-      debugPrint('Error actualizando mÃ©todo de pago: $e');
+      debugPrint('Error actualizando método de pago: $e');
     }
   }
 
@@ -844,7 +852,7 @@ class DatabaseService {
     try {
       await _db.delete('metodos_pago', 'id = ?', [id]);
     } catch (e) {
-      debugPrint('Error eliminando mÃ©todo de pago: $e');
+      debugPrint('Error eliminando método de pago: $e');
     }
   }
 
@@ -980,8 +988,8 @@ class DatabaseService {
         return null;
       }
 
-      // VerificaciÃ³n real: evita mostrar una venta como exitosa si SQLite/Web
-      // no la dejÃ³ persistida.
+      // Verificación real: evita mostrar una venta como exitosa si SQLite/Web
+      // no la dejó persistida.
       final verificada = await _db.query(
         'SELECT * FROM ventas WHERE id = ?',
         [venta['id']],
@@ -1079,7 +1087,7 @@ class DatabaseService {
     return await _db.getAll('movimientos_inventario', orderBy: 'fecha DESC');
   }
 
-  // ============ CONFIGURACIÃ“N ============
+  // ============ CONFIGURACIÓN ============
   Future<Map<String, dynamic>?> getConfiguracion() async {
     final results = await _db.query('SELECT * FROM configuracion WHERE id = 1');
     if (results.isEmpty) return null;
@@ -1091,9 +1099,9 @@ class DatabaseService {
       config['id'] = 1;
       config['actualizado_en'] = DateTime.now().toIso8601String();
       await _db.insert('configuracion', config, replace: true);
-      debugPrint('ConfiguraciÃ³n guardada correctamente');
+      debugPrint('Configuración guardada correctamente');
     } catch (e) {
-      debugPrint('Error guardando configuraciÃ³n: $e');
+      debugPrint('Error guardando configuración: $e');
     }
   }
 
@@ -1109,9 +1117,9 @@ class DatabaseService {
       config['id'] = 1;
       config['actualizado_en'] = DateTime.now().toIso8601String();
       await _db.insert('configuracion_ticket', config, replace: true);
-      debugPrint('ConfiguraciÃ³n ticket guardada');
+      debugPrint('Configuración ticket guardada');
     } catch (e) {
-      debugPrint('Error guardando configuraciÃ³n ticket: $e');
+      debugPrint('Error guardando configuración ticket: $e');
     }
   }
 
@@ -1179,9 +1187,9 @@ class DatabaseService {
       promocion['id'] = promocion['id'] ?? _generateId();
       promocion['creado_en'] = DateTime.now().toIso8601String();
       await _db.insert('promociones', promocion);
-      debugPrint('PromociÃ³n guardada: ${promocion['nombre']}');
+      debugPrint('Promoción guardada: ${promocion['nombre']}');
     } catch (e) {
-      debugPrint('Error creando promociÃ³n: $e');
+      debugPrint('Error creando promoción: $e');
     }
   }
 
@@ -1190,7 +1198,7 @@ class DatabaseService {
     try {
       await _db.update('promociones', promocion, 'id = ?', [id]);
     } catch (e) {
-      debugPrint('Error actualizando promociÃ³n: $e');
+      debugPrint('Error actualizando promoción: $e');
     }
   }
 
@@ -1198,7 +1206,7 @@ class DatabaseService {
     try {
       await _db.delete('promociones', 'id = ?', [id]);
     } catch (e) {
-      debugPrint('Error eliminando promociÃ³n: $e');
+      debugPrint('Error eliminando promoción: $e');
     }
   }
 
@@ -1253,7 +1261,7 @@ class DatabaseService {
 }
 
 // ============================================
-// SERVICIO DE CÃ“DIGOS DE BARRAS
+// SERVICIO DE CÓDIGOS DE BARRAS
 // ============================================
 class BarcodeService {
   static final BarcodeService _instance = BarcodeService._();
@@ -1447,7 +1455,7 @@ class TicketService {
                 pw.SizedBox(height: 5),
                 pw.Center(
                   child: pw.Text(
-                    config?['mensaje_pie'] ?? 'Â¡Gracias por su compra!',
+                    config?['mensaje_pie'] ?? '¡Gracias por su compra!',
                     style: const pw.TextStyle(
                         fontSize: 10, fontWeight: pw.FontWeight.bold),
                   ),
@@ -1461,8 +1469,8 @@ class TicketService {
       final bytes = await pdf.save();
 
       // WEB: path_provider no implementa getTemporaryDirectory() en esta
-      // configuraciÃ³n del proyecto. En navegador entregamos el PDF mediante
-      // el plugin de impresiÃ³n, que sÃ­ tiene implementaciÃ³n para Web.
+      // configuración del proyecto. En navegador entregamos el PDF mediante
+      // el plugin de impresión, que sí tiene implementación para Web.
       if (kIsWeb) {
         await Printing.sharePdf(
           bytes: bytes,
@@ -1471,11 +1479,13 @@ class TicketService {
         return 'web:ticket_$numeroFactura.pdf';
       }
 
-      // ANDROID / DESKTOP: guardamos el PDF en el directorio temporal local.
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/ticket_$numeroFactura.pdf');
-      await file.writeAsBytes(bytes, flush: true);
-      return file.path;
+      // Todas las plataformas: Printing se encarga de compartir/imprimir
+      // el PDF sin depender de dart:io ni de rutas del sistema.
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: 'ticket_$numeroFactura.pdf',
+      );
+      return 'shared:ticket_$numeroFactura.pdf';
     } catch (e) {
       debugPrint('Error generando PDF: $e');
       return null;
@@ -1552,11 +1562,72 @@ class ImagenProducto extends StatelessWidget {
   }
 }
 // ============================================
-// CONTINUACIÃ“N - ETAPA 2 de 6
+// OPCIONES DE PRODUCTO (extras, tamaños, salsas, etc.)
+// Genérico para cualquier tipo de negocio: comida, ropa, calzado...
+// ============================================
+class ValorOpcion {
+  String nombre;
+  double precioExtra;
+  ValorOpcion({required this.nombre, this.precioExtra = 0});
+
+  Map<String, dynamic> toJson() => {'nombre': nombre, 'precio_extra': precioExtra};
+  factory ValorOpcion.fromJson(Map<String, dynamic> j) => ValorOpcion(
+        nombre: j['nombre']?.toString() ?? '',
+        precioExtra: (j['precio_extra'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+class GrupoOpciones {
+  String nombre;
+  bool seleccionMultiple;
+  bool obligatorio;
+  List<ValorOpcion> valores;
+  GrupoOpciones({
+    required this.nombre,
+    this.seleccionMultiple = false,
+    this.obligatorio = false,
+    List<ValorOpcion>? valores,
+  }) : valores = valores ?? [];
+
+  Map<String, dynamic> toJson() => {
+        'nombre': nombre,
+        'multiple': seleccionMultiple,
+        'obligatorio': obligatorio,
+        'valores': valores.map((v) => v.toJson()).toList(),
+      };
+  factory GrupoOpciones.fromJson(Map<String, dynamic> j) => GrupoOpciones(
+        nombre: j['nombre']?.toString() ?? '',
+        seleccionMultiple: j['multiple'] == true,
+        obligatorio: j['obligatorio'] == true,
+        valores: ((j['valores'] as List?) ?? [])
+            .map((v) => ValorOpcion.fromJson(Map<String, dynamic>.from(v)))
+            .toList(),
+      );
+}
+
+class OpcionesProducto {
+  static List<GrupoOpciones> decodificar(String? json) {
+    if (json == null || json.trim().isEmpty) return [];
+    try {
+      final lista = jsonDecode(json) as List;
+      return lista
+          .map((g) => GrupoOpciones.fromJson(Map<String, dynamic>.from(g)))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static String codificar(List<GrupoOpciones> grupos) =>
+      jsonEncode(grupos.map((g) => g.toJson()).toList());
+}
+
+// ============================================
+// CONTINUACIÓN - ETAPA 2 de 6
 // ============================================
 
 // ============================================
-// WIDGET: SELECTOR DE TALLAS - DISEÃ‘O PROFESIONAL
+// WIDGET: SELECTOR DE TALLAS - DISEÑO PROFESIONAL
 // ============================================
 class SelectorTallas extends StatefulWidget {
   final List<Map<String, dynamic>> tallas;
@@ -1658,7 +1729,7 @@ class _SelectorTallasState extends State<SelectorTallas> {
 }
 
 // ============================================
-// WIDGET: SELECTOR DE COLORES - DISEÃ‘O PROFESIONAL
+// WIDGET: SELECTOR DE COLORES - DISEÑO PROFESIONAL
 // ============================================
 class SelectorColores extends StatefulWidget {
   final List<Map<String, dynamic>> colores;
@@ -1780,7 +1851,7 @@ class _SelectorColoresState extends State<SelectorColores> {
 }
 
 // ============================================
-// WIDGET: SCANNER RÃPIDO REUTILIZABLE
+// WIDGET: SCANNER RÁPIDO REUTILIZABLE
 // ============================================
 class ScannerRapido extends StatefulWidget {
   final bool isDark;
@@ -1987,7 +2058,7 @@ class _ScannerRapidoState extends State<ScannerRapido> with SingleTickerProvider
                     ),
                   ),
                   child: const Text(
-                    'Apunte la cÃ¡mara al cÃ³digo de barras',
+                    'Apunte la cámara al código de barras',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 12,
@@ -2067,7 +2138,7 @@ class _ScannerOverlayPainter extends CustomPainter {
 }
 
 // ============================================
-// SINCRONIZACIÃ“N ONLINE: SUPABASE + CLOUDINARY
+// SINCRONIZACIÓN ONLINE: SUPABASE + CLOUDINARY
 // ============================================
 class CloudinaryService {
   static const String cloudName = 'jn';
@@ -2115,18 +2186,18 @@ class SupabaseSyncService {
       final c = Supabase.instance.client;
       ready = true;
 
-      // El POS usa una sesiÃ³n anÃ³nima para que RLS permita escribir
-      // productos/categorÃ­as sin exponer una service_role key.
+      // El POS usa una sesión anónima para que RLS permita escribir
+      // productos/categorías sin exponer una service_role key.
       if (c.auth.currentSession == null) {
         try {
           await c.auth.signInAnonymously();
         } catch (authError) {
-          debugPrint('Supabase Auth anÃ³nimo no disponible: $authError');
+          debugPrint('Supabase Auth anónimo no disponible: $authError');
         }
       }
 
       final session = c.auth.currentSession;
-      debugPrint('Supabase inicializado. SesiÃ³n POS: ${session != null ? 'OK' : 'NO'}');
+      debugPrint('Supabase inicializado. Sesión POS: ${session != null ? 'OK' : 'NO'}');
     } catch (e) {
       ready = false;
       debugPrint('Supabase no disponible: $e');
@@ -2160,12 +2231,12 @@ class SupabaseSyncService {
     final c = client;
     if (c == null) return false;
     try {
-      // La escritura requiere sesiÃ³n authenticated (anÃ³nima).
+      // La escritura requiere sesión authenticated (anónima).
       if (c.auth.currentSession == null) {
         try { await c.auth.signInAnonymously(); } catch (_) {}
       }
       if (c.auth.currentSession == null) {
-        debugPrint('SYNC producto: sin sesiÃ³n autenticada');
+        debugPrint('SYNC producto: sin sesión autenticada');
         return false;
       }
 
@@ -2238,7 +2309,7 @@ class SupabaseSyncService {
       }
       return true;
     } catch (e) {
-      debugPrint('Supabase categorÃ­a pendiente: $e');
+      debugPrint('Supabase categoría pendiente: $e');
       return false;
     }
   }
@@ -2247,7 +2318,7 @@ class SupabaseSyncService {
     if (_syncing) return;
     _syncing = true;
     try {
-      // Si la app arrancÃ³ sin internet, reintentamos inicializar/auth al volver a tener red.
+      // Si la app arrancó sin internet, reintentamos inicializar/auth al volver a tener red.
       if (!ready) {
         await initialize();
       }
@@ -2257,7 +2328,7 @@ class SupabaseSyncService {
       for (final original in products) {
         final p = Map<String, dynamic>.from(original);
 
-        // 1) Si la imagen aÃºn estÃ¡ solo en local, primero la subimos a Cloudinary.
+        // 1) Si la imagen aún está solo en local, primero la subimos a Cloudinary.
         if ((p['imagen_url']?.toString() ?? '').trim().isEmpty &&
             (p['imagen_base64']?.toString() ?? '').trim().isNotEmpty) {
           final urlCloudinary = await uploadBase64(p['imagen_base64'].toString());
@@ -2271,7 +2342,7 @@ class SupabaseSyncService {
           }
         }
 
-        // 2) Solo despuÃ©s de tener la URL, sincronizamos el registro en Supabase.
+        // 2) Solo después de tener la URL, sincronizamos el registro en Supabase.
         final ok = await upsertProduct(p).timeout(const Duration(seconds: 15), onTimeout: () => false);
         await db.marcarProductoSincronizado(
           p['id'].toString(),
@@ -2291,7 +2362,7 @@ class SupabaseSyncService {
 // APP PRINCIPAL
 // ============================================
 
-/// SeÃ±al global para sincronizar automÃ¡ticamente los productos en todas las pantallas.
+/// Señal global para sincronizar automáticamente los productos en todas las pantallas.
 final ValueNotifier<int> productosVersion = ValueNotifier<int>(0);
 final ValueNotifier<int> ventasVersion = ValueNotifier<int>(0);
 
@@ -2305,6 +2376,33 @@ class _MiAppState extends State<MiApp> {
   bool _modoOscuro = false;
   int _currentIndex = 0;
   int _solicitudNuevoProducto = 0;
+  final GlobalKey<_DashboardScreenState> _dashboardKey = GlobalKey<_DashboardScreenState>();
+  int _stockBajoCount = 0;
+  Timer? _stockTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _actualizarStockBajo();
+    _stockTimer = Timer.periodic(const Duration(seconds: 45), (_) => _actualizarStockBajo());
+  }
+
+  @override
+  void dispose() {
+    _stockTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _actualizarStockBajo() async {
+    try {
+      final rows = await DatabaseService()
+          .query('SELECT COUNT(*) as c FROM productos WHERE stock <= stock_minimo');
+      final count = rows.isNotEmpty ? (rows.first['c'] as num?)?.toInt() ?? 0 : 0;
+      if (mounted && count != _stockBajoCount) setState(() => _stockBajoCount = count);
+    } catch (_) {
+      // Silencioso: si falla, simplemente no se muestra la insignia.
+    }
+  }
 
   void _abrirSidebar() {
     final navContext = navigatorKey.currentState?.overlay?.context;
@@ -2312,7 +2410,7 @@ class _MiAppState extends State<MiApp> {
     showGeneralDialog(
       context: navContext,
       barrierDismissible: true,
-      barrierLabel: 'Cerrar menÃº',
+      barrierLabel: 'Cerrar menú',
       barrierColor: Colors.black.withValues(alpha: 0.48),
       transitionDuration: const Duration(milliseconds: 260),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
@@ -2364,7 +2462,7 @@ class _MiAppState extends State<MiApp> {
                   : const Color(0xFFE2DED7),
             ),
           ),
-          child: Icon(Icons.apps_rounded, color: fg, size: 21),
+          child: Icon(Icons.menu_rounded, color: fg, size: 21),
         ),
       ),
     );
@@ -2410,6 +2508,9 @@ class _MiAppState extends State<MiApp> {
     if (m.containsKey(ruta)) {
       setState(() => _currentIndex = m[ruta]!);
       navigatorKey.currentState?.maybePop();
+      if (ruta == 'inventario' || ruta == 'pos' || ruta == 'dashboard') {
+        _actualizarStockBajo();
+      }
     }
   }
 
@@ -2495,19 +2596,21 @@ class _MiAppState extends State<MiApp> {
           backgroundColor: AppColors.background(_modoOscuro),
           body: LayoutBuilder(
             builder: (context, constraints) {
-              final sidebarVisible = constraints.maxWidth >= 480;
-              final expandedSidebar = constraints.maxWidth >= 1000;
+              final sidebarVisible = constraints.maxWidth >= 1100;
+              final expandedSidebar = constraints.maxWidth >= 1100;
               final content = IndexedStack(
                 index: _currentIndex,
                 children: [
                   EscanerVentas(
                     onAbrirSidebar: _abrirSidebar,
                     onNavigateToDashboard: () => setState(() => _currentIndex = 1),
+                    onNavigateToPerfil: () => setState(() => _currentIndex = 14),
                     modoOscuro: _modoOscuro,
                     onToggleModoOscuro: _toggleModoOscuro,
                     solicitudNuevoProducto: _solicitudNuevoProducto,
                   ),
                   DashboardScreen(
+                    key: _dashboardKey,
                     onAbrirSidebar: _abrirSidebar,
                     onNavigateToPOS: () => setState(() => _currentIndex = 0),
                     onNavigateToInventario: () => setState(() => _currentIndex = 15),
@@ -2540,12 +2643,20 @@ class _MiAppState extends State<MiApp> {
                 ],
               );
 
-return content;
+if (!sidebarVisible) return content;
+
+              return Row(
+                children: [
+                  _buildSideRail(expandedSidebar),
+                  Container(width: 1, color: AppColors.divider(_modoOscuro)),
+                  Expanded(child: content),
+                ],
+              );
             },
           ),
           bottomNavigationBar: LayoutBuilder(
             builder: (context, constraints) {
-              if (constraints.maxWidth >= 600) return const SizedBox.shrink();
+              if (constraints.maxWidth >= 1100) return const SizedBox.shrink();
               return _buildMobileNav();
             },
           ),
@@ -2555,66 +2666,167 @@ return content;
   }
 
   Widget _buildMobileNav() {
+    final selectedSlot = _currentIndex == 1
+        ? 0
+        : _currentIndex == 15
+            ? 1
+            : _currentIndex == 0
+                ? 3
+                : _currentIndex == 14
+                    ? 4
+                    : 0;
+
+    void select(int index) {
+      setState(() => _currentIndex = index);
+      if (index == 0 || index == 1 || index == 15) _actualizarStockBajo();
+    }
+
+    return _ProMobileNav(
+      selectedSlot: selectedSlot,
+      onSelect: select,
+      onCreateProduct: () {
+        // El botón + es una ACCIÓN: abre Crear producto directamente.
+        setState(() {
+          _currentIndex = 1;
+          _solicitudNuevoProducto++;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _dashboardKey.currentState?.mostrarDialogoProducto();
+        });
+      },
+    );
+  }
+
+
+  // ============================================
+  // RAIL LATERAL PERSISTENTE (tablet / escritorio)
+  // ============================================
+  Widget _buildSideRail(bool expanded) {
     final dark = _modoOscuro;
-    final surface = dark ? const Color(0xFF1B1F26) : Colors.white;
+    final bg = dark ? const Color(0xFF12141B) : Colors.white;
     final muted = dark ? const Color(0xFF9AA4B2) : const Color(0xFF667085);
     final active = AppColors.primary;
 
-    Widget item(String label, IconData icon, int index) {
+    Widget railItem(String label, IconData icon, int index, {int badge = 0}) {
       final selected = _currentIndex == index;
-      return Expanded(
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: () => setState(() => _currentIndex = index),
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(icon, size: 22, color: selected ? active : muted),
-            const SizedBox(height: 4),
-            Text(label, style: TextStyle(color: selected ? active : muted, fontSize: 9, fontWeight: selected ? FontWeight.w900 : FontWeight.w700)),
-          ]),
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        child: Material(
+          color: selected ? active.withValues(alpha: dark ? .20 : .10) : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () {
+              setState(() => _currentIndex = index);
+              if (index == 15 || index == 0 || index == 1) _actualizarStockBajo();
+            },
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: expanded ? 14 : 0, vertical: 12),
+              child: Row(
+                mainAxisAlignment: expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
+                children: [
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Icon(icon, size: 22, color: selected ? active : muted),
+                      if (badge > 0)
+                        Positioned(
+                          right: -4,
+                          top: -4,
+                          child: Container(
+                            padding: const EdgeInsets.all(3),
+                            constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
+                            decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                            child: Text('$badge', textAlign: TextAlign.center,
+                                style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.w900)),
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (expanded) ...[
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(label,
+                          style: TextStyle(color: selected ? active : muted, fontSize: 12.5,
+                              fontWeight: selected ? FontWeight.w800 : FontWeight.w600)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
         ),
       );
     }
 
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
-        child: Material(
-          color: surface,
-          elevation: 14,
-          shadowColor: Colors.black.withValues(alpha: .18),
-          borderRadius: BorderRadius.circular(22),
-          child: Container(
-            height: 70,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(22), border: Border.all(color: AppColors.divider(dark))),
-            child: Row(children: [
-              item('Inicio', Icons.dashboard_customize_outlined, 1),
-              item('POS', Icons.point_of_sale_outlined, 0),
-              SizedBox(width: 66, child: Center(child: Material(
-                color: active, shape: const CircleBorder(), elevation: 9,
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: () {
-                    setState(() {
-                      _currentIndex = 1;
-                      _solicitudNuevoProducto++;
-                    });
-                  },
-                  child: const SizedBox(width: 54, height: 54, child: Icon(Icons.add_rounded, color: Colors.white, size: 30)),
+      child: Container(
+        width: 224,
+        color: bg,
+        child: Column(
+          crossAxisAlignment: expanded ? CrossAxisAlignment.stretch : CrossAxisAlignment.center,
+          children: [
+            const SizedBox(height: 18),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: expanded ? 18 : 0),
+              child: Row(
+                mainAxisAlignment: expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 38, height: 38,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [AppColors.primary, AppColors.secondary]),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 20),
+                  ),
+                  if (expanded) ...[
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text('SINTHETIX', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 26),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    railItem('Venta', Icons.point_of_sale_rounded, 0),
+                    railItem('Dashboard', Icons.grid_view_rounded, 1),
+                    railItem('Inventario', Icons.inventory_2_rounded, 15, badge: _stockBajoCount),
+                    railItem('Clientes', Icons.groups_rounded, 6),
+                    railItem('Caja', Icons.account_balance_wallet_outlined, 13),
+                    railItem('Reportes', Icons.bar_chart_rounded, 7),
+                    railItem('Estadísticas', Icons.insights_rounded, 22),
+                  ],
                 ),
-              ))),
-              item('Productos', Icons.inventory_2_rounded, 1),
-              Expanded(child: InkWell(
-                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
                 onTap: _abrirSidebar,
-                child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Icon(Icons.apps_rounded, size: 22, color: muted),
-                  const SizedBox(height: 4),
-                  Text('MÃ¡s', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w700)),
-                ]),
-              )),
-            ]),
-          ),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: expanded ? 18 : 0, vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.menu_rounded, size: 22, color: muted),
+                      if (expanded) ...[
+                        const SizedBox(width: 14),
+                        Text('Más', style: TextStyle(color: muted, fontSize: 12.5, fontWeight: FontWeight.w700)),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -2623,8 +2835,373 @@ return content;
 }
 
 // ============================================
-// MENÃš GLOBAL - PANEL FLOTANTE ELEVADO
+// MENÚ GLOBAL - PANEL FLOTANTE ELEVADO
 // ============================================
+
+class _AnimatedMobileNavBackground extends StatefulWidget {
+  final Color color;
+  final double bumpCenterX;
+  final Widget child;
+  const _AnimatedMobileNavBackground({required this.color, required this.bumpCenterX, required this.child});
+  @override
+  State<_AnimatedMobileNavBackground> createState() => _AnimatedMobileNavBackgroundState();
+}
+
+class _AnimatedMobileNavBackgroundState extends State<_AnimatedMobileNavBackground> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+  double _from = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _from = widget.bumpCenterX;
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 420));
+    _animation = AlwaysStoppedAnimation(_from);
+  }
+
+  @override
+  void didUpdateWidget(covariant _AnimatedMobileNavBackground oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if ((oldWidget.bumpCenterX - widget.bumpCenterX).abs() > .5) {
+      _from = _animation.value;
+      _animation = Tween<double>(begin: _from, end: widget.bumpCenterX).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() { _controller.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, _) => CustomPaint(
+        painter: _MobileNavBackgroundPainter(color: widget.color, bumpCenterX: _animation.value),
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+class _MobileNavBackgroundPainter extends CustomPainter {
+  final Color color;
+  final double bumpCenterX;
+  const _MobileNavBackgroundPainter({required this.color, required this.bumpCenterX});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = 23.0;
+    final center = bumpCenterX.clamp(38.0, size.width - 38.0);
+    final path = Path()..moveTo(r, 12);
+    path.lineTo(center - 48, 12);
+    path.cubicTo(center - 30, 12, center - 28, 0, center, 0);
+    path.cubicTo(center + 28, 0, center + 30, 12, center + 48, 12);
+    path.lineTo(size.width - r, 12);
+    path.quadraticBezierTo(size.width, 12, size.width, 12 + r);
+    path.lineTo(size.width, size.height - r);
+    path.quadraticBezierTo(size.width, size.height, size.width - r, size.height);
+    path.lineTo(r, size.height);
+    path.quadraticBezierTo(0, size.height, 0, size.height - r);
+    path.lineTo(0, 12 + r);
+    path.quadraticBezierTo(0, 12, r, 12);
+    path.close();
+
+    final shadow = Paint()..color = Colors.black.withValues(alpha: .24);
+    canvas.drawShadow(path, Colors.black.withValues(alpha: .30), 18, false);
+    canvas.drawPath(path, Paint()..color = color);
+    canvas.drawPath(path, Paint()..style = PaintingStyle.stroke..strokeWidth = 1..color = Colors.white.withValues(alpha: .07));
+  }
+
+  @override
+  bool shouldRepaint(covariant _MobileNavBackgroundPainter oldDelegate) => oldDelegate.color != color || oldDelegate.bumpCenterX != bumpCenterX;
+}
+
+
+class _ProMobileNav extends StatefulWidget {
+  final int selectedSlot;
+  final ValueChanged<int> onSelect;
+  final VoidCallback onCreateProduct;
+
+  const _ProMobileNav({
+    required this.selectedSlot,
+    required this.onSelect,
+    required this.onCreateProduct,
+  });
+
+  @override
+  State<_ProMobileNav> createState() => _ProMobileNavState();
+}
+
+class _ProMobileNavState extends State<_ProMobileNav>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late int _previousSlot;
+  int _plusPulse = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _previousSlot = widget.selectedSlot;
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProMobileNav oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedSlot != widget.selectedSlot) {
+      _previousSlot = oldWidget.selectedSlot;
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    const labels = ['Dashboard', 'Inventario', '', 'POS', 'Perfil'];
+    const icons = [
+      Icons.dashboard_rounded,
+      Icons.inventory_2_rounded,
+      Icons.add_rounded,
+      Icons.point_of_sale_rounded,
+      Icons.person_rounded,
+    ];
+    const indices = [1, 15, -1, 0, 14];
+
+    final barGradient = LinearGradient(
+      colors: dark
+          ? const [Color(0xFF171127), Color(0xFF101B42)]
+          : const [Color(0xFF24104F), Color(0xFF1749A6)],
+      begin: Alignment.centerLeft,
+      end: Alignment.centerRight,
+    );
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+        child: SizedBox(
+          height: 78,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final slotWidth = constraints.maxWidth / 5;
+              final targetX = slotWidth * widget.selectedSlot +
+                  slotWidth / 2;
+              final previousX =
+                  slotWidth * _previousSlot + slotWidth / 2;
+
+              return AnimatedBuilder(
+                animation: CurvedAnimation(
+                  parent: _controller,
+                  curve: Curves.easeOutCubic,
+                ),
+                builder: (context, child) {
+                  final t = _controller.value;
+                  final selectedX =
+                      previousX + (targetX - previousX) * t;
+                  final settledX =
+                      _controller.isAnimating ? selectedX : targetX;
+
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      // Barra limpia y estable: no se deforma en los extremos.
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: barGradient,
+                            borderRadius: BorderRadius.circular(22),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: .20),
+                                blurRadius: 18,
+                                offset: const Offset(0, 7),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // Burbuja del elemento seleccionado. Se desplaza suavemente.
+                      if (widget.selectedSlot != 2)
+                        Positioned(
+                          left: settledX - 28,
+                          top: -13,
+                          child: IgnorePointer(
+                            child: Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF7C3AED),
+                                    Color(0xFF2563EB),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                border: Border.all(
+                                  color: dark
+                                      ? const Color(0xFF171127)
+                                      : const Color(0xFF24104F),
+                                  width: 4,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF2563EB)
+                                        .withValues(alpha: .30),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 7),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                icons[widget.selectedSlot],
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                      // Cinco zonas: el centro queda reservado exclusivamente al +.
+                      Row(
+                        children: List.generate(5, (slot) {
+                          if (slot == 2) {
+                            return const Expanded(child: SizedBox());
+                          }
+
+                          final selected = slot == widget.selectedSlot;
+                          final index = indices[slot];
+
+                          return Expanded(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () {
+                                if (index >= 0) {
+                                  widget.onSelect(index);
+                                }
+                              },
+                              child: SizedBox(
+                                height: 78,
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    const SizedBox(height: 17),
+                                    if (!selected)
+                                      Icon(
+                                        icons[slot],
+                                        size: 21,
+                                        color: Colors.white
+                                            .withValues(alpha: .72),
+                                      )
+                                    else
+                                      const SizedBox(height: 21),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      labels[slot],
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: selected
+                                            ? Colors.white
+                                            : Colors.white
+                                                .withValues(alpha: .72),
+                                        fontSize: 8.5,
+                                        fontWeight: selected
+                                            ? FontWeight.w900
+                                            : FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 7),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+
+                      // + CENTRAL: no navega. Abre Crear producto inmediatamente.
+                      Positioned(
+                        left: slotWidth * 2.5 - 31,
+                        top: -18,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            setState(() => _plusPulse++);
+                            widget.onCreateProduct();
+                          },
+                          child: TweenAnimationBuilder<double>(
+                            key: ValueKey(_plusPulse),
+                            tween: Tween(begin: .82, end: 1),
+                            duration: const Duration(milliseconds: 430),
+                            curve: Curves.elasticOut,
+                            builder: (context, scale, child) =>
+                                Transform.scale(
+                              scale: scale,
+                              child: child,
+                            ),
+                            child: Container(
+                              width: 62,
+                              height: 62,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF32104B),
+                                    Color(0xFF2563EB),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                border: Border.all(
+                                  color: dark
+                                      ? const Color(0xFF171127)
+                                      : const Color(0xFF24104F),
+                                  width: 4,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF2563EB)
+                                        .withValues(alpha: .35),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.add_rounded,
+                                color: Colors.white,
+                                size: 32,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class SidebarMenu extends StatefulWidget {
   final bool modoOscuro;
   final VoidCallback onToggleModoOscuro;
@@ -2677,9 +3254,11 @@ class _SidebarMenuState extends State<SidebarMenu> {
               padding: const EdgeInsets.fromLTRB(22, 22, 16, 18),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: dark
-                      ? const [Color(0xFF181A20), Color(0xFF2B3139)]
-                      : const [Color(0xFFFFF8DB), Color(0xFFFFF3B8)],
+                  colors: const [
+                      Color(0xFF24104F),
+                      Color(0xFF32156E),
+                      Color(0xFF1749A6),
+                    ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -2754,7 +3333,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
                             children: [
                               Text('Administrador', style: TextStyle(color: text, fontWeight: FontWeight.w800, fontSize: 12)),
                               const SizedBox(height: 2),
-                              Text('SesiÃ³n activa Â· Local', style: TextStyle(color: muted, fontSize: 9)),
+                              Text('Sesión activa · Local', style: TextStyle(color: muted, fontSize: 9)),
                             ],
                           ),
                         ),
@@ -2775,33 +3354,35 @@ class _SidebarMenuState extends State<SidebarMenu> {
                     _menuItem('pos', Icons.point_of_sale_rounded, 'Punto de venta', 'Vender y cobrar', text, muted, border, violet, dark),
                     _menuItem('dashboard', Icons.grid_view_rounded, 'Dashboard', 'Resumen del negocio', text, muted, border, violet, dark),
                     const SizedBox(height: 12),
-                    _sectionLabel('OPERACIÃ“N', muted),
+                    _sectionLabel('OPERACIÓN', muted),
                     _menuItem('inventario', Icons.inventory_2_outlined, 'Inventario', 'Productos y existencias', text, muted, border, violet, dark),
-                    _menuItem('categorias', Icons.sell_outlined, 'CategorÃ­as', 'Organiza tu catÃ¡logo', text, muted, border, violet, dark),
+                    _menuItem('categorias', Icons.sell_outlined, 'Categorías', 'Organiza tu catálogo', text, muted, border, violet, dark),
                     _menuItem('clientes', Icons.groups_rounded, 'Clientes', 'Agenda y compradores', text, muted, border, violet, dark),
                     _menuItem('proveedores', Icons.local_shipping_outlined, 'Proveedores', 'Compras y abastecimiento', text, muted, border, violet, dark),
-                    _menuItem('compras', Icons.shopping_cart_checkout_rounded, 'Compras', 'Entradas de mercancÃ­a', text, muted, border, violet, dark),
+                    _menuItem('compras', Icons.shopping_cart_checkout_rounded, 'Compras', 'Entradas de mercancía', text, muted, border, violet, dark),
+                    _menuItem('promociones', Icons.local_offer_rounded, 'Promociones', 'Descuentos y ofertas', text, muted, border, violet, dark),
                     const SizedBox(height: 12),
                     _sectionLabel('CONTROL', muted),
                     _menuItem('caja', Icons.account_balance_wallet_outlined, 'Caja', 'Movimientos y cierre', text, muted, border, violet, dark),
                     _menuItem('reportes', Icons.bar_chart_rounded, 'Reportes', 'Ventas y rendimiento', text, muted, border, violet, dark),
-                    _menuItem('estadisticas', Icons.insights_rounded, 'EstadÃ­sticas', 'Indicadores del negocio', text, muted, border, violet, dark),
+                    _menuItem('estadisticas', Icons.insights_rounded, 'Estadísticas', 'Indicadores del negocio', text, muted, border, violet, dark),
                     const SizedBox(height: 12),
                     const SizedBox(height: 12),
                     _sectionLabel('TIENDA ONLINE', muted),
                     _menuItem('tienda', Icons.storefront_rounded, 'Tienda virtual', 'Vista de la tienda para clientes', text, muted, border, violet, dark),
                     _menuItem('tienda_admin', Icons.dashboard_customize_rounded, 'Administrar tienda', 'Banners, destacados y portada', text, muted, border, violet, dark),
-                    _sectionLabel('CONFIGURACIÃ“N POS', muted),
-                    _menuItem('impresora', Icons.print_outlined, 'Impresora', 'Prueba y conexiÃ³n de impresiÃ³n', text, muted, border, violet, dark),
-                    _menuItem('configurar_ticket', Icons.receipt_long_outlined, 'Configurar ticket', 'Empresa, impuestos y diseÃ±o', text, muted, border, violet, dark),
-                    _menuItem('codigos_barras', Icons.qr_code_2_rounded, 'CÃ³digos de barras', 'Escanear, generar e imprimir etiquetas', text, muted, border, violet, dark),
+                    _sectionLabel('CONFIGURACIÓN POS', muted),
+                    _menuItem('impresora', Icons.print_outlined, 'Impresora', 'Prueba y conexión de impresión', text, muted, border, violet, dark),
+                    _menuItem('configurar_ticket', Icons.receipt_long_outlined, 'Configurar ticket', 'Empresa, impuestos y diseño', text, muted, border, violet, dark),
+                    _menuItem('codigos_barras', Icons.qr_code_2_rounded, 'Códigos de barras', 'Escanear, generar e imprimir etiquetas', text, muted, border, violet, dark),
                     _menuItem('variantes', Icons.tune_rounded, 'Variantes', 'Tallas, colores y opciones', text, muted, border, violet, dark),
-                    _menuItem('metodos_pago', Icons.credit_card_rounded, 'MÃ©todos de pago', 'Efectivo, tarjeta y transferencias', text, muted, border, violet, dark),
+                    _menuItem('metodos_pago', Icons.credit_card_rounded, 'Métodos de pago', 'Efectivo, tarjeta y transferencias', text, muted, border, violet, dark),
                     const SizedBox(height: 12),
                     _sectionLabel('SISTEMA', muted),
-                    _menuItem('configuracion', Icons.settings_outlined, 'ConfiguraciÃ³n', 'Preferencias del sistema', text, muted, border, violet, dark),
+                    _menuItem('configuracion', Icons.settings_outlined, 'Configuración', 'Preferencias del sistema', text, muted, border, violet, dark),
                     _menuItem('perfil', Icons.manage_accounts_outlined, 'Perfil', 'Cuenta y datos', text, muted, border, violet, dark),
                     _menuItem('backup', Icons.cloud_sync_outlined, 'Copias de seguridad', 'Respaldo local', text, muted, border, violet, dark),
+                    _menuItem('roles', Icons.admin_panel_settings_outlined, 'Roles y permisos', 'Accesos por usuario', text, muted, border, violet, dark),
                     const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.all(13),
@@ -2830,7 +3411,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
                 children: [
                   Icon(Icons.offline_bolt_rounded, color: violet, size: 17),
                   const SizedBox(width: 8),
-                  Expanded(child: Text('Offline + nube Â· SINTHETIX PRO', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w600))),
+                  Expanded(child: Text('Offline + nube · SINTHETIX PRO', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w600))),
                   Text('7.0', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w800)),
                 ],
               ),
@@ -2859,7 +3440,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
           curve: Curves.easeOut,
           decoration: BoxDecoration(
             gradient: selected
-                ? const LinearGradient(colors: [AppColors.primary, AppColors.secondary], begin: Alignment.centerLeft, end: Alignment.centerRight)
+                ? const LinearGradient(colors: const [Color(0xFF6D28D9), Color(0xFF2563EB)], begin: Alignment.centerLeft, end: Alignment.centerRight)
                 : null,
             color: selected ? null : (hover ? (dark ? Colors.white.withValues(alpha: .055) : const Color(0xFFF6F3FB)) : Colors.transparent),
             borderRadius: BorderRadius.circular(15),
@@ -2886,9 +3467,11 @@ class _SidebarMenuState extends State<SidebarMenu> {
   }
 }
 
+
 class EscanerVentas extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
   final VoidCallback onNavigateToDashboard;
+  final VoidCallback onNavigateToPerfil;
   final bool modoOscuro;
   final VoidCallback onToggleModoOscuro;
   final int solicitudNuevoProducto;
@@ -2896,6 +3479,7 @@ class EscanerVentas extends StatefulWidget {
     super.key,
     required this.onAbrirSidebar,
     required this.onNavigateToDashboard,
+    required this.onNavigateToPerfil,
     required this.modoOscuro,
     required this.onToggleModoOscuro,
     this.solicitudNuevoProducto = 0,
@@ -2972,11 +3556,13 @@ class _EscanerVentasState extends State<EscanerVentas> {
   }
 
   void _agregar(Map<String, dynamic> prod) {
+    final grupos = OpcionesProducto.decodificar(prod['opciones_json']?.toString());
     if (prod['tiene_variantes'] == 1 ||
         prod['tiene_variantes'] == true ||
         (prod['talla'] != null && prod['talla'].toString().isNotEmpty) ||
-        (prod['color'] != null && prod['color'].toString().isNotEmpty)) {
-      _agregarConVariante(prod);
+        (prod['color'] != null && prod['color'].toString().isNotEmpty) ||
+        grupos.isNotEmpty) {
+      _agregarConVariante(prod, grupos);
       return;
     }
 
@@ -3010,10 +3596,36 @@ class _EscanerVentasState extends State<EscanerVentas> {
     _sonidoExito();
   }
 
-  void _agregarConVariante(Map<String, dynamic> prod) {
+  void _agregarConVariante(Map<String, dynamic> prod, [List<GrupoOpciones>? gruposOpciones]) {
+    final grupos = gruposOpciones ?? const <GrupoOpciones>[];
     String tallaSeleccionada = '';
     String colorSeleccionado = '';
     final cantidadCtrl = TextEditingController(text: '1');
+    // grupo.nombre -> nombres de valores seleccionados
+    final Map<String, Set<String>> seleccion = {for (final g in grupos) g.nombre: <String>{}};
+
+    bool faltanObligatorios() =>
+        grupos.any((g) => g.obligatorio && (seleccion[g.nombre]?.isEmpty ?? true));
+
+    double extraPorUnidad() {
+      double extra = 0;
+      for (final g in grupos) {
+        final sel = seleccion[g.nombre] ?? {};
+        for (final v in g.valores) {
+          if (sel.contains(v.nombre)) extra += v.precioExtra;
+        }
+      }
+      return extra;
+    }
+
+    String descripcionOpciones() {
+      final partes = <String>[];
+      for (final g in grupos) {
+        final sel = seleccion[g.nombre] ?? {};
+        if (sel.isNotEmpty) partes.add('${g.nombre}: ${sel.join(', ')}');
+      }
+      return partes.join(' · ');
+    }
 
     showDialog(
       context: context,
@@ -3067,6 +3679,62 @@ class _EscanerVentasState extends State<EscanerVentas> {
                   ),
                   const SizedBox(height: 16),
                 ],
+                for (final g in grupos) ...[
+                  Row(children: [
+                    Text(g.nombre.toUpperCase(),
+                        style: TextStyle(
+                            color: AppColors.subtext(widget.modoOscuro),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700)),
+                    if (g.obligatorio) ...[
+                      const SizedBox(width: 6),
+                      Text('· obligatorio',
+                          style: TextStyle(color: AppColors.danger, fontSize: 9.5, fontWeight: FontWeight.w700)),
+                    ] else ...[
+                      const SizedBox(width: 6),
+                      Text('· opcional',
+                          style: TextStyle(color: AppColors.subtext(widget.modoOscuro), fontSize: 9.5)),
+                    ],
+                  ]),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: g.valores.map((v) {
+                      final activo = seleccion[g.nombre]?.contains(v.nombre) ?? false;
+                      final etiqueta = v.precioExtra > 0
+                          ? '${v.nombre} (+${_precio(v.precioExtra)})'
+                          : v.nombre;
+                      return ChoiceChip(
+                        label: Text(etiqueta,
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: activo ? Colors.white : AppColors.text(widget.modoOscuro))),
+                        selected: activo,
+                        selectedColor: AppColors.primary,
+                        backgroundColor: AppColors.background(widget.modoOscuro),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: AppColors.divider(widget.modoOscuro))),
+                        onSelected: (_) {
+                          setDialogState(() {
+                            final sel = seleccion[g.nombre] ?? <String>{};
+                            if (g.seleccionMultiple) {
+                              activo ? sel.remove(v.nombre) : sel.add(v.nombre);
+                            } else {
+                              sel
+                                ..clear()
+                                ..add(v.nombre);
+                            }
+                            seleccion[g.nombre] = sel;
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 TextField(
                   controller: cantidadCtrl,
                   keyboardType: TextInputType.number,
@@ -3091,12 +3759,16 @@ class _EscanerVentasState extends State<EscanerVentas> {
                       TextStyle(color: AppColors.subtext(widget.modoOscuro))),
             ),
             ElevatedButton.icon(
-              onPressed: () {
+              onPressed: faltanObligatorios()
+                  ? null
+                  : () {
                 final cantidad = int.tryParse(cantidadCtrl.text) ?? 1;
                 if (cantidad <= 0) return;
+                final descOpciones = descripcionOpciones();
                 final variante =
-                    '${tallaSeleccionada.isNotEmpty ? 'Talla: $tallaSeleccionada' : ''}${colorSeleccionado.isNotEmpty ? ' Color: $colorSeleccionado' : ''}'
+                    '${tallaSeleccionada.isNotEmpty ? 'Talla: $tallaSeleccionada' : ''}${colorSeleccionado.isNotEmpty ? ' Color: $colorSeleccionado' : ''}${descOpciones.isNotEmpty ? (tallaSeleccionada.isNotEmpty || colorSeleccionado.isNotEmpty ? ' · ' : '') + descOpciones : ''}'
                         .trim();
+                final precioFinal = (prod['precio'] as num).toDouble() + extraPorUnidad();
 
                 setState(() {
                   carrito.add({
@@ -3105,7 +3777,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                     'codigo_barras': prod['codigo_barras'],
                     'nombre':
                         '${prod['nombre']}${variante.isNotEmpty ? ' ($variante)' : ''}',
-                    'precio': (prod['precio'] as num).toDouble(),
+                    'precio': precioFinal,
                     'costo': (prod['costo'] as num? ?? 0).toDouble(),
                     'imagen_base64': prod['imagen_base64'] ?? '',
                     'cantidad': cantidad,
@@ -3126,6 +3798,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                       color: Colors.white, fontWeight: FontWeight.w600)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
+                disabledBackgroundColor: AppColors.primary.withValues(alpha: .35),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
               ),
@@ -3312,7 +3985,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
         _tallas = tallasActualizadas;
         _colores = coloresActualizados;
 
-        // Mantener bÃºsqueda/filtros y reconstruir resultados con los datos nuevos.
+        // Mantener búsqueda/filtros y reconstruir resultados con los datos nuevos.
         final q = _buscador.text.trim().toLowerCase();
         if (q.isNotEmpty) {
           busqueda = listaProductos.where((prod) {
@@ -3410,7 +4083,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
 
   void _cobrar() {
     if (carrito.isEmpty) {
-      _snack('Carrito vacÃ­o', AppColors.warning);
+      _snack('Carrito vacío', AppColors.warning);
       return;
     }
     showModalBottomSheet(
@@ -3456,7 +4129,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
         'ganancia_total': gananciaTotal,
         'metodo_pago': metodo,
         'moneda': 'USD',
-        'cliente_nombre': nombre.isNotEmpty ? nombre : 'PÃºblico General',
+        'cliente_nombre': nombre.isNotEmpty ? nombre : 'Público General',
         'cliente_telefono': telefono,
         'cliente_cedula': cedula,
         'estado': 'Pagada',
@@ -3539,7 +4212,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
         try {
           pdfPath = await _ticketService.generarPDFTicket(
             numeroFactura: fac,
-            clienteNombre: nombre.isNotEmpty ? nombre : 'PÃºblico General',
+            clienteNombre: nombre.isNotEmpty ? nombre : 'Público General',
             clienteTelefono: telefono,
             metodoPago: metodo,
             total: totalVenta,
@@ -3569,143 +4242,35 @@ class _EscanerVentasState extends State<EscanerVentas> {
   void _mostrarNotificacionVenta(String factura, String nombre, String telefono,
       double totalVenta, String? pdfPath) {
     final isDark = widget.modoOscuro;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isTablet = screenWidth >= 600;
-
-    showDialog(
+    showGeneralDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: Container(
-          width: isTablet ? 450 : double.infinity,
-          padding: EdgeInsets.all(isTablet ? 28 : 20),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF161B22) : Colors.white,
-            borderRadius: BorderRadius.circular(isTablet ? 28 : 22),
-            border: Border.all(
-              color: AppColors.success.withValues(alpha: 0.3),
-              width: 2,
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: isTablet ? 72 : 60,
-                height: isTablet ? 72 : 60,
-                decoration: BoxDecoration(
-                  gradient: AppColors.gradientSuccess,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.check_rounded,
-                  color: Colors.white,
-                  size: isTablet ? 40 : 32,
-                ),
-              ),
-              SizedBox(height: isTablet ? 20 : 16),
-              Text(
-                'Â¡VENTA EXITOSA!',
-                style: TextStyle(
-                  color: AppColors.text(isDark),
-                  fontSize: isTablet ? 22 : 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              SizedBox(height: isTablet ? 12 : 8),
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(isTablet ? 20 : 16),
-                decoration: BoxDecoration(
-                  color: AppColors.background(isDark),
-                  borderRadius: BorderRadius.circular(isTablet ? 16 : 14),
-                ),
-                child: Column(
-                  children: [
-                    _buildDetalleVenta(
-                      icon: Icons.receipt_long_rounded,
-                      label: 'Factura',
-                      value: factura,
-                      isDark: isDark,
-                    ),
-                    const SizedBox(height: 8),
-                    _buildDetalleVenta(
-                      icon: Icons.person_outline_rounded,
-                      label: 'Cliente',
-                      value: nombre.isEmpty ? 'PÃºblico General' : nombre,
-                      isDark: isDark,
-                    ),
-                    const SizedBox(height: 8),
-                    Divider(color: AppColors.divider(isDark)),
-                    const SizedBox(height: 8),
-                    _buildDetalleVenta(
-                      icon: Icons.payment_rounded,
-                      label: 'TOTAL A PAGAR',
-                      value: '\$${totalVenta.toStringAsFixed(2)}',
-                      isDark: isDark,
-                      esTotal: true,
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: isTablet ? 24 : 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildBotonAccion(
-                      icon: Icons.chat_rounded,
-                      label: 'WhatsApp',
-                      color: AppColors.whatsapp,
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _enviarWhatsAppCliente(
-                            nombre, telefono, factura, totalVenta);
-                      },
-                      isTablet: isTablet,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildBotonAccion(
-                      icon: Icons.print_rounded,
-                      label: 'Imprimir',
-                      color: AppColors.primary,
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _imprimirTicket(factura, nombre, totalVenta);
-                      },
-                      isTablet: isTablet,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: TextButton.styleFrom(
-                    backgroundColor: AppColors.background(isDark),
-                    padding: EdgeInsets.symmetric(vertical: isTablet ? 14 : 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(isTablet ? 14 : 10),
-                    ),
-                  ),
-                  child: Text(
-                    'CERRAR',
-                    style: TextStyle(
-                      color: AppColors.subtext(isDark),
-                      fontSize: isTablet ? 14 : 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+      barrierLabel: 'Venta completada',
+      barrierColor: Colors.black.withValues(alpha: .58),
+      transitionDuration: const Duration(milliseconds: 520),
+      pageBuilder: (ctx, a, b) => Center(
+        child: _AnimatedSaleTicket(
+          isDark: isDark,
+          factura: factura,
+          nombre: nombre,
+          total: totalVenta,
+          onClose: () => Navigator.of(ctx).pop(),
+          onWhatsApp: () {
+            Navigator.of(ctx).pop();
+            _enviarWhatsAppCliente(nombre, telefono, factura, totalVenta);
+          },
+          onPrint: () {
+            Navigator.of(ctx).pop();
+            _imprimirTicket(factura, nombre, totalVenta);
+          },
         ),
       ),
+      transitionBuilder: (ctx, animation, secondary, child) {
+        final scale = CurvedAnimation(parent: animation, curve: Curves.easeOutBack);
+        final slide = Tween<Offset>(begin: const Offset(0, .12), end: Offset.zero)
+            .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+        return FadeTransition(opacity: animation, child: SlideTransition(position: slide, child: ScaleTransition(scale: scale, child: child)));
+      },
     );
   }
 
@@ -3804,20 +4369,20 @@ class _EscanerVentasState extends State<EscanerVentas> {
   void _enviarWhatsAppCliente(
       String nombre, String telefono, String factura, double totalVenta) {
     if (telefono.isEmpty) {
-      _snack('El cliente no tiene nÃºmero de telÃ©fono', AppColors.warning);
+      _snack('El cliente no tiene número de teléfono', AppColors.warning);
       return;
     }
     String phone = telefono.replaceAll(RegExp(r'[^0-9]'), '');
     if (phone.startsWith('0')) {
       phone = '58${phone.substring(1)}';
     }
-    String message = "ðŸ›ï¸ *SINTHETIX - COMPROBANTE DE VENTA*\n\n";
-    message += "ðŸ“„ Factura: $factura\n";
-    message += "ðŸ‘¤ Cliente: $nombre\n";
-    message += "ðŸ’° Total: \$${totalVenta.toStringAsFixed(2)}\n";
+    String message = "🛍️ *SINTHETIX - COMPROBANTE DE VENTA*\n\n";
+    message += "📄 Factura: $factura\n";
+    message += "👤 Cliente: $nombre\n";
+    message += "💰 Total: \$${totalVenta.toStringAsFixed(2)}\n";
     message +=
-        "ðŸ“… Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}\n\n";
-    message += "Â¡Gracias por su compra! ðŸŽ‰";
+        "📅 Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}\n\n";
+    message += "¡Gracias por su compra! 🎉";
 
     final whatsappUrl =
         "https://wa.me/$phone?text=${Uri.encodeComponent(message)}";
@@ -3887,60 +4452,122 @@ class _EscanerVentasState extends State<EscanerVentas> {
       appBar: _buildModernAppBar(dark),
       body: SafeArea(
         child: desktop
-            ? Row(
-                children: [
-                  SizedBox(
-                    width: 76,
-                    child: _buildPosRail(dark),
-                  ),
-                  Expanded(child: _buildDesktopWorkspace(dark)),
-                ],
-              )
+            ? _buildDesktopWorkspace(dark)
             : _buildMobileWorkspace(dark),
       ),
     );
   }
 
   AppBar _buildModernAppBar(bool dark) {
-    final bg = dark ? const Color(0xFF101318) : const Color(0xFFF8F9FB);
-    final ink = dark ? Colors.white : const Color(0xFF17202A);
-    final muted = dark ? const Color(0xFF8F98A6) : const Color(0xFF667085);
+    final ink = dark ? Colors.white : AppColors.textLight;
+    final muted = dark ? const Color(0xFF9EA6B6) : const Color(0xFF707A8A);
     return AppBar(
-      backgroundColor: bg, elevation: 0, scrolledUnderElevation: 0, surfaceTintColor: Colors.transparent,
-      automaticallyImplyLeading: false, toolbarHeight: 82, titleSpacing: 0,
-      leadingWidth: 66,
+      automaticallyImplyLeading: false,
+      toolbarHeight: 76,
+      backgroundColor: dark ? const Color(0xFF0F1219) : Colors.white,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      surfaceTintColor: Colors.transparent,
+      titleSpacing: 0,
+      leadingWidth: 64,
       leading: Padding(
-        padding: const EdgeInsets.only(left: 14, top: 18, bottom: 18),
+        padding: const EdgeInsets.only(left: 12, top: 14, bottom: 14),
         child: Material(
-          color: dark ? const Color(0xFF1B2028) : Colors.white, elevation: 1,
-          borderRadius: BorderRadius.circular(15),
-          child: InkWell(borderRadius: BorderRadius.circular(15), onTap: widget.onAbrirSidebar,
-            child: Icon(Icons.grid_view_rounded, color: ink, size: 21)),
+          color: dark ? const Color(0xFF151B23) : const Color(0xFFF5F3FA),
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: widget.onAbrirSidebar,
+            borderRadius: BorderRadius.circular(16),
+            child: const Icon(Icons.menu_rounded, color: AppColors.primary, size: 23),
+          ),
         ),
       ),
-      title: Row(children: [
-        Container(width: 48, height: 48, padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: dark ? Colors.white12 : const Color(0xFFE6EAF0))),
-          child: _logoNegocio != null ? Image.memory(_logoNegocio!, fit: BoxFit.contain) : const Icon(Icons.storefront_rounded, color: AppColors.primary, size: 24)),
-        const SizedBox(width: 12),
-        Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text('SINTHETIX PRO', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: ink, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: -.2)),
-          const SizedBox(height: 3),
-          Row(children: [Container(width: 7, height: 7, decoration: const BoxDecoration(color: AppColors.success, shape: BoxShape.circle)), const SizedBox(width: 6), Flexible(child: Text('Punto de venta Â· Local', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 9.5, fontWeight: FontWeight.w600)))])
-        ])),
-      ]),
+      title: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppColors.primary, AppColors.info],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(color: AppColors.primary.withValues(alpha: .18), blurRadius: 14, offset: const Offset(0, 5)),
+              ],
+            ),
+            child: const Icon(Icons.point_of_sale_rounded, color: Colors.white, size: 23),
+          ),
+          const SizedBox(width: 11),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('PUNTO DE VENTA', maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: ink, fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: .2)),
+                const SizedBox(height: 2),
+                Row(children: [
+                  Container(width: 7, height: 7, decoration: const BoxDecoration(color: AppColors.success, shape: BoxShape.circle)),
+                  const SizedBox(width: 6),
+                  Text('${listaProductos.length} productos · ${carrito.length} en venta', maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: muted, fontSize: 9.5, fontWeight: FontWeight.w600)),
+                ]),
+              ],
+            ),
+          ),
+        ],
+      ),
       actions: [
-        IconButton(tooltip: 'Sincronizar', onPressed: () => SupabaseSyncService.syncPendingProducts(), icon: Icon(Icons.sync_rounded, color: muted, size: 21)),
-        PopupMenuButton<String>(tooltip: 'MÃ¡s opciones', icon: Icon(Icons.more_vert_rounded, color: ink), onSelected: (v) {
-          if (v == 'dashboard') widget.onNavigateToDashboard();
-          if (v == 'tienda') { Navigator.pop(context); }
-          if (v == 'config') { Navigator.pop(context); widget.onAbrirSidebar(); }
-        }, itemBuilder: (_) => const [
-          PopupMenuItem(value: 'dashboard', child: ListTile(leading: Icon(Icons.dashboard_outlined), title: Text('Resumen'))),
-          PopupMenuItem(value: 'tienda', child: ListTile(leading: Icon(Icons.storefront_outlined), title: Text('Tienda'))),
-          PopupMenuItem(value: 'config', child: ListTile(leading: Icon(Icons.settings_outlined), title: Text('ConfiguraciÃ³n'))),
-        ]),
-        const SizedBox(width: 8),
+        Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: PopupMenuButton<String>(
+            tooltip: 'Opciones de usuario',
+            onSelected: (value) {
+              if (value == 'perfil') widget.onNavigateToPerfil();
+              if (value == 'menu') widget.onAbrirSidebar();
+              if (value == 'theme') widget.onToggleModoOscuro();
+              if (value == 'sync') SupabaseSyncService.syncPendingProducts();
+            },
+            offset: const Offset(0, 52),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            itemBuilder: (context) => [
+              PopupMenuItem<String>(
+                enabled: false,
+                child: Row(children: [
+                  const CircleAvatar(radius: 18, backgroundColor: AppColors.primary,
+                      child: Icon(Icons.person_rounded, color: Colors.white, size: 18)),
+                  const SizedBox(width: 10),
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('Administrador', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                    Text('Sesión activa · Local', style: TextStyle(color: muted, fontSize: 9)),
+                  ]),
+                ]),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(value: 'perfil', child: ListTile(contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.person_outline_rounded), title: Text('Mi perfil'))),
+              const PopupMenuItem(value: 'sync', child: ListTile(contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.sync_rounded), title: Text('Sincronizar'))),
+              const PopupMenuItem(value: 'menu', child: ListTile(contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.menu_rounded), title: Text('Menú principal'))),
+              PopupMenuItem(value: 'theme', child: ListTile(contentPadding: EdgeInsets.zero,
+                  leading: Icon(dark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                  ), title: Text(dark ? 'Modo claro' : 'Modo oscuro'))),
+            ],
+            child: Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [AppColors.primary, AppColors.info]),
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: .16), blurRadius: 12, offset: const Offset(0, 4))],
+              ),
+              child: const Icon(Icons.more_horiz_rounded, color: Colors.white, size: 25),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -3995,7 +4622,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
     bool dark,
     VoidCallback onTap,
   ) {
-    final accent = const Color(0xFFF0B90B);
+    final accent = AppColors.primary;
     final muted = dark ? const Color(0xFF7D8795) : const Color(0xFF8A93A0);
 
     return Padding(
@@ -4032,13 +4659,13 @@ class _EscanerVentasState extends State<EscanerVentas> {
 
   Widget _buildDesktopWorkspace(bool dark) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      padding: const EdgeInsets.fromLTRB(22, 18, 22, 20),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(flex: 7, child: _buildProductWorkspace(dark)),
-          const SizedBox(width: 16),
-          SizedBox(width: 390, child: _buildOrderWorkspace(dark)),
+          const SizedBox(width: 18),
+          SizedBox(width: 410, child: _buildOrderWorkspace(dark)),
         ],
       ),
     );
@@ -4119,7 +4746,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
           crossAxisCount: mobile ? 2 : 4,
           crossAxisSpacing: mobile ? 10 : 12,
           mainAxisSpacing: mobile ? 10 : 12,
-          childAspectRatio: mobile ? .74 : .80,
+          childAspectRatio: mobile ? .68 : .72,
         ),
         itemCount: items.length,
         itemBuilder: (_, i) => _buildModernProductCard(items[i], dark),
@@ -4147,12 +4774,12 @@ class _EscanerVentasState extends State<EscanerVentas> {
                 children: [
                   Expanded(
                     child: Text(
-                      'CatÃ¡logo',
+                      'Catálogo',
                       style: TextStyle(color: ink, fontSize: 19, fontWeight: FontWeight.w900),
                     ),
                   ),
                   Text(
-                    '${listaProductos.length} artÃ­culos',
+                    '${listaProductos.length} artículos',
                     style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w700),
                   ),
                 ],
@@ -4196,9 +4823,9 @@ class _EscanerVentasState extends State<EscanerVentas> {
                     ),
                   ),
                   selected: selected,
-                  selectedColor: const Color(0xFFF0B90B),
+                  selectedColor: AppColors.primary,
                   backgroundColor: dark ? const Color(0xFF171D26) : const Color(0xFFF4F6F9),
-                  side: BorderSide(color: selected ? const Color(0xFFF0B90B) : border),
+                  side: BorderSide(color: selected ? AppColors.primary : border),
                   onSelected: (_) => setState(() => _filtroCategoriaPOS = c),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 );
@@ -4219,15 +4846,19 @@ class _EscanerVentasState extends State<EscanerVentas> {
       _precioMaxPOS != null;
 
   Widget _buildSearchField(bool dark) {
-    final surface = dark ? const Color(0xFF171D26) : const Color(0xFFF5F7F9);
-    final muted = dark ? const Color(0xFF7D8795) : const Color(0xFF8A93A0);
-    final ink = dark ? Colors.white : const Color(0xFF17202A);
+    final surface = dark ? const Color(0xFF171D26) : Colors.white;
+    final muted = dark ? const Color(0xFF7D8795) : const Color(0xFFAAA79E);
+    final ink = dark ? Colors.white : const Color(0xFF2A2622);
 
     return Container(
-      height: 48,
+      height: 52,
       decoration: BoxDecoration(
         color: surface,
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: dark ? Colors.white10 : const Color(0xFFEFE7DC)),
+        boxShadow: dark
+            ? null
+            : [BoxShadow(color: Colors.black.withValues(alpha: .04), blurRadius: 14, offset: const Offset(0, 6))],
       ),
       child: TextField(
         controller: _buscador,
@@ -4236,13 +4867,13 @@ class _EscanerVentasState extends State<EscanerVentas> {
         decoration: InputDecoration(
           prefixIcon: Icon(Icons.search_rounded, color: muted, size: 21),
           suffixIcon: _buscador.text.isEmpty
-              ? Icon(Icons.keyboard_rounded, color: muted, size: 18)
+              ? null
               : IconButton(
                   onPressed: _limpiarBusqueda,
                   icon: Icon(Icons.close_rounded, color: muted, size: 18),
                 ),
-          hintText: 'Buscar producto, cÃ³digo o nombre...',
-          hintStyle: TextStyle(color: muted, fontSize: 11),
+          hintText: 'Buscar productos, marcas...',
+          hintStyle: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w500),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 14),
         ),
@@ -4266,7 +4897,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
   Widget _squareAction(IconData icon, bool active, VoidCallback onTap, bool dark) {
     return Material(
       color: active
-          ? const Color(0xFFF0B90B).withValues(alpha: .13)
+          ? AppColors.primary.withValues(alpha: .13)
           : (dark ? const Color(0xFF171D26) : const Color(0xFFF5F7F9)),
       borderRadius: BorderRadius.circular(13),
       child: InkWell(
@@ -4277,7 +4908,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
           height: 48,
           child: Icon(
             icon,
-            color: active ? const Color(0xFFF0B90B) : (dark ? Colors.white70 : const Color(0xFF697382)),
+            color: active ? AppColors.primary : (dark ? Colors.white70 : const Color(0xFF697382)),
             size: 20,
           ),
         ),
@@ -4292,25 +4923,27 @@ class _EscanerVentasState extends State<EscanerVentas> {
     final price = (prod['precio'] as num?)?.toDouble() ?? 0;
     final finalPrice = discount > 0 ? price * (1 - discount / 100) : price;
     final category = (prod['categoria'] ?? 'General').toString();
-    final surface = dark ? const Color(0xFF151B23) : Colors.white;
-    final border = dark ? Colors.white10 : const Color(0xFFE1E6EC);
-    final ink = dark ? Colors.white : const Color(0xFF17202A);
-    final muted = dark ? const Color(0xFF818C9B) : const Color(0xFF77818E);
+    final surface = dark ? const Color(0xFF151A24) : Colors.white;
+    final border = dark ? Colors.white.withValues(alpha: .07) : const Color(0xFFE8EAF0);
+    final ink = dark ? Colors.white : const Color(0xFF151827);
+    final muted = dark ? const Color(0xFF8F97A8) : const Color(0xFF707789);
     final status = stock <= 0
-        ? const Color(0xFFE25C5C)
+        ? const Color(0xFFE45767)
         : stock <= min
-            ? const Color(0xFFD49A3A)
-            : const Color(0xFF3CA66B);
+            ? const Color(0xFFE0A23A)
+            : const Color(0xFF32B67A);
 
     return Material(
       color: surface,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(22),
+      elevation: dark ? 0 : 2,
+      shadowColor: Colors.black.withValues(alpha: .07),
       child: InkWell(
         onTap: stock <= 0 ? null : () => _agregar(prod),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(22),
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(22),
             border: Border.all(color: border),
           ),
           clipBehavior: Clip.antiAlias,
@@ -4318,11 +4951,12 @@ class _EscanerVentasState extends State<EscanerVentas> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
+                flex: 6,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
                     Container(
-                      color: dark ? const Color(0xFF1B222C) : const Color(0xFFF5F7F9),
+                      color: dark ? const Color(0xFF202633) : const Color(0xFFF2F3F5),
                       child: ImagenProducto(
                         imagenBase64: prod['imagen_base64']?.toString(),
                         width: double.infinity,
@@ -4331,98 +4965,68 @@ class _EscanerVentasState extends State<EscanerVentas> {
                       ),
                     ),
                     Positioned(
-                      top: 9,
-                      left: 9,
+                      left: 10,
+                      top: 10,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                         decoration: BoxDecoration(
-                          color: dark ? const Color(0xCC0F131A) : const Color(0xDDFFFFFF),
-                          borderRadius: BorderRadius.circular(7),
+                          color: Colors.white.withValues(alpha: .93),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Text(
-                          category,
-                          style: TextStyle(
-                            color: dark ? Colors.white : const Color(0xFF4D5662),
-                            fontSize: 8,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
+                        child: Text(category, style: const TextStyle(color: Color(0xFF263042), fontSize: 8.5, fontWeight: FontWeight.w900)),
                       ),
                     ),
                     Positioned(
-                      top: 9,
-                      right: 9,
+                      right: 10,
+                      top: 10,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                        decoration: BoxDecoration(color: status, borderRadius: BorderRadius.circular(7)),
-                        child: Text(
-                          stock <= 0 ? 'AGOTADO' : '$stock',
-                          style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: status,
+                          borderRadius: BorderRadius.circular(10),
                         ),
+                        child: Text(stock <= 0 ? 'Agotado' : '$stock disponibles',
+                            style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900)),
                       ),
                     ),
-                    if (discount > 0)
-                      Positioned(
-                        left: 9,
-                        bottom: 9,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE55353),
-                            borderRadius: BorderRadius.circular(7),
-                          ),
-                          child: Text(
-                            '-${discount.toStringAsFixed(0)}%',
-                            style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900),
-                          ),
-                        ),
-                      ),
-                    if (stock > 0)
-                      Positioned(
-                        right: 9,
-                        bottom: 9,
-                        child: Container(
-                          width: 38,
-                          height: 38,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFF0B90B),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.add_rounded, color: Colors.white, size: 22),
-                        ),
-                      ),
                   ],
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(10, 9, 10, 10),
+                padding: const EdgeInsets.fromLTRB(11, 9, 11, 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      prod['nombre']?.toString() ?? '',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: ink, fontSize: 11, fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 5),
+                    Text(prod['nombre']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 4),
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            _precio(finalPrice),
-                            style: const TextStyle(
-                              color: Color(0xFFF0B90B),
-                              fontSize: 15,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
+                          child: Text(_precio(finalPrice),
+                              style: const TextStyle(color: Color(0xFF4A176B), fontSize: 17, fontWeight: FontWeight.w900)),
                         ),
-                        Text(
-                          prod['unidad_medida']?.toString() ?? 'pieza',
-                          style: TextStyle(color: muted, fontSize: 8, fontWeight: FontWeight.w700),
-                        ),
+                        if (discount > 0)
+                          Text('-${discount.toStringAsFixed(0)}%', style: const TextStyle(color: Color(0xFF0A9F6B), fontSize: 8, fontWeight: FontWeight.w900)),
                       ],
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 34,
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: stock > 0 ? () => _agregar(prod) : null,
+                        icon: const Icon(Icons.shopping_bag_rounded, size: 15),
+                        label: const Text('Agregar al carrito', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900)),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF211C2B),
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: const Color(0xFFE5E7EB),
+                          disabledForegroundColor: const Color(0xFF9CA3AF),
+                          padding: const EdgeInsets.symmetric(horizontal: 7),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -4473,7 +5077,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                           Text(
                             carrito.isEmpty
                                 ? 'Agrega productos al pedido'
-                                : '$units unidades Â· ${carrito.length} lÃ­neas',
+                                : '$units unidades · ${carrito.length} líneas',
                             style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w600),
                           ),
                         ],
@@ -4502,19 +5106,19 @@ class _EscanerVentasState extends State<EscanerVentas> {
                               width: 72,
                               height: 72,
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF0B90B).withValues(alpha: .09),
+                                color: AppColors.primary.withValues(alpha: .09),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.shopping_cart_outlined, color: Color(0xFFF0B90B), size: 32),
+                              child: const Icon(Icons.shopping_cart_outlined, color: AppColors.primary, size: 32),
                             ),
                             const SizedBox(height: 14),
                             Text(
-                              'La venta estÃ¡ vacÃ­a',
+                              'La venta está vacía',
                               style: TextStyle(color: ink, fontSize: 14, fontWeight: FontWeight.w900),
                             ),
                             const SizedBox(height: 5),
                             Text(
-                              'Selecciona productos del catÃ¡logo',
+                              'Selecciona productos del catálogo',
                               style: TextStyle(color: muted, fontSize: 10),
                             ),
                           ],
@@ -4544,7 +5148,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                         const Spacer(),
                         Text(
                           _precio(total),
-                          style: const TextStyle(color: Color(0xFFF0B90B), fontSize: 27, fontWeight: FontWeight.w900),
+                          style: const TextStyle(color: AppColors.primary, fontSize: 27, fontWeight: FontWeight.w900),
                         ),
                       ],
                     ),
@@ -4560,7 +5164,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                           style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: .2),
                         ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFF0B90B),
+                          backgroundColor: AppColors.primary,
                           disabledBackgroundColor: dark ? const Color(0xFF252C36) : const Color(0xFFDCE1E7),
                           foregroundColor: Colors.white,
                           elevation: 0,
@@ -4635,7 +5239,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                 const SizedBox(height: 4),
                 Text(
                   _precio(amount),
-                  style: const TextStyle(color: Color(0xFFF0B90B), fontSize: 13, fontWeight: FontWeight.w900),
+                  style: const TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w900),
                 ),
               ],
             ),
@@ -4685,7 +5289,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
         child: SizedBox(
           width: 30,
           height: 34,
-          child: Icon(icon, size: 16, color: const Color(0xFFF0B90B)),
+          child: Icon(icon, size: 16, color: AppColors.primary),
         ),
       ),
     );
@@ -4736,10 +5340,10 @@ class _EscanerVentasState extends State<EscanerVentas> {
                       width: 42,
                       height: 42,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF0B90B).withValues(alpha: .12),
+                        color: AppColors.primary.withValues(alpha: .12),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.shopping_cart_rounded, color: Color(0xFFF0B90B), size: 21),
+                      child: const Icon(Icons.shopping_cart_rounded, color: AppColors.primary, size: 21),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -4747,7 +5351,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '$units unidades Â· revisar venta',
+                            '$units unidades · revisar venta',
                             style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w700),
                           ),
                           Text(
@@ -4761,7 +5365,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
                         ],
                       ),
                     ),
-                    const Icon(Icons.arrow_forward_rounded, color: Color(0xFFF0B90B), size: 21),
+                    const Icon(Icons.arrow_forward_rounded, color: AppColors.primary, size: 21),
                   ],
                 ),
               ),
@@ -4875,12 +5479,154 @@ class _EscanerVentasState extends State<EscanerVentas> {
 
 }
 // ============================================
-// CONTINUACIÃ“N - ETAPA 4 de 6
+// CONTINUACIÓN - ETAPA 4 de 6
 // ============================================
 
 // ============================================
-// PANTALLA DE COBRO - DISEÃ‘O PROFESIONAL
+// PANTALLA DE COBRO - DISEÑO PROFESIONAL
 // ============================================
+
+class _AnimatedSaleTicket extends StatefulWidget {
+  final bool isDark;
+  final String factura;
+  final String nombre;
+  final double total;
+  final VoidCallback onClose;
+  final VoidCallback onWhatsApp;
+  final VoidCallback onPrint;
+  const _AnimatedSaleTicket({
+    required this.isDark,
+    required this.factura,
+    required this.nombre,
+    required this.total,
+    required this.onClose,
+    required this.onWhatsApp,
+    required this.onPrint,
+  });
+  @override
+  State<_AnimatedSaleTicket> createState() => _AnimatedSaleTicketState();
+}
+
+class _AnimatedSaleTicketState extends State<_AnimatedSaleTicket> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..forward();
+  @override
+  void dispose() { _controller.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = widget.isDark;
+    final bg = dark ? const Color(0xFF171A22) : Colors.white;
+    final ink = dark ? Colors.white : const Color(0xFF202332);
+    final muted = dark ? const Color(0xFFA3A9B8) : const Color(0xFF707789);
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, __) => Material(
+        color: Colors.transparent,
+        child: Container(
+          width: (MediaQuery.sizeOf(context).width - 28).clamp(300.0, 520.0),
+          constraints: const BoxConstraints(maxHeight: 690),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .28), blurRadius: 40, offset: const Offset(0, 20))],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(30),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+              child: Column(
+                children: [
+                  Row(children: [
+                    const Expanded(child: Text('Venta completada', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900))),
+                    IconButton(onPressed: widget.onClose, icon: const Icon(Icons.close_rounded)),
+                  ]),
+                  const SizedBox(height: 4),
+                  Container(
+                    height: 92,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF343434),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Stack(
+                      alignment: Alignment.topCenter,
+                      children: [
+                        Positioned(
+                          top: -22 + (1 - Curves.easeOut.transform(_controller.value)) * 35,
+                          child: Container(
+                            width: 82,
+                            height: 82,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF20B486),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.check_rounded, color: Colors.white, size: 48),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Transform.translate(
+                    offset: Offset(0, -7 * _controller.value),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(18, 24, 18, 18),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .10), blurRadius: 18, offset: const Offset(0, 8))],
+                      ),
+                      child: Column(
+                        children: [
+                          const Text('SINTHETIX PRO', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1.3, color: Color(0xFF202332))),
+                          const SizedBox(height: 3),
+                          const Text('TICKET DE VENTA', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF707789), letterSpacing: 1.2)),
+                          const SizedBox(height: 16),
+                          Text(widget.factura, style: const TextStyle(fontFamily: 'monospace', fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF202332))),
+                          const SizedBox(height: 13),
+                          _ticketLine('Cliente', widget.nombre.isEmpty ? 'Público General' : widget.nombre),
+                          _ticketLine('Estado', 'PAGADO'),
+                          const Divider(height: 24),
+                          Row(children: const [
+                            Text('TOTAL', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF707789))),
+                            Spacer(),
+                          ]),
+                          const SizedBox(height: 3),
+                          Align(alignment: Alignment.centerRight, child: Text('\$${widget.total.toStringAsFixed(2)}', style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900, color: Color(0xFF202332)))),
+                          const SizedBox(height: 16),
+                          Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(28, (i) => Container(width: i.isEven ? 2 : 1, height: 28 + (i % 3) * 5, margin: const EdgeInsets.symmetric(horizontal: 1), color: const Color(0xFF202332)))),
+                          const SizedBox(height: 8),
+                          const Text('¡Gracias por tu compra!', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF707789))),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(children: [
+                    Expanded(child: FilledButton.icon(onPressed: widget.onWhatsApp, icon: const Icon(Icons.chat_rounded, size: 17), label: const Text('WhatsApp', style: TextStyle(fontWeight: FontWeight.w900)), style: FilledButton.styleFrom(backgroundColor: AppColors.whatsapp, minimumSize: const Size(0, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))))),
+                    const SizedBox(width: 9),
+                    Expanded(child: FilledButton.icon(onPressed: widget.onPrint, icon: const Icon(Icons.print_rounded, size: 17), label: const Text('Imprimir', style: TextStyle(fontWeight: FontWeight.w900)), style: FilledButton.styleFrom(backgroundColor: const Color(0xFF25293A), minimumSize: const Size(0, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))))),
+                  ]),
+                  const SizedBox(height: 8),
+                  TextButton(onPressed: widget.onClose, child: Text('Cerrar', style: TextStyle(color: muted, fontWeight: FontWeight.w800))),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _ticketLine(String a, String b) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(children: [
+      Text(a, style: const TextStyle(fontSize: 10, color: Color(0xFF707789), fontWeight: FontWeight.w700)),
+      const Spacer(),
+      Flexible(child: Text(b, textAlign: TextAlign.right, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Color(0xFF202332), fontWeight: FontWeight.w900))),
+    ]),
+  );
+}
+
 class PantallaCobro extends StatefulWidget {
   final List<Map<String, dynamic>> carrito;
   final double total;
@@ -4908,8 +5654,8 @@ class _PantallaCobroState extends State<PantallaCobro> {
 
   bool get _isTablet => MediaQuery.of(context).size.width >= 600;
   bool get _isDesktop => MediaQuery.of(context).size.width >= 1000;
-  static const violet = Color(0xFFF0B90B);
-  static const violet2 = Color(0xFFF8D33A);
+  static const violet = AppColors.primary;
+  static const violet2 = AppColors.info;
 
   @override
   void initState() { super.initState(); _cargarDatos(); }
@@ -4920,13 +5666,13 @@ class _PantallaCobroState extends State<PantallaCobro> {
     try {
       final metodos = await _db.getMetodosPago();
       if (metodos.isNotEmpty) { _metodosPago = metodos; _metodo = (metodos.first['nombre'] ?? 'Efectivo').toString(); }
-    } catch (e) { debugPrint('Error cargando mÃ©todos de pago: $e'); }
+    } catch (e) { debugPrint('Error cargando métodos de pago: $e'); }
     if (mounted) setState(() => _cargandoMetodos = false);
   }
 
   Future<void> _buscarClientePorCedula() async {
     final cedula = _cedulaCtrl.text.trim();
-    if (cedula.isEmpty) { _mostrarSnackbar('Escribe la identificaciÃ³n del cliente', Colors.orange); return; }
+    if (cedula.isEmpty) { _mostrarSnackbar('Escribe la identificación del cliente', Colors.orange); return; }
     setState(() => _buscandoCliente = true);
     try {
       final cliente = await _db.buscarClientePorCedula(cedula);
@@ -4935,7 +5681,7 @@ class _PantallaCobroState extends State<PantallaCobro> {
         _mostrarSnackbar('Cliente encontrado', Colors.green);
       } else {
         setState(() => _clienteEncontrado = false);
-        _mostrarSnackbar('Cliente nuevo: se registrarÃ¡ al confirmar', violet);
+        _mostrarSnackbar('Cliente nuevo: se registrará al confirmar', violet);
       }
     } catch (e) { _mostrarSnackbar('No se pudo buscar el cliente', Colors.red); }
     if (mounted) setState(() => _buscandoCliente = false);
@@ -4981,18 +5727,18 @@ class _PantallaCobroState extends State<PantallaCobro> {
         Padding(padding: const EdgeInsets.fromLTRB(22, 14, 14, 14), child: Row(children: [
           Container(width: 46, height: 46, decoration: BoxDecoration(gradient: const LinearGradient(colors: [violet, violet2]), borderRadius: BorderRadius.circular(15)), child: const Icon(Icons.credit_score_rounded, color: Colors.white, size: 23)),
           const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Finalizar venta', style: TextStyle(color: text, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -.4)), const SizedBox(height: 3), Text('${widget.carrito.length} productos Â· ${widget.formatearPrecio(widget.total)}', style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w600))])),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Finalizar venta', style: TextStyle(color: text, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -.4)), const SizedBox(height: 3), Text('${widget.carrito.length} productos · ${widget.formatearPrecio(widget.total)}', style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w600))])),
           Material(color: dark ? Colors.white.withValues(alpha: .06) : const Color(0xFFF0EEF5), borderRadius: BorderRadius.circular(13), child: InkWell(onTap: () => Navigator.of(context).pop(), borderRadius: BorderRadius.circular(13), child: const SizedBox(width: 44, height: 44, child: Icon(Icons.close_rounded, size: 20)))),
         ])),
         Divider(height: 1, color: border),
         Expanded(child: LayoutBuilder(builder: (context, constraints) {
           final desktop = constraints.maxWidth >= 980;
           final form = SingleChildScrollView(padding: EdgeInsets.fromLTRB(desktop ? 24 : 18, 18, desktop ? 12 : 18, 22), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _sectionHeader('Cliente', 'Identifica al comprador o usa PÃºblico general', Icons.person_outline_rounded, text, muted),
+            _sectionHeader('Cliente', 'Identifica al comprador o usa Público general', Icons.person_outline_rounded, text, muted),
             const SizedBox(height: 10),
             _buildClienteCard(dark, card, soft, text, muted, border),
             const SizedBox(height: 18),
-            _sectionHeader('Pago', 'Elige cÃ³mo se registra esta venta', Icons.payments_outlined, text, muted),
+            _sectionHeader('Pago', 'Elige cómo se registra esta venta', Icons.payments_outlined, text, muted),
             const SizedBox(height: 10),
             _buildCurrencyAndPayment(dark, card, soft, text, muted, border),
             const SizedBox(height: 18),
@@ -5014,13 +5760,13 @@ class _PantallaCobroState extends State<PantallaCobro> {
 
   Widget _buildClienteCard(bool dark, Color card, Color soft, Color text, Color muted, Color border) {
     return Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(20), border: Border.all(color: border), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: dark ? .12 : .035), blurRadius: 18, offset: const Offset(0, 8))]), child: Column(children: [
-      Row(children: [Container(width: 44, height: 44, decoration: BoxDecoration(gradient: const LinearGradient(colors: [violet, violet2]), borderRadius: BorderRadius.circular(14)), child: Icon(_clienteEncontrado ? Icons.person_rounded : Icons.groups_rounded, color: Colors.white, size: 22)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_clienteEncontrado ? 'Cliente identificado' : 'PÃºblico general', style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(_clienteEncontrado ? _nombreCtrl.text : 'Venta sin datos de cliente', style: TextStyle(color: muted, fontSize: 9.5, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)])), TextButton(onPressed: () { setState(() { _clienteEncontrado = false; _cedulaCtrl.clear(); _nombreCtrl.clear(); _telefonoCtrl.clear(); _direccionCtrl.clear(); }); }, child: Text('Limpiar', style: TextStyle(color: violet, fontWeight: FontWeight.w800, fontSize: 10)))]),
+      Row(children: [Container(width: 44, height: 44, decoration: BoxDecoration(gradient: const LinearGradient(colors: [violet, violet2]), borderRadius: BorderRadius.circular(14)), child: Icon(_clienteEncontrado ? Icons.person_rounded : Icons.groups_rounded, color: Colors.white, size: 22)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_clienteEncontrado ? 'Cliente identificado' : 'Público general', style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(_clienteEncontrado ? _nombreCtrl.text : 'Venta sin datos de cliente', style: TextStyle(color: muted, fontSize: 9.5, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)])), TextButton(onPressed: () { setState(() { _clienteEncontrado = false; _cedulaCtrl.clear(); _nombreCtrl.clear(); _telefonoCtrl.clear(); _direccionCtrl.clear(); }); }, child: Text('Limpiar', style: TextStyle(color: violet, fontWeight: FontWeight.w800, fontSize: 10)))]),
       const SizedBox(height: 13),
-      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: _field(_cedulaCtrl, 'IdentificaciÃ³n', Icons.badge_outlined, dark, text, muted, border, onSubmitted: (_) => _buscarClientePorCedula())), const SizedBox(width: 8), SizedBox(width: 50, height: 50, child: Material(color: violet, borderRadius: BorderRadius.circular(14), child: InkWell(onTap: _buscandoCliente ? null : _buscarClientePorCedula, borderRadius: BorderRadius.circular(14), child: Center(child: _buscandoCliente ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.search_rounded, color: Colors.white, size: 21))))) ]),
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: _field(_cedulaCtrl, 'Identificación', Icons.badge_outlined, dark, text, muted, border, onSubmitted: (_) => _buscarClientePorCedula())), const SizedBox(width: 8), SizedBox(width: 50, height: 50, child: Material(color: violet, borderRadius: BorderRadius.circular(14), child: InkWell(onTap: _buscandoCliente ? null : _buscarClientePorCedula, borderRadius: BorderRadius.circular(14), child: Center(child: _buscandoCliente ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.search_rounded, color: Colors.white, size: 21))))) ]),
       const SizedBox(height: 9),
       _field(_nombreCtrl, 'Nombre completo', Icons.person_outline_rounded, dark, text, muted, border),
       const SizedBox(height: 9),
-      Row(children: [Expanded(child: _field(_telefonoCtrl, 'TelÃ©fono', Icons.phone_outlined, dark, text, muted, border, keyboardType: TextInputType.phone)), const SizedBox(width: 9), Expanded(child: _field(_direccionCtrl, 'DirecciÃ³n', Icons.location_on_outlined, dark, text, muted, border))]),
+      Row(children: [Expanded(child: _field(_telefonoCtrl, 'Teléfono', Icons.phone_outlined, dark, text, muted, border, keyboardType: TextInputType.phone)), const SizedBox(width: 9), Expanded(child: _field(_direccionCtrl, 'Dirección', Icons.location_on_outlined, dark, text, muted, border))]),
     ]));
   }
 
@@ -5169,7 +5915,7 @@ class _PantallaCobroState extends State<PantallaCobro> {
   Widget _buildSummaryCard(bool dark, Color card, Color soft, Color text, Color muted, Color border) {
     return Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(22), border: Border.all(color: border), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: dark ? .12 : .04), blurRadius: 22, offset: const Offset(0, 10))]), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [Container(width: 38, height: 38, decoration: BoxDecoration(color: violet.withValues(alpha: .10), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.receipt_long_rounded, color: violet, size: 19)), const SizedBox(width: 10), Expanded(child: Text('Resumen del pedido', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w900)))]), const SizedBox(height: 14),
-      ...widget.carrito.map((item) { final q=(item['cantidad'] as num?)?.toInt()??1; final p=(item['precio'] as num?)?.toDouble()??0; return Padding(padding: const EdgeInsets.only(bottom: 10), child: Row(children: [Container(width: 36, height: 36, decoration: BoxDecoration(color: soft, borderRadius: BorderRadius.circular(10)), clipBehavior: Clip.antiAlias, child: ImagenProducto(imagenBase64: item['imagen_base64']?.toString(), width: 36, height: 36, fit: BoxFit.cover)), const SizedBox(width: 8), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(item['nombre']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 10, fontWeight: FontWeight.w800)), const SizedBox(height: 2), Text('$q Ã— ${widget.formatearPrecio(p)}', style: TextStyle(color: muted, fontSize: 9))])), Text(widget.formatearPrecio(p*q), style: TextStyle(color: text, fontSize: 10, fontWeight: FontWeight.w900))])); }),
+      ...widget.carrito.map((item) { final q=(item['cantidad'] as num?)?.toInt()??1; final p=(item['precio'] as num?)?.toDouble()??0; return Padding(padding: const EdgeInsets.only(bottom: 10), child: Row(children: [Container(width: 36, height: 36, decoration: BoxDecoration(color: soft, borderRadius: BorderRadius.circular(10)), clipBehavior: Clip.antiAlias, child: ImagenProducto(imagenBase64: item['imagen_base64']?.toString(), width: 36, height: 36, fit: BoxFit.cover)), const SizedBox(width: 8), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(item['nombre']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 10, fontWeight: FontWeight.w800)), const SizedBox(height: 2), Text('$q × ${widget.formatearPrecio(p)}', style: TextStyle(color: muted, fontSize: 9))])), Text(widget.formatearPrecio(p*q), style: TextStyle(color: text, fontSize: 10, fontWeight: FontWeight.w900))])); }),
       Divider(color: border), const SizedBox(height: 8), Row(children: [Text('Total', style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w800)), const Spacer(), Text('${simbolosMoneda[_moneda] ?? '\$'} ${_totalEnMoneda().toStringAsFixed(2)}', style: TextStyle(color: text, fontSize: 23, fontWeight: FontWeight.w900))]), const SizedBox(height: 8), Container(width: double.infinity, padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: violet.withValues(alpha: .07), borderRadius: BorderRadius.circular(12)), child: Row(children: [const Icon(Icons.lock_outline_rounded, color: violet, size: 16), const SizedBox(width: 7), Expanded(child: Text('Venta local y segura', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w700)))])),
     ]));
   }
@@ -5270,6 +6016,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ventasVersion.removeListener(_sincronizarDashboard);
     productosVersion.removeListener(_sincronizarDashboard);
     super.dispose();
+  }
+
+  void _agregar(Map<String, dynamic> prod) {
+    widget.onNavigateToPOS();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${prod['nombre'] ?? 'Producto'} seleccionado para la venta',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Future<void> cargarDatos({bool silencioso = false}) async {
@@ -5692,7 +6452,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       ),
                                     ),
                                     const SizedBox(width: 6),
-                                    Text('ONLINE Â· LOCAL', style: TextStyle(
+                                    Text('ONLINE · LOCAL', style: TextStyle(
                                       color: AppColors.subtext(isDark),
                                       fontSize: 9,
                                       fontWeight: FontWeight.w700,
@@ -5711,7 +6471,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ),
                                 const SizedBox(height: 5),
                                 Text(
-                                  'Todo lo importante de tu operaciÃ³n en una sola vista.',
+                                  'Todo lo importante de tu operación en una sola vista.',
                                   style: TextStyle(
                                     color: AppColors.subtext(isDark),
                                     fontSize: 12,
@@ -5751,7 +6511,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ],
                       ),
                       const SizedBox(height: 20),
-                      // Acciones rÃ¡pidas.
+                      // Acciones rápidas.
                       LayoutBuilder(builder: (context, c) {
                         final twoColumns = c.maxWidth >= 680;
                         final items = [
@@ -5778,7 +6538,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // KPIs grandes, con jerarquÃ­a mÃ¡s marcada.
+                // KPIs grandes, con jerarquía más marcada.
                 LayoutBuilder(builder: (context, c) {
                   final count = desktop ? 4 : 2;
                   final gap = 10.0;
@@ -5787,21 +6547,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     _executiveMetric('Ventas', '\$${totalVentasHoy.toStringAsFixed(2)}', '$cantidadVentasHoy transacciones', Icons.trending_up_rounded, AppColors.primary, isDark),
                     _executiveMetric('Ganancia', '\$${gananciaTotalVentas.toStringAsFixed(2)}', 'Margen ${_margenPorcentaje.toStringAsFixed(1)}%', Icons.savings_rounded, AppColors.success, isDark),
                     _executiveMetric('Este mes', '\$${totalVentasMes.toStringAsFixed(2)}', 'Acumulado mensual', Icons.calendar_today_rounded, AppColors.secondary, isDark),
-                    _executiveMetric('Ticket medio', '\$${_ticketPromedio.toStringAsFixed(2)}', 'Por operaciÃ³n', Icons.receipt_long_rounded, AppColors.info, isDark),
+                    _executiveMetric('Ticket medio', '\$${_ticketPromedio.toStringAsFixed(2)}', 'Por operación', Icons.receipt_long_rounded, AppColors.info, isDark),
                   ];
                   return Wrap(spacing: gap, runSpacing: gap, children: cards.map((x) => SizedBox(width: w, child: x)).toList());
                 }),
                 const SizedBox(height: 14),
 
-                // Zona analÃ­tica principal.
+                // Zona analítica principal.
                 if (desktop)
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Expanded(flex: 7, child: _panel(isDark, title: 'Rendimiento de ventas', subtitle: 'Ingresos distribuidos durante el dÃ­a', icon: Icons.multiline_chart_rounded, child: SizedBox(height: 290, child: _graficoVentasHora(isDark, ventasHora, maxHora)))),
+                    Expanded(flex: 7, child: _panel(isDark, title: 'Rendimiento de ventas', subtitle: 'Ingresos distribuidos durante el día', icon: Icons.multiline_chart_rounded, child: SizedBox(height: 290, child: _graficoVentasHora(isDark, ventasHora, maxHora)))),
                     const SizedBox(width: 12),
                     Expanded(flex: 4, child: _inventarioPanel(isDark)),
                   ])
                 else ...[
-                  _panel(isDark, title: 'Rendimiento de ventas', subtitle: 'Ingresos distribuidos durante el dÃ­a', icon: Icons.multiline_chart_rounded, child: SizedBox(height: 255, child: _graficoVentasHora(isDark, ventasHora, maxHora))),
+                  _panel(isDark, title: 'Rendimiento de ventas', subtitle: 'Ingresos distribuidos durante el día', icon: Icons.multiline_chart_rounded, child: SizedBox(height: 255, child: _graficoVentasHora(isDark, ventasHora, maxHora))),
                   const SizedBox(height: 12),
                   _inventarioPanel(isDark),
                 ],
@@ -5824,7 +6584,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _panel(
                   isDark,
                   title: 'Centro operativo',
-                  subtitle: 'Salud actual de inventario y operaciÃ³n',
+                  subtitle: 'Salud actual de inventario y operación',
                   icon: Icons.radar_rounded,
                   child: Wrap(
                     spacing: 10,
@@ -6128,7 +6888,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return _panel(
       isDark,
-      title: 'CatÃ¡logo e inventario',
+      title: 'Catálogo e inventario',
       subtitle: 'Cantidad y estado de tus productos',
       icon: Icons.inventory_2_outlined,
       child: Column(
@@ -6140,7 +6900,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ]),
           const SizedBox(height: 8),
           Row(children: [
-            Expanded(child: _dashboardCount('CategorÃ­as', '$categoriasActivas', Icons.category_rounded, AppColors.info, isDark)),
+            Expanded(child: _dashboardCount('Categorías', '$categoriasActivas', Icons.category_rounded, AppColors.info, isDark)),
             const SizedBox(width: 8),
             Expanded(child: _dashboardCount('Unidades', '$unidades', Icons.all_inbox_rounded, AppColors.secondary, isDark)),
           ]),
@@ -6237,11 +6997,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _topProductosPanel(bool isDark) {
     return _panel(
       isDark,
-      title: 'Productos mÃ¡s vendidos',
+      title: 'Productos más vendidos',
       subtitle: 'Los productos con mayor movimiento',
       icon: Icons.local_fire_department_outlined,
       child: productosMasVendidos.isEmpty
-          ? _emptyDashboard('AÃºn no hay ventas registradas', isDark)
+          ? _emptyDashboard('Aún no hay ventas registradas', isDark)
           : Column(
               children: productosMasVendidos.take(7).toList().asMap().entries.map((entry) {
                 final index = entry.key;
@@ -6278,11 +7038,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final total = metodos.fold<double>(0, (sum, e) => sum + e.value);
     return _panel(
       isDark,
-      title: 'MÃ©todos de pago',
-      subtitle: 'DistribuciÃ³n de las ventas de hoy',
+      title: 'Métodos de pago',
+      subtitle: 'Distribución de las ventas de hoy',
       icon: Icons.payments_outlined,
       child: metodos.isEmpty
-          ? _emptyDashboard('TodavÃ­a no hay pagos registrados', isDark)
+          ? _emptyDashboard('Todavía no hay pagos registrados', isDark)
           : Column(
               children: [
                 SizedBox(
@@ -6485,7 +7245,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(prod['nombre']?.toString() ?? 'Sin nombre', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: ink, fontSize: 11, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 4),
-                    Text('${prod['codigo_barras'] ?? 'Sin cÃ³digo'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 8, fontWeight: FontWeight.w600)),
+                    Text('${prod['codigo_barras'] ?? 'Sin código'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 8, fontWeight: FontWeight.w600)),
                     const Spacer(),
                     Row(children: [
                       Expanded(child: Text(_precioDashboard(price), style: TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w900))),
@@ -6507,18 +7267,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             mostrarDialogoProducto(productoEditar: prod);
                           } else if (action == 'copy') {
                             Clipboard.setData(ClipboardData(text: (prod['codigo_barras'] ?? '').toString()));
-                            mostrarSnackBar('CÃ³digo copiado', AppColors.primary);
+                            mostrarSnackBar('Código copiado', AppColors.primary);
                           } else if (action == 'delete') {
                             eliminarProducto(prod['id'].toString());
                           }
                         },
                         itemBuilder: (_) => const [
                           PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18), SizedBox(width: 10), Text('Editar') ])),
-                          PopupMenuItem(value: 'copy', child: Row(children: [Icon(Icons.content_copy_outlined, size: 18), SizedBox(width: 10), Text('Copiar cÃ³digo') ])),
+                          PopupMenuItem(value: 'copy', child: Row(children: [Icon(Icons.content_copy_outlined, size: 18), SizedBox(width: 10), Text('Copiar código') ])),
                           PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 18, color: AppColors.danger), SizedBox(width: 10), Text('Eliminar') ])),
                         ],
                       ),
                     ]),
+                    const SizedBox(height: 7),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 34,
+                      child: FilledButton.icon(
+                        onPressed: stock > 0 ? () => _agregar(prod) : null,
+                        icon: const Icon(Icons.shopping_cart_rounded, size: 15),
+                        label: const Text('Agregar al carrito', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900)),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
                   ]),
                 ),
               ),
@@ -6539,7 +7315,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('Productos', style: TextStyle(color: ink, fontSize: desktop ? 24 : 20, fontWeight: FontWeight.w900, letterSpacing: -.6)),
               const SizedBox(height: 3),
-              Text('CatÃ¡logo, existencias y rentabilidad en una sola vista.', style: TextStyle(color: muted, fontSize: 10.5)),
+              Text('Catálogo, existencias y rentabilidad en una sola vista.', style: TextStyle(color: muted, fontSize: 10.5)),
             ])),
             Material(color: AppColors.primary, borderRadius: BorderRadius.circular(13), child: InkWell(borderRadius: BorderRadius.circular(13), onTap: () => mostrarDialogoProducto(), child: const Padding(padding: EdgeInsets.symmetric(horizontal: 13, vertical: 11), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.add_rounded, color: Colors.white, size: 18), SizedBox(width: 6), Text('Nuevo producto', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900))])))),
           ]),
@@ -6561,14 +7337,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: border)),
             child: Column(children: [
               Row(children: [
-                Expanded(child: Container(height: 44, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)), child: TextField(onChanged: (v) => setState(() => searchQuery = v), style: TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w600), decoration: InputDecoration(border: InputBorder.none, prefixIcon: Icon(Icons.search_rounded, color: muted, size: 19), hintText: 'Buscar por nombre, cÃ³digo o marca...', hintStyle: TextStyle(color: muted, fontSize: 10), contentPadding: const EdgeInsets.symmetric(vertical: 13))))),
+                Expanded(child: Container(height: 44, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)), child: TextField(onChanged: (v) => setState(() => searchQuery = v), style: TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w600), decoration: InputDecoration(border: InputBorder.none, prefixIcon: Icon(Icons.search_rounded, color: muted, size: 19), hintText: 'Buscar por nombre, código o marca...', hintStyle: TextStyle(color: muted, fontSize: 10), contentPadding: const EdgeInsets.symmetric(vertical: 13))))),
                 const SizedBox(width: 8),
                 SizedBox(width: 155, child: _buildFiltroDropdown(_filtroCategoria, ['Todas', ..._categorias.map((c) => c['nombre'].toString())], (v) => setState(() => _filtroCategoria = v ?? 'Todas'), isDark)),
                 const SizedBox(width: 8),
                 SizedBox(width: 145, child: _buildFiltroDropdown(_filtroStock, ['Todos', 'Con Stock', 'Stock Bajo', 'Agotados'], (v) => setState(() => _filtroStock = v ?? 'Todos'), isDark)),
               ]),
               const SizedBox(height: 8),
-              Row(children: [Icon(Icons.tune_rounded, size: 13, color: AppColors.primary), const SizedBox(width: 5), Text('${filtrados.length} resultados', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w800)), const Spacer(), Text('Vista catÃ¡logo', style: TextStyle(color: muted, fontSize: 8.5, fontWeight: FontWeight.w700))]),
+              Row(children: [Icon(Icons.tune_rounded, size: 13, color: AppColors.primary), const SizedBox(width: 5), Text('${filtrados.length} resultados', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w800)), const Spacer(), Text('Vista catálogo', style: TextStyle(color: muted, fontSize: 8.5, fontWeight: FontWeight.w700))]),
             ]),
           ),
           const SizedBox(height: 12),
@@ -6654,7 +7430,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final values = [
             _buildSalesKpi('Ventas hoy', '\$${totalVentasHoy.toStringAsFixed(2)}', '$cantidadVentasHoy operaciones', Icons.trending_up_rounded, AppColors.success, isDark),
             _buildSalesKpi('Este mes', '\$${totalVentasMes.toStringAsFixed(2)}', 'Acumulado mensual', Icons.calendar_month_rounded, AppColors.primary, isDark),
-            _buildSalesKpi('Ticket medio', '\$${_ticketPromedio.toStringAsFixed(2)}', 'Por operaciÃ³n', Icons.receipt_long_rounded, AppColors.info, isDark),
+            _buildSalesKpi('Ticket medio', '\$${_ticketPromedio.toStringAsFixed(2)}', 'Por operación', Icons.receipt_long_rounded, AppColors.info, isDark),
             _buildSalesKpi('Margen', '${_margenPorcentaje.toStringAsFixed(1)}%', 'Rentabilidad estimada', Icons.savings_rounded, AppColors.secondary, isDark),
           ];
           if (!compact) return Row(children: [for (int i = 0; i < values.length; i++) ...[Expanded(child: values[i]), if (i < values.length - 1) const SizedBox(width: 12)]]);
@@ -6665,14 +7441,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const SizedBox(height: 12),
         Container(decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: border)), clipBehavior: Clip.antiAlias, child: Column(children: [
           Container(padding: const EdgeInsets.fromLTRB(15, 13, 15, 12), color: isDark ? Colors.white.withValues(alpha: .025) : const Color(0xFFF7F9FB), child: Row(children: [Expanded(child: Text('Historial de operaciones', style: TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w900))), Text('${ventasFiltradas.length} registros', style: TextStyle(color: muted, fontSize: 8.5, fontWeight: FontWeight.w800))])),
-          if (ventasFiltradas.isEmpty) Padding(padding: const EdgeInsets.symmetric(vertical: 65), child: Column(children: [Icon(Icons.receipt_long_outlined, size: 44, color: muted), const SizedBox(height: 12), Text('No hay ventas', style: TextStyle(color: ink, fontSize: 14, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text('Las operaciones aparecerÃ¡n aquÃ­.', style: TextStyle(color: muted, fontSize: 10))]))
+          if (ventasFiltradas.isEmpty) Padding(padding: const EdgeInsets.symmetric(vertical: 65), child: Column(children: [Icon(Icons.receipt_long_outlined, size: 44, color: muted), const SizedBox(height: 12), Text('No hay ventas', style: TextStyle(color: ink, fontSize: 14, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text('Las operaciones aparecerán aquí.', style: TextStyle(color: muted, fontSize: 10))]))
           else ...ventasFiltradas.asMap().entries.map((entry) {
             final i = entry.key; final v = entry.value;
             final fecha = v['fecha'] != null ? DateTime.tryParse(v['fecha'].toString()) ?? DateTime.now() : DateTime.now();
             final totalVenta = (v['total'] as num?)?.toDouble() ?? 0;
-            final cliente = (v['cliente_nombre'] ?? 'PÃºblico General').toString();
+            final cliente = (v['cliente_nombre'] ?? 'Público General').toString();
             final factura = (v['numero_factura'] ?? 'Venta #${v['id']}').toString();
-            return Material(color: Colors.transparent, child: InkWell(onTap: () => _mostrarDetalleVenta(v), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11), child: Column(children: [Row(children: [Container(width: 42, height: 42, decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: .10), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.receipt_long_rounded, color: AppColors.primary, size: 19)), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(factura, style: TextStyle(color: ink, fontSize: 11, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(cliente, style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w700)), const SizedBox(height: 2), Text(DateFormat('dd/MM/yyyy Â· HH:mm').format(fecha), style: TextStyle(color: muted, fontSize: 8))])), Column(crossAxisAlignment: CrossAxisAlignment.end, children: [Text('\$${totalVenta.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Icon(Icons.chevron_right_rounded, color: muted, size: 17)])]), if (i < ventasFiltradas.length - 1) Padding(padding: const EdgeInsets.only(top: 11), child: Divider(height: 1, color: border))]))));
+            return Material(color: Colors.transparent, child: InkWell(onTap: () => _mostrarDetalleVenta(v), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11), child: Column(children: [Row(children: [Container(width: 42, height: 42, decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: .10), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.receipt_long_rounded, color: AppColors.primary, size: 19)), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(factura, style: TextStyle(color: ink, fontSize: 11, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(cliente, style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w700)), const SizedBox(height: 2), Text(DateFormat('dd/MM/yyyy · HH:mm').format(fecha), style: TextStyle(color: muted, fontSize: 8))])), Column(crossAxisAlignment: CrossAxisAlignment.end, children: [Text('\$${totalVenta.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Icon(Icons.chevron_right_rounded, color: muted, size: 17)])]), if (i < ventasFiltradas.length - 1) Padding(padding: const EdgeInsets.only(top: 11), child: Divider(height: 1, color: border))]))));
           }),
         ])),
       ]);
@@ -6683,7 +7459,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final isDark = widget.modoOscuro;
     final detalle = await _db.getDetalleVenta(venta['id'].toString());
     final totalVenta = (venta['total'] as num).toDouble();
-    final nombreCliente = venta['cliente_nombre'] ?? 'PÃºblico General';
+    final nombreCliente = venta['cliente_nombre'] ?? 'Público General';
     final telefonoCliente = venta['cliente_telefono'] ?? '';
     final factura = venta['numero_factura'] ?? 'Venta #${venta['id']}';
 
@@ -6838,20 +7614,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       String nombre, String telefono, String factura, double totalVenta) {
     if (telefono.isEmpty) {
       mostrarSnackBar(
-          'El cliente no tiene nÃºmero de telÃ©fono', AppColors.warning);
+          'El cliente no tiene número de teléfono', AppColors.warning);
       return;
     }
     String phone = telefono.replaceAll(RegExp(r'[^0-9]'), '');
     if (phone.startsWith('0')) {
       phone = '58${phone.substring(1)}';
     }
-    String message = "ðŸ›ï¸ *SINTHETIX - COMPROBANTE DE VENTA*\n\n";
-    message += "ðŸ“„ Factura: $factura\n";
-    message += "ðŸ‘¤ Cliente: $nombre\n";
-    message += "ðŸ’° Total: \$${totalVenta.toStringAsFixed(2)}\n";
+    String message = "🛍️ *SINTHETIX - COMPROBANTE DE VENTA*\n\n";
+    message += "📄 Factura: $factura\n";
+    message += "👤 Cliente: $nombre\n";
+    message += "💰 Total: \$${totalVenta.toStringAsFixed(2)}\n";
     message +=
-        "ðŸ“… Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}\n\n";
-    message += "Â¡Gracias por su compra! ðŸŽ‰";
+        "📅 Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}\n\n";
+    message += "¡Gracias por su compra! 🎉";
 
     final whatsappUrl =
         "https://wa.me/$phone?text=${Uri.encodeComponent(message)}";
@@ -6868,7 +7644,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: Text('Eliminar producto',
             style: TextStyle(
                 color: AppColors.text(isDark), fontWeight: FontWeight.w700)),
-        content: Text('Â¿EstÃ¡s seguro de eliminar este producto?',
+        content: Text('¿Estás seguro de eliminar este producto?',
             style: TextStyle(color: AppColors.subtext(isDark))),
         actions: [
           TextButton(
@@ -6925,6 +7701,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         productoEditar?['destacado'] == true;
     bool tieneDescuento = (productoEditar?['descuento'] ?? 0) > 0;
     bool guardando = false;
+    final List<GrupoOpciones> gruposOpciones =
+        OpcionesProducto.decodificar(productoEditar?['opciones_json']?.toString());
 
     showDialog(
       context: context,
@@ -6948,14 +7726,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   subiendo = false;
                 });
                 if (cloudUrl == null) {
-                  mostrarSnackBar('Imagen guardada localmente. Se subirÃ¡ cuando haya conexiÃ³n.', AppColors.warning);
+                  mostrarSnackBar('Imagen guardada localmente. Se subirá cuando haya conexión.', AppColors.warning);
                 }
               } catch (e) {
                 setDialogState(() => subiendo = false);
               }
             }
 
-            // FUNCIÃ“N PARA ESCANEAR CÃ“DIGO
+            // FUNCIÓN PARA ESCANEAR CÓDIGO
             Future<void> escanearCodigo() async {
               final codigo = await showDialog<String>(
                 context: dialogContext,
@@ -7006,7 +7784,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // SECCIÃ“N IMAGEN
+                      // SECCIÓN IMAGEN
                       ValueListenableBuilder<String>(
                         valueListenable: imagenNotifier,
                         builder: (context, base64, child) {
@@ -7080,7 +7858,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   },
                             icon: const Icon(Icons.photo_library,
                                 color: AppColors.primary, size: 20),
-                            label: const Text('GalerÃ­a',
+                            label: const Text('Galería',
                                 style: TextStyle(
                                     color: AppColors.primary, fontSize: 13)),
                             style: OutlinedButton.styleFrom(
@@ -7098,7 +7876,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(height: 16),
                       Divider(color: AppColors.divider(isDark)),
                       const SizedBox(height: 8),
-                      // SECCIÃ“N INFORMACIÃ“N BÃSICA
+                      // SECCIÓN INFORMACIÓN BÁSICA
                       TextField(
                         controller: nombreCtrl,
                         style: TextStyle(color: AppColors.text(isDark)),
@@ -7112,7 +7890,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             controller: codigoCtrl,
                             style: TextStyle(color: AppColors.text(isDark)),
                             decoration: _inputDecoration(
-                                'CÃ³digo de Barras', Icons.qr_code, isDark),
+                                'Código de Barras', Icons.qr_code, isDark),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -7127,7 +7905,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             icon: const Icon(Icons.qr_code_scanner_rounded,
                                 color: Colors.white, size: 22),
                             onPressed: escanearCodigo,
-                            tooltip: 'Escanear cÃ³digo',
+                            tooltip: 'Escanear código',
                           ),
                         ),
                         const SizedBox(width: 4),
@@ -7148,7 +7926,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 codigoCtrl.text = codigo;
                               });
                             },
-                            tooltip: 'Generar cÃ³digo',
+                            tooltip: 'Generar código',
                           ),
                         ),
                       ]),
@@ -7240,7 +8018,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ]),
                       const SizedBox(height: 12),
-                      // SECCIÃ“N PRECIOS
+                      // SECCIÓN PRECIOS
                       Row(children: [
                         Expanded(
                           child: TextField(
@@ -7268,7 +8046,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ]),
                       const SizedBox(height: 12),
-                      // SECCIÃ“N STOCK
+                      // SECCIÓN STOCK
                       Row(children: [
                         Expanded(
                           child: TextField(
@@ -7286,7 +8064,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             style: TextStyle(color: AppColors.text(isDark)),
                             keyboardType: TextInputType.number,
                             decoration: _inputDecoration(
-                                'Stock MÃ­nimo', Icons.warning_amber, isDark),
+                                'Stock Mínimo', Icons.warning_amber, isDark),
                           ),
                         ),
                       ]),
@@ -7295,11 +8073,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         controller: descCtrl,
                         style: TextStyle(color: AppColors.text(isDark)),
                         decoration: _inputDecoration(
-                            'DescripciÃ³n', Icons.description_outlined, isDark),
+                            'Descripción', Icons.description_outlined, isDark),
                         maxLines: 2,
                       ),
                       const SizedBox(height: 12),
-                      // SECCIÃ“N VARIANTES
+                      // SECCIÓN VARIANTES
                       if (_tallas.isNotEmpty) ...[
                         Text('TALLA',
                             style: TextStyle(
@@ -7334,7 +8112,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         const SizedBox(height: 12),
                       ],
-                      // SECCIÃ“N CONFIGURACIÃ“N
+                      // SECCIÓN CONFIGURACIÓN
                       Material(
   color: Colors.transparent,
   child: SwitchListTile(
@@ -7388,6 +8166,175 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               isDark),
                         ),
                       ],
+                      const SizedBox(height: 18),
+                      Text('OPCIONES PARA EL POS',
+                          style: TextStyle(
+                              color: AppColors.subtext(isDark),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 4),
+                      Text('Ej: Extras (queso, tocino) o Tamaño (S, M, L) con precio adicional opcional.',
+                          style: TextStyle(color: AppColors.subtext(isDark), fontSize: 10.5)),
+                      const SizedBox(height: 10),
+                      ...gruposOpciones.map((g) {
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.background(isDark),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppColors.divider(isDark)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(g.nombre,
+                                        style: TextStyle(
+                                            color: AppColors.text(isDark),
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 13)),
+                                  ),
+                                  Text(g.seleccionMultiple ? 'Múltiple' : 'Única',
+                                      style: TextStyle(color: AppColors.subtext(isDark), fontSize: 10)),
+                                  const SizedBox(width: 8),
+                                  if (g.obligatorio)
+                                    Text('Obligatorio', style: TextStyle(color: AppColors.danger, fontSize: 10, fontWeight: FontWeight.w700)),
+                                  IconButton(
+                                    icon: Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
+                                    onPressed: () => setDialogState(() => gruposOpciones.remove(g)),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  ...g.valores.map((v) => Chip(
+                                        label: Text(
+                                          v.precioExtra > 0
+                                              ? '${v.nombre} (+\$${v.precioExtra.toStringAsFixed(2)})'
+                                              : v.nombre,
+                                          style: const TextStyle(fontSize: 11),
+                                        ),
+                                        onDeleted: () =>
+                                            setDialogState(() => g.valores.remove(v)),
+                                        backgroundColor: AppColors.card(isDark),
+                                      )),
+                                  ActionChip(
+                                    avatar: const Icon(Icons.add, size: 16),
+                                    label: const Text('Agregar valor', style: TextStyle(fontSize: 11)),
+                                    onPressed: () async {
+                                      final nombreValorCtrl = TextEditingController();
+                                      final precioValorCtrl = TextEditingController(text: '0');
+                                      final ok = await showDialog<bool>(
+                                        context: context,
+                                        builder: (c) => AlertDialog(
+                                          backgroundColor: AppColors.card(isDark),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                          title: const Text('Nuevo valor'),
+                                          content: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              TextField(
+                                                controller: nombreValorCtrl,
+                                                decoration: _inputDecoration('Nombre (ej: Queso)', Icons.label_outline, isDark),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              TextField(
+                                                controller: precioValorCtrl,
+                                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                                decoration: _inputDecoration('Precio adicional (0 si es gratis)', Icons.attach_money, isDark),
+                                              ),
+                                            ],
+                                          ),
+                                          actions: [
+                                            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancelar')),
+                                            ElevatedButton(onPressed: () => Navigator.pop(c, true), child: const Text('Agregar')),
+                                          ],
+                                        ),
+                                      );
+                                      if (ok == true && nombreValorCtrl.text.trim().isNotEmpty) {
+                                        setDialogState(() => g.valores.add(ValorOpcion(
+                                              nombre: nombreValorCtrl.text.trim(),
+                                              precioExtra: double.tryParse(precioValorCtrl.text) ?? 0,
+                                            )));
+                                      }
+                                    },
+                                    backgroundColor: AppColors.primary.withValues(alpha: .12),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final nombreGrupoCtrl = TextEditingController();
+                          bool multiple = true;
+                          bool obligatorio = false;
+                          final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (c) => StatefulBuilder(
+                              builder: (c, setGrupoState) => AlertDialog(
+                                backgroundColor: AppColors.card(isDark),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                title: const Text('Nuevo grupo de opciones'),
+                                content: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    TextField(
+                                      controller: nombreGrupoCtrl,
+                                      decoration: _inputDecoration('Nombre (ej: Extras, Tamaño)', Icons.tune, isDark),
+                                    ),
+                                    SwitchListTile(
+                                      title: const Text('Permitir varias opciones', style: TextStyle(fontSize: 13)),
+                                      value: multiple,
+                                      onChanged: (v) => setGrupoState(() => multiple = v),
+                                      activeThumbColor: AppColors.primary,
+                                      contentPadding: EdgeInsets.zero,
+                                      dense: true,
+                                    ),
+                                    SwitchListTile(
+                                      title: const Text('Obligatorio antes de agregar al carrito', style: TextStyle(fontSize: 13)),
+                                      value: obligatorio,
+                                      onChanged: (v) => setGrupoState(() => obligatorio = v),
+                                      activeThumbColor: AppColors.primary,
+                                      contentPadding: EdgeInsets.zero,
+                                      dense: true,
+                                    ),
+                                  ],
+                                ),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancelar')),
+                                  ElevatedButton(onPressed: () => Navigator.pop(c, true), child: const Text('Crear')),
+                                ],
+                              ),
+                            ),
+                          );
+                          if (ok == true && nombreGrupoCtrl.text.trim().isNotEmpty) {
+                            setDialogState(() => gruposOpciones.add(GrupoOpciones(
+                                  nombre: nombreGrupoCtrl.text.trim(),
+                                  seleccionMultiple: multiple,
+                                  obligatorio: obligatorio,
+                                )));
+                          }
+                        },
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Agregar grupo de opciones'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: BorderSide(color: AppColors.primary.withValues(alpha: .5)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -7445,6 +8392,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               'talla': tallaSeleccionada,
                               'color': colorSeleccionado,
                               'tiene_variantes': tieneVariantes ? 1 : 0,
+                              'opciones_json': OpcionesProducto.codificar(gruposOpciones),
                               'descuento': tieneDescuento ? descuento : 0,
                               'margen': costo > 0
                                   ? ((precio - costo) / costo * 100)
@@ -7470,7 +8418,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               mostrarSnackBar(
                                 synced
                                     ? 'Producto creado y sincronizado en Supabase'
-                                    : 'Producto guardado localmente. QuedÃ³ pendiente de sincronizaciÃ³n.',
+                                    : 'Producto guardado localmente. Quedó pendiente de sincronización.',
                                 synced ? AppColors.success : AppColors.warning,
                               );
                               return;
@@ -7575,7 +8523,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('DASHBOARD', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: ink, fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: .2)),
             const SizedBox(height: 2),
-            Text('${productos.length} productos Â· ${cantidadVentasHoy} ventas hoy', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 9.5, fontWeight: FontWeight.w600)),
+            Text('${productos.length} productos · ${cantidadVentasHoy} ventas hoy', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 9.5, fontWeight: FontWeight.w600)),
           ])),
         ]),
         actions: [
@@ -7606,11 +8554,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 // ============================================
-// CONTINUACIÃ“N - ETAPA 5 de 6
+// CONTINUACIÓN - ETAPA 5 de 6
 // ============================================
 
 // ============================================
-// FUNCIÃ“N MAIN
+// FUNCIÓN MAIN
 // ============================================
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -7632,7 +8580,7 @@ void main() async {
 }
 
 // ============================================
-// PANTALLA: CONFIGURACIÃ“N (MI NEGOCIO) - DISEÃ‘O PROFESIONAL
+// PANTALLA: CONFIGURACIÓN (MI NEGOCIO) - DISEÑO PROFESIONAL
 // ============================================
 class ConfiguracionScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -7678,7 +8626,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
       _tasaCOPCtrl.text = (prefs.getDouble('tasa_cop') ?? 4500.0).toString();
       _tasaVESCtrl.text = (prefs.getDouble('tasa_ves') ?? 60.0).toString();
     } catch (e) {
-      debugPrint('Error cargando configuraciÃ³n: $e');
+      debugPrint('Error cargando configuración: $e');
     }
     setState(() => _cargando = false);
   }
@@ -7724,7 +8672,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('ConfiguraciÃ³n guardada exitosamente',
+            content: const Text('Configuración guardada exitosamente',
                 style: TextStyle(color: Colors.white)),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
@@ -7734,7 +8682,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
         );
       }
     } catch (e) {
-      debugPrint('Error guardando configuraciÃ³n: $e');
+      debugPrint('Error guardando configuración: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -7851,15 +8799,15 @@ const SizedBox(width: 14),
                     const SizedBox(height: 20),
                     _buildTextField(_nombreCtrl, 'Nombre del Negocio', isDark),
                     const SizedBox(height: 12),
-                    _buildTextField(_rifCtrl, 'RIF / CÃ©dula', isDark),
+                    _buildTextField(_rifCtrl, 'RIF / Cédula', isDark),
                     const SizedBox(height: 12),
-                    _buildTextField(_direccionCtrl, 'DirecciÃ³n', isDark,
+                    _buildTextField(_direccionCtrl, 'Dirección', isDark,
                         maxLines: 2),
                     const SizedBox(height: 12),
-                    _buildTextField(_telefonoCtrl, 'TelÃ©fono', isDark,
+                    _buildTextField(_telefonoCtrl, 'Teléfono', isDark,
                         keyboardType: TextInputType.phone),
                     const SizedBox(height: 12),
-                    _buildTextField(_correoCtrl, 'Correo ElectrÃ³nico', isDark,
+                    _buildTextField(_correoCtrl, 'Correo Electrónico', isDark,
                         keyboardType: TextInputType.emailAddress),
                     const SizedBox(height: 24),
                     Text('TIPO DE CAMBIO',
@@ -7956,7 +8904,7 @@ const SizedBox(width: 14),
 }
 
 // ============================================
-// PANTALLA: CATEGORÃAS - CON GUARDADO AUTOMÃTICO
+// PANTALLA: CATEGORÍAS - CON GUARDADO AUTOMÁTICO
 // ============================================
 class CategoriasScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -7982,9 +8930,9 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
     setState(() => _cargando = true);
     try {
       _categorias = await _db.getCategorias();
-      debugPrint('CategorÃ­as cargadas: ${_categorias.length}');
+      debugPrint('Categorías cargadas: ${_categorias.length}');
     } catch (e) {
-      debugPrint('Error cargando categorÃ­as: $e');
+      debugPrint('Error cargando categorías: $e');
       _categorias = [];
     }
     setState(() => _cargando = false);
@@ -8007,7 +8955,7 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text(
-            categoria != null ? 'Editar CategorÃ­a' : 'Nueva CategorÃ­a',
+            categoria != null ? 'Editar Categoría' : 'Nueva Categoría',
             style: TextStyle(
                 color: AppColors.text(isDark), fontWeight: FontWeight.w700),
           ),
@@ -8037,7 +8985,7 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
                   controller: descCtrl,
                   style: TextStyle(color: AppColors.text(isDark)),
                   decoration: InputDecoration(
-                    labelText: 'DescripciÃ³n',
+                    labelText: 'Descripción',
                     labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                     filled: true,
                     fillColor: AppColors.background(isDark),
@@ -8084,8 +9032,8 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
                         await _cargarCategorias();
                         _mostrarSnackbar(
                             categoria != null
-                                ? 'CategorÃ­a actualizada'
-                                : 'CategorÃ­a creada exitosamente',
+                                ? 'Categoría actualizada'
+                                : 'Categoría creada exitosamente',
                             AppColors.success);
                       } catch (e) {
                         setDialogState(() => guardando = false);
@@ -8145,7 +9093,7 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
         ),
         title: Row(children: [
 const SizedBox(width: 14),
-          Text('CATEGORÃAS',
+          Text('CATEGORÍAS',
               style: TextStyle(
                   color: AppColors.text(isDark),
                   fontSize: 18,
@@ -8186,12 +9134,12 @@ const SizedBox(width: 14),
                         Icon(Icons.category_outlined,
                             size: 60, color: AppColors.subtext(isDark)),
                         const SizedBox(height: 16),
-                        Text('No hay categorÃ­as',
+                        Text('No hay categorías',
                             style: TextStyle(
                                 color: AppColors.subtext(isDark),
                                 fontSize: 16)),
                         const SizedBox(height: 4),
-                        Text('Agrega tu primera categorÃ­a',
+                        Text('Agrega tu primera categoría',
                             style: TextStyle(
                                 color: AppColors.subtext(isDark),
                                 fontSize: 12)),
@@ -8265,7 +9213,7 @@ const SizedBox(width: 14),
                               await _db.eliminarCategoria(cat['id'].toString());
                               await _cargarCategorias();
                               _mostrarSnackbar(
-                                  'CategorÃ­a eliminada', AppColors.danger);
+                                  'Categoría eliminada', AppColors.danger);
                             },
                           ),
                         ]),
@@ -8290,7 +9238,7 @@ const SizedBox(width: 14),
                   onPressed: () => _mostrarDialogo(),
                   icon: const Icon(Icons.add_rounded,
                       color: Colors.white, size: 24),
-                  label: const Text('AGREGAR CATEGORÃA',
+                  label: const Text('AGREGAR CATEGORÍA',
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 14,
@@ -8313,7 +9261,7 @@ const SizedBox(width: 14),
 }
 
 // ============================================
-// PANTALLA: MÃ‰TODOS DE PAGO - CON GUARDADO AUTOMÃTICO
+// PANTALLA: MÉTODOS DE PAGO - CON GUARDADO AUTOMÁTICO
 // ============================================
 class MetodosPagoScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -8340,7 +9288,7 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
     try {
       _metodos = await _db.getMetodosPago();
     } catch (e) {
-      debugPrint('Error cargando mÃ©todos de pago: $e');
+      debugPrint('Error cargando métodos de pago: $e');
       _metodos = [];
     }
     setState(() => _cargando = false);
@@ -8356,30 +9304,30 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
     final titular = TextEditingController(text: metodo?['titular'] ?? '');
     final datos = TextEditingController(text: metodo?['datos_adicionales'] ?? '');
     bool guardando=false;
-    final tipos=['Efectivo','Tarjeta','Transferencia','Pago MÃ³vil','Otro'];
+    final tipos=['Efectivo','Tarjeta','Transferencia','Pago Móvil','Otro'];
 
     showDialog(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setD)=>AlertDialog(
       backgroundColor:AppColors.card(dark),
       shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24)),
-      title:Row(children:[Container(width:42,height:42,decoration:BoxDecoration(color:AppColors.primary.withValues(alpha:.10),borderRadius:BorderRadius.circular(13)),child:const Icon(Icons.account_balance_wallet_outlined,color:AppColors.primary)),const SizedBox(width:12),Expanded(child:Text(metodo==null?'Agregar mÃ©todo de pago':'Editar mÃ©todo de pago',style:TextStyle(color:AppColors.text(dark),fontWeight:FontWeight.w900,fontSize:18)))]),
+      title:Row(children:[Container(width:42,height:42,decoration:BoxDecoration(color:AppColors.primary.withValues(alpha:.10),borderRadius:BorderRadius.circular(13)),child:const Icon(Icons.account_balance_wallet_outlined,color:AppColors.primary)),const SizedBox(width:12),Expanded(child:Text(metodo==null?'Agregar método de pago':'Editar método de pago',style:TextStyle(color:AppColors.text(dark),fontWeight:FontWeight.w900,fontSize:18)))]),
       content:SizedBox(width:520,child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text('TIPO',style:TextStyle(color:AppColors.subtext(dark),fontSize:10,fontWeight:FontWeight.w900,letterSpacing:1)),const SizedBox(height:7),
-        DropdownButtonFormField<String>(value:tipos.contains(tipo)?tipo:'Otro',decoration:_field('MÃ©todo'),items:tipos.map((x)=>DropdownMenuItem(value:x,child:Text(x))).toList(),onChanged:(v){setD(()=>tipo=v??'Otro');if(metodo==null)nombre.text=tipo;}),
+        DropdownButtonFormField<String>(value:tipos.contains(tipo)?tipo:'Otro',decoration:_field('Método'),items:tipos.map((x)=>DropdownMenuItem(value:x,child:Text(x))).toList(),onChanged:(v){setD(()=>tipo=v??'Otro');if(metodo==null)nombre.text=tipo;}),
         const SizedBox(height:16),
         TextField(controller:nombre,decoration:_field('Nombre visible')),
         const SizedBox(height:14),
         if(tipo=='Efectivo') _infoMetodo('No necesita datos bancarios. Solo se registra el pago recibido y el vuelto.',Icons.payments_outlined,dark),
         if(tipo=='Tarjeta') ...[
-          _infoMetodo('Registra Ãºnicamente los datos que tu negocio necesite para identificar la operaciÃ³n.',Icons.credit_card_outlined,dark),
+          _infoMetodo('Registra únicamente los datos que tu negocio necesite para identificar la operación.',Icons.credit_card_outlined,dark),
           const SizedBox(height:10),TextField(controller:datos,decoration:_field('Terminal / referencia (opcional)')),
         ],
         if(tipo=='Transferencia') ...[
           TextField(controller:banco,decoration:_field('Banco')),
-          const SizedBox(height:10),TextField(controller:cuenta,decoration:_field('NÃºmero de cuenta / referencia')),
+          const SizedBox(height:10),TextField(controller:cuenta,decoration:_field('Número de cuenta / referencia')),
           const SizedBox(height:10),TextField(controller:titular,decoration:_field('Titular')),
         ],
-        if(tipo=='Pago MÃ³vil') ...[
-          TextField(controller:telefono,keyboardType:TextInputType.phone,decoration:_field('TelÃ©fono')),
+        if(tipo=='Pago Móvil') ...[
+          TextField(controller:telefono,keyboardType:TextInputType.phone,decoration:_field('Teléfono')),
           const SizedBox(height:10),TextField(controller:banco,decoration:_field('Banco')),
           const SizedBox(height:10),TextField(controller:titular,decoration:_field('Titular')),
         ],
@@ -8387,7 +9335,7 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
           TextField(controller:datos,maxLines:3,decoration:_field('Instrucciones / datos adicionales')),
         ],
       ]))),
-      actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:Text('Cancelar',style:TextStyle(color:AppColors.subtext(dark)))),FilledButton(onPressed:guardando?null:()async{if(nombre.text.trim().isEmpty)return;setD(()=>guardando=true);final data={'nombre':nombre.text.trim(),'tipo':tipo,'banco':banco.text.trim(),'numero_cuenta':cuenta.text.trim(),'telefono_pago_movil':telefono.text.trim(),'titular':titular.text.trim(),'datos_adicionales':datos.text.trim()};if(metodo!=null){await _db.actualizarMetodoPago(metodo['id'].toString(),data);}else{await _db.crearMetodoPago({...data,'activo':1});}if(ctx.mounted)Navigator.pop(ctx);await _cargarMetodos();},child:Text(guardando?'Guardandoâ€¦':'Guardar'))],
+      actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:Text('Cancelar',style:TextStyle(color:AppColors.subtext(dark)))),FilledButton(onPressed:guardando?null:()async{if(nombre.text.trim().isEmpty)return;setD(()=>guardando=true);final data={'nombre':nombre.text.trim(),'tipo':tipo,'banco':banco.text.trim(),'numero_cuenta':cuenta.text.trim(),'telefono_pago_movil':telefono.text.trim(),'titular':titular.text.trim(),'datos_adicionales':datos.text.trim()};if(metodo!=null){await _db.actualizarMetodoPago(metodo['id'].toString(),data);}else{await _db.crearMetodoPago({...data,'activo':1});}if(ctx.mounted)Navigator.pop(ctx);await _cargarMetodos();},child:Text(guardando?'Guardando…':'Guardar'))],
     )));
   }
 
@@ -8419,7 +9367,7 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
         ),
         title: Row(children: [
 const SizedBox(width: 14),
-          Text('MÃ‰TODOS DE PAGO',
+          Text('MÉTODOS DE PAGO',
               style: TextStyle(
                   color: AppColors.text(isDark),
                   fontSize: 18,
@@ -8460,7 +9408,7 @@ const SizedBox(width: 14),
                         Icon(Icons.payment_outlined,
                             size: 60, color: AppColors.subtext(isDark)),
                         const SizedBox(height: 16),
-                        Text('No hay mÃ©todos de pago',
+                        Text('No hay métodos de pago',
                             style: TextStyle(
                                 color: AppColors.subtext(isDark),
                                 fontSize: 16)),
@@ -8599,7 +9547,7 @@ const SizedBox(width: 14),
                   onPressed: () => _mostrarDialogo(),
                   icon: const Icon(Icons.add_rounded,
                       color: Colors.white, size: 24),
-                  label: const Text('AGREGAR MÃ‰TODO',
+                  label: const Text('AGREGAR MÉTODO',
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 14,
@@ -8622,7 +9570,7 @@ const SizedBox(width: 14),
 }
 
 // ============================================
-// PANTALLA: VENDEDORES - CON GUARDADO AUTOMÃTICO
+// PANTALLA: VENDEDORES - CON GUARDADO AUTOMÁTICO
 // ============================================
 class VendedoresScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -8702,7 +9650,7 @@ class _VendedoresScreenState extends State<VendedoresScreen> {
                 style: TextStyle(color: AppColors.text(isDark)),
                 keyboardType: TextInputType.phone,
                 decoration: InputDecoration(
-                  labelText: 'TelÃ©fono',
+                  labelText: 'Teléfono',
                   labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                   filled: true,
                   fillColor: AppColors.background(isDark),
@@ -8721,7 +9669,7 @@ class _VendedoresScreenState extends State<VendedoresScreen> {
                 style: TextStyle(color: AppColors.text(isDark)),
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: 'ComisiÃ³n (%)',
+                  labelText: 'Comisión (%)',
                   labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                   filled: true,
                   fillColor: AppColors.background(isDark),
@@ -8893,7 +9841,7 @@ const SizedBox(width: 14),
                                         color: AppColors.text(isDark),
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600)),
-                                Text('ComisiÃ³n: $comision%',
+                                Text('Comisión: $comision%',
                                     style: TextStyle(
                                         color: AppColors.subtext(isDark),
                                         fontSize: 11)),
@@ -8959,7 +9907,7 @@ const SizedBox(width: 14),
 }
 
 // ============================================
-// PANTALLA: CLIENTES - CON GUARDADO AUTOMÃTICO
+// PANTALLA: CLIENTES - CON GUARDADO AUTOMÁTICO
 // ============================================
 class ClientesScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -9045,7 +9993,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
                   style: TextStyle(color: AppColors.text(isDark)),
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
-                    labelText: 'CÃ©dula',
+                    labelText: 'Cédula',
                     labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                     filled: true,
                     fillColor: AppColors.background(isDark),
@@ -9064,7 +10012,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
                   style: TextStyle(color: AppColors.text(isDark)),
                   keyboardType: TextInputType.phone,
                   decoration: InputDecoration(
-                    labelText: 'TelÃ©fono',
+                    labelText: 'Teléfono',
                     labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                     filled: true,
                     fillColor: AppColors.background(isDark),
@@ -9101,7 +10049,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
                   controller: direccionCtrl,
                   style: TextStyle(color: AppColors.text(isDark)),
                   decoration: InputDecoration(
-                    labelText: 'DirecciÃ³n',
+                    labelText: 'Dirección',
                     labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                     filled: true,
                     fillColor: AppColors.background(isDark),
@@ -9245,7 +10193,7 @@ const SizedBox(width: 14),
                   style: TextStyle(color: AppColors.text(isDark)),
                   onChanged: (v) => setState(() => _busqueda = v),
                   decoration: InputDecoration(
-                    hintText: 'Buscar por nombre, telÃ©fono o cÃ©dula...',
+                    hintText: 'Buscar por nombre, teléfono o cédula...',
                     hintStyle: TextStyle(color: AppColors.subtext(isDark)),
                     prefixIcon: Icon(Icons.search_rounded,
                         color: AppColors.subtext(isDark)),
@@ -9427,11 +10375,11 @@ const SizedBox(width: 14),
   }
 }
 // ============================================
-// CONTINUACIÃ“N - ETAPA 6 de 6 (FINAL)
+// CONTINUACIÓN - ETAPA 6 de 6 (FINAL)
 // ============================================
 
 // ============================================
-// PANTALLA: CONFIGURAR TICKET - DISEÃ‘O PROFESIONAL
+// PANTALLA: CONFIGURAR TICKET - DISEÑO PROFESIONAL
 // ============================================
 class ConfigurarTicketScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -9490,7 +10438,7 @@ class _ConfigurarTicketScreenState extends State<ConfigurarTicketScreen> {
         _telefonoCtrl.text = config['telefono'] ?? '';
         _emailCtrl.text = config['email'] ?? '';
         _mensajePieCtrl.text =
-            config['mensaje_pie'] ?? 'Â¡Gracias por su compra!';
+            config['mensaje_pie'] ?? '¡Gracias por su compra!';
         _mensajeAdicionalCtrl.text = config['mensaje_adicional'] ?? '';
         _logoBase64 = config['logo_base64'];
         _mostrarLogo =
@@ -9512,7 +10460,7 @@ class _ConfigurarTicketScreenState extends State<ConfigurarTicketScreen> {
         _numeroCopias = config['numero_copias'] ?? 1;
       }
     } catch (e) {
-      debugPrint('Error cargando configuraciÃ³n ticket: $e');
+      debugPrint('Error cargando configuración ticket: $e');
     }
     setState(() => _cargando = false);
   }
@@ -9561,7 +10509,7 @@ class _ConfigurarTicketScreenState extends State<ConfigurarTicketScreen> {
       };
       await _db.guardarConfiguracionTicket(config);
       _mostrarSnackbar(
-          'ConfiguraciÃ³n guardada exitosamente', AppColors.success);
+          'Configuración guardada exitosamente', AppColors.success);
     } catch (e) {
       debugPrint('Error guardando ticket: $e');
       _mostrarSnackbar('Error: $e', AppColors.danger);
@@ -9623,7 +10571,7 @@ const SizedBox(width: 14),
                       ],
                     ),
                     child: Row(children: [
-                      _tab('ConfiguraciÃ³n', 0, isDark, Icons.settings_rounded),
+                      _tab('Configuración', 0, isDark, Icons.settings_rounded),
                       _tab('Vista Previa', 1, isDark, Icons.preview_rounded),
                     ]),
                   ),
@@ -9681,7 +10629,7 @@ const SizedBox(width: 14),
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('INFORMACIÃ“N DEL NEGOCIO',
+        Text('INFORMACIÓN DEL NEGOCIO',
             style: TextStyle(
                 color: AppColors.subtext(isDark),
                 fontSize: 11,
@@ -9748,9 +10696,9 @@ const SizedBox(width: 14),
         const SizedBox(height: 10),
         _buildTextField(_rifCtrl, 'RIF', isDark),
         const SizedBox(height: 10),
-        _buildTextField(_direccionCtrl, 'DirecciÃ³n', isDark, maxLines: 2),
+        _buildTextField(_direccionCtrl, 'Dirección', isDark, maxLines: 2),
         const SizedBox(height: 10),
-        _buildTextField(_telefonoCtrl, 'TelÃ©fono', isDark,
+        _buildTextField(_telefonoCtrl, 'Teléfono', isDark,
             keyboardType: TextInputType.phone),
         const SizedBox(height: 10),
         _buildTextField(_emailCtrl, 'Email', isDark,
@@ -9777,9 +10725,9 @@ const SizedBox(width: 14),
                   (v) => setState(() => _mostrarEslogan = v), isDark),
               _buildSwitch('Mostrar RIF', _mostrarRif,
                   (v) => setState(() => _mostrarRif = v), isDark),
-              _buildSwitch('Mostrar DirecciÃ³n', _mostrarDireccion,
+              _buildSwitch('Mostrar Dirección', _mostrarDireccion,
                   (v) => setState(() => _mostrarDireccion = v), isDark),
-              _buildSwitch('Mostrar TelÃ©fono', _mostrarTelefono,
+              _buildSwitch('Mostrar Teléfono', _mostrarTelefono,
                   (v) => setState(() => _mostrarTelefono = v), isDark),
               _buildSwitch('Mostrar Email', _mostrarEmail,
                   (v) => setState(() => _mostrarEmail = v), isDark),
@@ -9809,7 +10757,7 @@ const SizedBox(width: 14),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('TamaÃ±o de papel',
+                  Text('Tamaño de papel',
                       style: TextStyle(
                           color: AppColors.text(isDark), fontSize: 14)),
                   DropdownButton<String>(
@@ -9830,7 +10778,7 @@ const SizedBox(width: 14),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('NÃºmero de copias',
+                  Text('Número de copias',
                       style: TextStyle(
                           color: AppColors.text(isDark), fontSize: 14)),
                   Row(
@@ -9900,7 +10848,7 @@ const SizedBox(width: 14),
                         strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.save_rounded, color: Colors.white),
             label: Text(
-              _guardando ? 'GUARDANDO...' : 'GUARDAR CONFIGURACIÃ“N',
+              _guardando ? 'GUARDANDO...' : 'GUARDAR CONFIGURACIÓN',
               style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
@@ -10057,7 +11005,7 @@ const SizedBox(width: 14),
                   'Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
                   style: const TextStyle(fontSize: 8, color: Colors.black54)),
               if (_mostrarCliente) ...[
-                const Text('Cliente: PÃºblico General',
+                const Text('Cliente: Público General',
                     style: TextStyle(fontSize: 10, color: Colors.black)),
               ],
               const Divider(color: Colors.black26, height: 20),
@@ -10088,7 +11036,7 @@ const SizedBox(width: 14),
               Center(
                 child: Text(
                   _mensajePieCtrl.text.isEmpty
-                      ? 'Â¡Gracias por su compra!'
+                      ? '¡Gracias por su compra!'
                       : _mensajePieCtrl.text,
                   style: const TextStyle(
                       fontSize: 10,
@@ -10119,7 +11067,7 @@ const SizedBox(width: 14),
 }
 
 // ============================================
-// PANTALLA: CONFIGURACIÃ“N DE VARIANTES (TALLAS Y COLORES)
+// PANTALLA: CONFIGURACIÓN DE VARIANTES (TALLAS Y COLORES)
 // ============================================
 class ConfiguracionVariantesScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -10145,7 +11093,7 @@ class _ConfiguracionVariantesScreenState
     Colors.green,
     Colors.black,
     Colors.white,
-    Colors.yellow,
+    AppColors.primary,
     Colors.orange,
     Colors.purple,
     Colors.pink,
@@ -10760,7 +11708,7 @@ class _EAN13Painter extends CustomPainter {
 }
 
 // ============================================
-// PANTALLA: CÃ“DIGOS DE BARRAS
+// PANTALLA: CÓDIGOS DE BARRAS
 // ============================================
 class CodigosBarrasScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -10821,7 +11769,7 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
       _productos = await _db.getProductos();
       _filtrar();
     } catch (e) {
-      debugPrint('Error cargando cÃ³digos: $e');
+      debugPrint('Error cargando códigos: $e');
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -10858,7 +11806,7 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
       _camaraActiva = false;
     });
     if (p == null) {
-      _snack('CÃ³digo $clean no estÃ¡ asociado a un producto.', AppColors.warning);
+      _snack('Código $clean no está asociado a un producto.', AppColors.warning);
     } else {
       _snack('Producto encontrado: ${p['nombre']}', AppColors.success);
     }
@@ -10879,11 +11827,11 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
     final c = await _barcode.generarCodigoEAN13();
     final ok = await _db.actualizarProducto('${p['id']}', {'codigo_barras': c});
     if (!ok) {
-      _snack('No se pudo guardar el cÃ³digo.', AppColors.danger);
+      _snack('No se pudo guardar el código.', AppColors.danger);
       return;
     }
     await _cargar();
-    _snack('CÃ³digo generado: $c', AppColors.success);
+    _snack('Código generado: $c', AppColors.success);
   }
 
   Future<void> _imprimir(List<Map<String, dynamic>> items) async {
@@ -10910,7 +11858,7 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
           pageFormat: PdfPageFormat(70 * PdfPageFormat.mm, 40 * PdfPageFormat.mm),
           margin: const pw.EdgeInsets.all(5),
           build: (_) {
-            final details = [if (marca.isNotEmpty) marca, if (color.isNotEmpty) color, if (talla.isNotEmpty) talla].join(' Â· ');
+            final details = [if (marca.isNotEmpty) marca, if (color.isNotEmpty) color, if (talla.isNotEmpty) talla].join(' · ');
             if (_diseno == 'A') {
               return pw.Column(
                 mainAxisAlignment: pw.MainAxisAlignment.center,
@@ -10965,7 +11913,7 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
           ),
           const SizedBox(width: 14),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('CÃ³digos de barras', style: TextStyle(color: AppColors.text(dark), fontSize: 21, fontWeight: FontWeight.w900)),
+            Text('Códigos de barras', style: TextStyle(color: AppColors.text(dark), fontSize: 21, fontWeight: FontWeight.w900)),
             const SizedBox(height: 3),
             Text('Escanea, genera y prepara etiquetas profesionales', style: TextStyle(color: AppColors.subtext(dark), fontSize: 11)),
           ])),
@@ -10991,15 +11939,15 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('${p['nombre'] ?? 'Producto'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.text(dark), fontSize: 13, fontWeight: FontWeight.w900)),
           const SizedBox(height: 3),
-          Text(codigo.isEmpty ? 'Sin cÃ³digo Â· Stock $stock' : 'CÃ³digo $codigo Â· Stock $stock', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10)),
+          Text(codigo.isEmpty ? 'Sin código · Stock $stock' : 'Código $codigo · Stock $stock', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10)),
         ])),
-        if (codigo.isEmpty) IconButton(tooltip: 'Generar cÃ³digo', onPressed: () => _generar(p), icon: const Icon(Icons.auto_awesome_rounded, color: AppColors.primary, size: 19)),
+        if (codigo.isEmpty) IconButton(tooltip: 'Generar código', onPressed: () => _generar(p), icon: const Icon(Icons.auto_awesome_rounded, color: AppColors.primary, size: 19)),
         PopupMenuButton<String>(
           tooltip: 'Opciones',
           onSelected: (v) { if (v == 'print') _imprimir([p]); if (v == 'generate') _generar(p); },
           itemBuilder: (_) => [
             if (codigo.isNotEmpty) const PopupMenuItem(value: 'print', child: Row(children: [Icon(Icons.print_outlined), SizedBox(width: 10), Text('Imprimir etiqueta')])),
-            if (codigo.isEmpty) const PopupMenuItem(value: 'generate', child: Row(children: [Icon(Icons.auto_awesome_outlined), SizedBox(width: 10), Text('Generar cÃ³digo')])),
+            if (codigo.isEmpty) const PopupMenuItem(value: 'generate', child: Row(children: [Icon(Icons.auto_awesome_outlined), SizedBox(width: 10), Text('Generar código')])),
           ],
         ),
       ]),
@@ -11035,7 +11983,7 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
           FilledButton.icon(
             onPressed: () => setState(() => _camaraActiva = !_camaraActiva),
             icon: Icon(_camaraActiva ? Icons.close_rounded : Icons.camera_alt_rounded),
-            label: Text(_camaraActiva ? 'Cerrar cÃ¡mara' : 'Abrir cÃ¡mara'),
+            label: Text(_camaraActiva ? 'Cerrar cámara' : 'Abrir cámara'),
           ),
         ]),
         const SizedBox(height: 12),
@@ -11048,7 +11996,7 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
               MobileScanner(controller: _scanner, onDetect: _onDetect),
               IgnorePointer(child: Center(child: Container(width: 250, height: 150, decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: Colors.white, width: 2))))),
               Positioned(left: 16, right: 16, bottom: 14, child: Row(children: [
-                Expanded(child: Text('Centra el cÃ³digo dentro del marco', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700))),
+                Expanded(child: Text('Centra el código dentro del marco', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700))),
                 IconButton(onPressed: () => _scanner.toggleTorch(), icon: const Icon(Icons.flashlight_on_rounded, color: Colors.white)),
                 IconButton(onPressed: () => _scanner.switchCamera(), icon: const Icon(Icons.cameraswitch_rounded, color: Colors.white)),
               ])),
@@ -11059,8 +12007,8 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
           controller: _manual,
           onSubmitted: _procesarCodigo,
           decoration: InputDecoration(
-            labelText: 'CÃ³digo manual',
-            hintText: 'Escribe o pega el cÃ³digo de barras',
+            labelText: 'Código manual',
+            hintText: 'Escribe o pega el código de barras',
             prefixIcon: const Icon(Icons.keyboard_alt_outlined),
             suffixIcon: IconButton(onPressed: () => _procesarCodigo(_manual.text), icon: const Icon(Icons.search_rounded)),
             filled: true, fillColor: AppColors.card(dark),
@@ -11080,8 +12028,8 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
               Wrap(spacing: 8, runSpacing: 8, children: [
                 _dataChip('Precio', _money(_productoEscaneado!), dark),
                 _dataChip('Stock', '${_productoEscaneado!['stock'] ?? 0}', dark),
-                _dataChip('CategorÃ­a', '${_productoEscaneado!['categoria'] ?? 'General'}', dark),
-                _dataChip('CÃ³digo', _codigoEncontrado, dark),
+                _dataChip('Categoría', '${_productoEscaneado!['categoria'] ?? 'General'}', dark),
+                _dataChip('Código', _codigoEncontrado, dark),
               ]),
             ]),
           )
@@ -11089,7 +12037,7 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
           Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(20), border: Border.all(color: AppColors.divider(dark))),
-            child: Column(children: [Icon(Icons.qr_code_scanner_rounded, size: 42, color: AppColors.subtext(dark)), const SizedBox(height: 10), Text('Escanea o escribe un cÃ³digo para localizar el producto.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.subtext(dark), fontSize: 11))]),
+            child: Column(children: [Icon(Icons.qr_code_scanner_rounded, size: 42, color: AppColors.subtext(dark)), const SizedBox(height: 10), Text('Escanea o escribe un código para localizar el producto.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.subtext(dark), fontSize: 11))]),
           ),
       ],
     );
@@ -11106,14 +12054,14 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 100),
       children: [
         Row(children: [
-          Expanded(child: TextField(onChanged: (v) { _q = v; _filtrar(); setState(() {}); }, decoration: InputDecoration(hintText: 'Buscar producto o cÃ³digo', prefixIcon: const Icon(Icons.search_rounded), filled: true, fillColor: AppColors.card(dark), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.divider(dark)))))),
+          Expanded(child: TextField(onChanged: (v) { _q = v; _filtrar(); setState(() {}); }, decoration: InputDecoration(hintText: 'Buscar producto o código', prefixIcon: const Icon(Icons.search_rounded), filled: true, fillColor: AppColors.card(dark), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.divider(dark)))))),
           const SizedBox(width: 10),
           FilledButton.icon(onPressed: _seleccionados.isEmpty ? null : () => _imprimir(_productos.where((p) => _seleccionados.contains('${p['id']}')).toList()), icon: const Icon(Icons.print_rounded), label: const Text('Imprimir')),
         ]),
         const SizedBox(height: 20),
-        Text('DISEÃ‘O DE ETIQUETA', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+        Text('DISEÑO DE ETIQUETA', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
         const SizedBox(height: 8),
-        Row(children: [Expanded(child: _designCard('A', 'ClÃ¡sica', 'Logo Â· nombre Â· marca Â· talla/color Â· precio Â· cÃ³digo', Icons.label_outline_rounded, dark)), const SizedBox(width: 10), Expanded(child: _designCard('B', 'Minimal', 'Nombre Â· precio Â· cÃ³digo', Icons.view_compact_outlined, dark))]),
+        Row(children: [Expanded(child: _designCard('A', 'Clásica', 'Logo · nombre · marca · talla/color · precio · código', Icons.label_outline_rounded, dark)), const SizedBox(width: 10), Expanded(child: _designCard('B', 'Minimal', 'Nombre · precio · código', Icons.view_compact_outlined, dark))]),
         const SizedBox(height: 20),
         Row(children: [Expanded(child: Text('${_filtrados.length} productos', style: TextStyle(color: AppColors.text(dark), fontSize: 15, fontWeight: FontWeight.w900))), Text('${_seleccionados.length} seleccionados', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10, fontWeight: FontWeight.w700))]),
         const SizedBox(height: 8),
@@ -11132,7 +12080,7 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
       Container(
         margin: const EdgeInsets.fromLTRB(20, 14, 20, 0),
         decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.divider(dark))),
-        child: TabBar(controller: _tabs, labelColor: AppColors.primary, unselectedLabelColor: AppColors.subtext(dark), indicatorColor: AppColors.primary, tabs: const [Tab(icon: Icon(Icons.qr_code_scanner_rounded), text: 'Escanear producto'), Tab(icon: Icon(Icons.local_offer_outlined), text: 'Generar cÃ³digos')]),
+        child: TabBar(controller: _tabs, labelColor: AppColors.primary, unselectedLabelColor: AppColors.subtext(dark), indicatorColor: AppColors.primary, tabs: const [Tab(icon: Icon(Icons.qr_code_scanner_rounded), text: 'Escanear producto'), Tab(icon: Icon(Icons.local_offer_outlined), text: 'Generar códigos')]),
       ),
       Expanded(child: TabBarView(controller: _tabs, children: [_scanTab(dark), _labelsTab(dark)])),
     ]);
@@ -11434,7 +12382,7 @@ const SizedBox(width: 14),
                           ),
                         ]),
                         const SizedBox(height: 12),
-                        Text('Ventas del perÃ­odo',
+                        Text('Ventas del período',
                             style: TextStyle(
                                 color: AppColors.text(isDark),
                                 fontSize: 14,
@@ -11567,7 +12515,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
         _mostrarQR = prefs.getBool('impresora_qr') ?? false;
       });
     } catch (e) {
-      debugPrint('Error cargando configuraciÃ³n impresora: $e');
+      debugPrint('Error cargando configuración impresora: $e');
     }
   }
 
@@ -11577,9 +12525,9 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
       final prefs = await SharedPreferences.getInstance();
 
       // En Web el navegador no permite a Flutter enumerar las impresoras
-      // instaladas de forma fiable. La impresiÃ³n se hace mediante el diÃ¡logo
+      // instaladas de forma fiable. La impresión se hace mediante el diálogo
       // nativo del navegador/sistema. No llamamos a pickPrinter/listPrinters
-      // en esta plataforma para evitar el UnimplementedError que se veÃ­a en
+      // en esta plataforma para evitar el UnimplementedError que se veía en
       // Chrome/Android.
       if (kIsWeb) {
         final savedName = prefs.getString('impresora_nombre');
@@ -11655,7 +12603,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
   }
 
   Future<void> _abrirSelectorNativo() async {
-    // Web: abre directamente el diÃ¡logo real de impresiÃ³n del navegador.
+    // Web: abre directamente el diálogo real de impresión del navegador.
     if (kIsWeb) {
       await _probarImpresion();
       return;
@@ -11685,7 +12633,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
     final direccion = (cfg?['direccion'] ?? '').toString();
     final telefono = (cfg?['telefono'] ?? '').toString();
     final email = (cfg?['email'] ?? '').toString();
-    final mensajePie = (cfg?['mensaje_pie'] ?? 'Â¡Gracias por su compra!').toString();
+    final mensajePie = (cfg?['mensaje_pie'] ?? '¡Gracias por su compra!').toString();
     final mensajeAdicional = (cfg?['mensaje_adicional'] ?? '').toString();
     final mostrarLogo = cfg == null ? _mostrarLogo : (cfg?['mostrar_logo'] == 1 || cfg?['mostrar_logo'] == true);
     final mostrarEslogan = cfg == null ? true : (cfg?['mostrar_eslogan'] == 1 || cfg?['mostrar_eslogan'] == true);
@@ -11778,7 +12726,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
       await prefs.setString('impresora_tamano', _tamanoPapel);
       await prefs.setBool('impresora_logo', _mostrarLogo);
       await prefs.setBool('impresora_qr', _mostrarQR);
-      _mostrarMensaje('ConfiguraciÃ³n guardada', true);
+      _mostrarMensaje('Configuración guardada', true);
     } catch (e) {
       _mostrarMensaje('No se pudo guardar: $e', false);
     }
@@ -11810,7 +12758,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          tooltip: 'Abrir menÃº',
+          tooltip: 'Abrir menú',
           onPressed: widget.onAbrirSidebar,
           icon: Icon(Icons.menu_rounded, color: text, size: 24),
         ),
@@ -11874,7 +12822,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Centro de impresiÃ³n',
+                              'Centro de impresión',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 20,
@@ -11954,7 +12902,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
               children: [
                 Text(
                   kIsWeb
-                      ? 'ImpresiÃ³n del navegador'
+                      ? 'Impresión del navegador'
                       : _seleccionada == null
                       ? 'Sin impresora seleccionada'
                       : _seleccionada!.name,
@@ -11971,7 +12919,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                       ? 'Selector del navegador / sistema'
                       : canList
                       ? 'Lista de impresoras disponible'
-                      : 'El sistema usa el selector de impresiÃ³n',
+                      : 'El sistema usa el selector de impresión',
                   style: TextStyle(color: sub, fontSize: 11),
                 ),
               ],
@@ -12119,7 +13067,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                   Expanded(
                     child: Text(
                       kIsWeb
-                          ? 'En Web Chrome no permite enumerar las impresoras. Pulsa "Seleccionar impresora" para abrir el diÃ¡logo del sistema y elegirla.'
+                          ? 'En Web Chrome no permite enumerar las impresoras. Pulsa "Seleccionar impresora" para abrir el diálogo del sistema y elegirla.'
                           : 'No hay impresoras enumerables en esta plataforma. Usa "Elegir impresora" para abrir el selector del sistema.',
                       style: TextStyle(color: sub, fontSize: 11),
                     ),
@@ -12177,7 +13125,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                                       printer.model!,
                                     if ((printer.location ?? '').isNotEmpty)
                                       printer.location!,
-                                  ].join(' Â· '),
+                                  ].join(' · '),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -12221,7 +13169,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Opciones de impresiÃ³n',
+            'Opciones de impresión',
             style: TextStyle(
               color: text,
               fontSize: 15,
@@ -12244,11 +13192,11 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                   items: const [
                     DropdownMenuItem(
                       value: '58mm',
-                      child: Text('58 mm tÃ©rmico'),
+                      child: Text('58 mm térmico'),
                     ),
                     DropdownMenuItem(
                       value: '80mm',
-                      child: Text('80 mm tÃ©rmico'),
+                      child: Text('80 mm térmico'),
                     ),
                   ],
                   onChanged: (v) {
@@ -12303,7 +13251,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
             child: SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(
-                'Mostrar cÃ³digo QR',
+                'Mostrar código QR',
                 style: TextStyle(color: text),
               ),
               value: _mostrarQR,
@@ -12316,7 +13264,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
             child: ElevatedButton.icon(
               onPressed: _guardarConfiguracion,
               icon: const Icon(Icons.save_rounded),
-              label: const Text('Guardar configuraciÃ³n'),
+              label: const Text('Guardar configuración'),
             ),
           ),
         ],
@@ -12731,7 +13679,7 @@ class _CajaScreenState extends State<CajaScreen> {
               controller: descCtrl,
               style: TextStyle(color: AppColors.text(isDark)),
               decoration: InputDecoration(
-                labelText: 'DescripciÃ³n',
+                labelText: 'Descripción',
                 labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                 filled: true,
                 fillColor: AppColors.background(isDark),
@@ -12838,7 +13786,7 @@ class _CajaScreenState extends State<CajaScreen> {
             Icon(Icons.point_of_sale,
                 size: 64, color: AppColors.subtext(isDark)),
             const SizedBox(height: 16),
-            Text('La caja estÃ¡ cerrada',
+            Text('La caja está cerrada',
                 style:
                     TextStyle(color: AppColors.subtext(isDark), fontSize: 16)),
             const SizedBox(height: 24),
@@ -13326,7 +14274,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card(isDark),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Cambiar ContraseÃ±a',
+        title: Text('Cambiar Contraseña',
             style: TextStyle(
                 color: AppColors.text(isDark), fontWeight: FontWeight.w700)),
         content: Column(
@@ -13337,7 +14285,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
               obscureText: true,
               style: TextStyle(color: AppColors.text(isDark)),
               decoration: InputDecoration(
-                labelText: 'Nueva ContraseÃ±a',
+                labelText: 'Nueva Contraseña',
                 labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                 filled: true,
                 fillColor: AppColors.background(isDark),
@@ -13356,7 +14304,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
               obscureText: true,
               style: TextStyle(color: AppColors.text(isDark)),
               decoration: InputDecoration(
-                labelText: 'Confirmar ContraseÃ±a',
+                labelText: 'Confirmar Contraseña',
                 labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                 filled: true,
                 fillColor: AppColors.background(isDark),
@@ -13381,7 +14329,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
               if (ctrl1.text != ctrl2.text) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                      content: Text('Las contraseÃ±as no coinciden'),
+                      content: Text('Las contraseñas no coinciden'),
                       backgroundColor: AppColors.danger),
                 );
                 return;
@@ -13389,7 +14337,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
               if (ctrl1.text.length < 6) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                      content: Text('MÃ­nimo 6 caracteres'),
+                      content: Text('Mínimo 6 caracteres'),
                       backgroundColor: AppColors.danger),
                 );
                 return;
@@ -13398,7 +14346,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                 await _db.actualizarPerfil({'password_hash': ctrl1.text});
                 Navigator.pop(ctx);
               } catch (e) {
-                debugPrint('Error cambiando contraseÃ±a: $e');
+                debugPrint('Error cambiando contraseña: $e');
               }
             },
             style: ElevatedButton.styleFrom(
@@ -13525,7 +14473,7 @@ const SizedBox(width: 14),
                         ListTile(
                           leading: Icon(Icons.lock,
                               color: AppColors.subtext(isDark), size: 22),
-                          title: Text('Cambiar ContraseÃ±a',
+                          title: Text('Cambiar Contraseña',
                               style: TextStyle(
                                   color: AppColors.text(isDark), fontSize: 14)),
                           trailing: Icon(Icons.chevron_right,
@@ -13847,7 +14795,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
                           color: AppColors.text(isDark),
                           fontSize: 14,
                           fontWeight: FontWeight.w600)),
-                  Text('CÃ³digo: ${prod['codigo_barras']}',
+                  Text('Código: ${prod['codigo_barras']}',
                       style: TextStyle(
                           color: AppColors.subtext(isDark), fontSize: 11)),
                 ],
@@ -13911,7 +14859,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
 // ============================================
 // ============================================
 // TIENDA VIRTUAL SINTHETIX PRO - V27
-// CatÃ¡logo universal + carrito + WhatsApp + favoritos + banners
+// Catálogo universal + carrito + WhatsApp + favoritos + banners
 // ============================================
 
 class WhatsAppMark extends StatelessWidget {
@@ -14140,7 +15088,7 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
       (sum, item) => sum + _precio(item) * ((item['_qty'] as int?) ?? 0),
     );
     final buffer = StringBuffer()
-      ..writeln('ðŸ›ï¸ðŸ›ï¸ PEDIDO - $_nombreTienda')
+      ..writeln('🛍️🛍️ PEDIDO - $_nombreTienda')
       ..writeln()
       ..writeln('Hola, quiero realizar este pedido:')
       ..writeln();
@@ -14177,7 +15125,7 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
 
   Future<void> _compartirTienda() async {
     await Share.share(
-      'ðŸ›ï¸ Visita $_nombreTienda\n$_publicUrl',
+      '🛍️ Visita $_nombreTienda\n$_publicUrl',
       subject: 'Tienda online - $_nombreTienda',
     );
   }
@@ -14256,7 +15204,7 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
                     controller: _search,
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
-                      hintText: 'Buscar productos, marcas o cÃ³digos...',
+                      hintText: 'Buscar productos, marcas o códigos...',
                       prefixIcon: const Icon(Icons.search_rounded),
                       suffixIcon: _search.text.isEmpty
                           ? null
@@ -14311,7 +15259,7 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
                   const SizedBox(height: 14),
                   Row(
                     children: [
-                      const Expanded(child: Text('CategorÃ­as', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.dark))),
+                      const Expanded(child: Text('Categorías', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.dark))),
                       Text('${_filtrados.length} productos', style: const TextStyle(fontSize: 11, color: AppColors.subtextLight)),
                     ],
                   ),
@@ -14344,7 +15292,7 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
                       crossAxisCount: cols,
                       crossAxisSpacing: 10,
                       mainAxisSpacing: 10,
-                      childAspectRatio: .68,
+                      childAspectRatio: .66,
                     ),
                     itemBuilder: (_, i) {
                       final p = _filtrados[i];
@@ -14418,7 +15366,7 @@ class _StoreHero extends StatelessWidget {
             const SizedBox(height: 7),
             Text(nombre, style: const TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.w900)),
             const SizedBox(height: 5),
-            const Text('Compra fÃ¡cil, rÃ¡pido y desde cualquier dispositivo.', style: TextStyle(color: Colors.white70, fontSize: 11)),
+            const Text('Compra fácil, rápido y desde cualquier dispositivo.', style: TextStyle(color: Colors.white70, fontSize: 11)),
           ],
         ),
       );
@@ -14464,6 +15412,7 @@ class _StoreProductCard extends StatelessWidget {
   final VoidCallback onFavorite;
   final VoidCallback onOpen;
   final VoidCallback onAdd;
+
   const _StoreProductCard({
     required this.product,
     required this.price,
@@ -14473,65 +15422,118 @@ class _StoreProductCard extends StatelessWidget {
     required this.onOpen,
     required this.onAdd,
   });
+
   @override
-  Widget build(BuildContext context) => Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        child: InkWell(
-          onTap: onOpen,
-          borderRadius: BorderRadius.circular(18),
-          child: Padding(
-            padding: const EdgeInsets.all(7),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Stack(
-                    children: [
-                      Positioned.fill(child: _StoreImage(base64: product['imagen_base64']?.toString() ?? '', url: product['imagen_url']?.toString(), radius: 14)),
-                      if ((product['descuento'] ?? 0).toString() != '0')
-                        Positioned(
-                          top: 7,
-                          left: 7,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                            decoration: BoxDecoration(color: AppColors.danger, borderRadius: BorderRadius.circular(8)),
-                            child: Text('-${product['descuento']}%', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)),
-                          ),
-                        ),
-                      Positioned(
-                        top: 7,
-                        right: 7,
-                        child: Material(
-                          color: Colors.white.withValues(alpha: .92),
-                          shape: const CircleBorder(),
-                          child: IconButton(
-                            onPressed: onFavorite,
-                            icon: Icon(favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: favorite ? AppColors.danger : AppColors.dark, size: 17),
-                            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-                            padding: EdgeInsets.zero,
-                          ),
+  Widget build(BuildContext context) {
+    final discount = double.tryParse((product['descuento'] ?? 0).toString()) ?? 0;
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(24),
+      elevation: 2,
+      shadowColor: Colors.black.withValues(alpha: .10),
+      child: InkWell(
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFFE9E7EE)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 6,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(9),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: _StoreImage(
+                          base64: product['imagen_base64']?.toString() ?? '',
+                          url: product['imagen_url']?.toString(),
+                          radius: 18,
                         ),
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 7),
-                Text(product['nombre']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.dark)),
-                const SizedBox(height: 2),
-                Text(stock > 0 ? 'Disponible' : 'Agotado', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: stock > 0 ? AppColors.success : AppColors.danger)),
-                const SizedBox(height: 3),
-                Row(
-                  children: [
-                    Expanded(child: Text('\$${price.toStringAsFixed(2)}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.dark))),
-                    IconButton(onPressed: stock > 0 ? onAdd : null, icon: const Icon(Icons.add_circle_rounded, color: AppColors.primary), visualDensity: VisualDensity.compact),
+                    ),
+                    if (discount > 0)
+                      Positioned(
+                        left: 17,
+                        top: 17,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                          decoration: BoxDecoration(color: const Color(0xFFE94F79), borderRadius: BorderRadius.circular(10)),
+                          child: Text('-${discount.toStringAsFixed(0)}%', style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900)),
+                        ),
+                      ),
+                    Positioned(
+                      right: 16,
+                      top: 16,
+                      child: Material(
+                        color: Colors.white.withValues(alpha: .92),
+                        shape: const CircleBorder(),
+                        child: IconButton(
+                          onPressed: onFavorite,
+                          icon: Icon(favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                              color: favorite ? const Color(0xFFE94F79) : const Color(0xFF263042), size: 17),
+                          constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 2, 12, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(product['nombre']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Color(0xFF171A27), fontSize: 12, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 5),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(color: const Color(0xFFF1F3F5), borderRadius: BorderRadius.circular(8)),
+                          child: Text(stock > 0 ? 'Disponible' : 'Agotado',
+                              style: TextStyle(color: stock > 0 ? const Color(0xFF189A6B) : const Color(0xFFD6475F), fontSize: 7.5, fontWeight: FontWeight.w900)),
+                        ),
+                        const Spacer(),
+                        Text('\$${price.toStringAsFixed(2)}',
+                            style: const TextStyle(color: Color(0xFF202332), fontSize: 16, fontWeight: FontWeight.w900)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 34,
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: stock > 0 ? onAdd : null,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF173B45),
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: const Color(0xFFE4E6EA),
+                          disabledForegroundColor: const Color(0xFF9CA3AF),
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(17)),
+                        ),
+                        child: const Text('Agregar al carrito', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w900)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _StoreImage extends StatelessWidget {
@@ -14623,7 +15625,7 @@ class _StoreProductDetailState extends State<_StoreProductDetail> {
           Text('\$${price.toStringAsFixed(2)}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppColors.dark)),
           if ((p['descuento'] ?? 0).toString() != '0') Text('Descuento ${p['descuento']}%', style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.w800)),
           const SizedBox(height: 18),
-          const Text('DescripciÃ³n', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.dark)),
+          const Text('Descripción', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.dark)),
           const SizedBox(height: 6),
           Text((p['descripcion'] ?? 'Producto disponible en nuestra tienda.').toString(), style: const TextStyle(color: AppColors.subtextLight, height: 1.5)),
           const SizedBox(height: 14),
@@ -14725,7 +15727,7 @@ class _StoreCartSheet extends StatelessWidget {
             Padding(padding: const EdgeInsets.fromLTRB(18, 16, 10, 10), child: Row(children: [const Expanded(child: Text('Mi carrito', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900))), IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded))])),
             Expanded(
               child: items.isEmpty
-                  ? const Center(child: Text('Tu carrito estÃ¡ vacÃ­o.'))
+                  ? const Center(child: Text('Tu carrito está vacío.'))
                   : ListView.separated(
                       controller: scrollController,
                       padding: const EdgeInsets.fromLTRB(14, 4, 14, 20),
@@ -14825,7 +15827,7 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selecciona una imagen para el banner.')));
       return;
     }
-    final banner = <String, dynamic>{'id': DateTime.now().millisecondsSinceEpoch.toString(), 'image': image, 'title': _title.text.trim().isEmpty ? 'Nueva promociÃ³n' : _title.text.trim(), 'subtitle': _subtitle.text.trim(), 'button': _button.text.trim(), 'active': true};
+    final banner = <String, dynamic>{'id': DateTime.now().millisecondsSinceEpoch.toString(), 'image': image, 'title': _title.text.trim().isEmpty ? 'Nueva promoción' : _title.text.trim(), 'subtitle': _subtitle.text.trim(), 'button': _button.text.trim(), 'active': true};
     setState(() => _banners.add(banner));
     await _save();
     _title.clear(); _subtitle.clear();
@@ -14837,12 +15839,12 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
 
   Future<void> _saveSettings() async {
     await _save();
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ConfiguraciÃ³n de la tienda guardada.')));
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Configuración de la tienda guardada.')));
   }
 
   Future<void> _shareStore() async {
     await _save();
-    await Share.share('ðŸ›ï¸ Visita nuestra tienda online\n${_publicUrl.text.trim()}', subject: 'Tienda online');
+    await Share.share('🛍️ Visita nuestra tienda online\n${_publicUrl.text.trim()}', subject: 'Tienda online');
   }
 
   Future<void> _openStore() async {
@@ -14885,7 +15887,7 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
         text: 'Catalogo publico de ${payload['store']['name']}. Reemplaza catalogo_tienda.json en la carpeta publica de la tienda.',
       );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo exportar el catÃ¡logo: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo exportar el catálogo: $e')));
     }
   }
 
@@ -14902,41 +15904,41 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
       appBar: AppBar(
         backgroundColor: bg, elevation: 0, scrolledUnderElevation: 0, toolbarHeight: 76, titleSpacing: 0, leadingWidth: 64,
         leading: Padding(padding: const EdgeInsets.only(left: 12, top: 14, bottom: 14), child: Material(color: Colors.white, borderRadius: BorderRadius.circular(16), child: InkWell(borderRadius: BorderRadius.circular(16), onTap: widget.onAbrirSidebar, child: const Icon(Icons.menu_rounded, color: AppColors.primary, size: 23)))),
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Tienda online', style: TextStyle(color: ink, fontSize: 18, fontWeight: FontWeight.w900)), Text('Escaparate, contacto y publicaciÃ³n', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w600))]),
+        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Tienda online', style: TextStyle(color: ink, fontSize: 18, fontWeight: FontWeight.w900)), Text('Escaparate, contacto y publicación', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w600))]),
         actions: [IconButton(onPressed: _load, tooltip: 'Actualizar', icon: const Icon(Icons.refresh_rounded, color: AppColors.primary)), const SizedBox(width: 6)],
       ),
       body: _loading ? const Center(child: CircularProgressIndicator(color: AppColors.primary)) : ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 28), children: [
-        Container(padding: const EdgeInsets.fromLTRB(18, 18, 18, 20), decoration: BoxDecoration(gradient: AppColors.gradientPrimary, borderRadius: BorderRadius.circular(24)), child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('STORE CONTROL', style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.5)), SizedBox(height: 7), Text('Tu tienda, lista para vender', style: TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w900)), SizedBox(height: 5), Text('El POS sigue trabajando localmente. La tienda pÃºblica consulta el catÃ¡logo publicado.', style: TextStyle(color: Colors.white70, fontSize: 10.5, height: 1.35))])),
+        Container(padding: const EdgeInsets.fromLTRB(18, 18, 18, 20), decoration: BoxDecoration(gradient: AppColors.gradientPrimary, borderRadius: BorderRadius.circular(24)), child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('STORE CONTROL', style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.5)), SizedBox(height: 7), Text('Tu tienda, lista para vender', style: TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w900)), SizedBox(height: 5), Text('El POS sigue trabajando localmente. La tienda pública consulta el catálogo publicado.', style: TextStyle(color: Colors.white70, fontSize: 10.5, height: 1.35))])),
         const SizedBox(height: 18),
-        _adminCard('PublicaciÃ³n', 'Enlace que compartirÃ¡s con tus clientes.', Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          TextField(controller: _publicUrl, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Enlace pÃºblico', prefixIcon: Icon(Icons.link_rounded))),
+        _adminCard('Publicación', 'Enlace que compartirás con tus clientes.', Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          TextField(controller: _publicUrl, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Enlace público', prefixIcon: Icon(Icons.link_rounded))),
           const SizedBox(height: 10),
           Row(children: [Expanded(child: OutlinedButton.icon(onPressed: _openStore, icon: const Icon(Icons.open_in_new_rounded), label: const Text('Abrir tienda'))), const SizedBox(width: 9), Expanded(child: FilledButton.icon(onPressed: _saveSettings, icon: const Icon(Icons.save_rounded), label: const Text('Guardar')))]),
           const SizedBox(height: 9),
           SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _shareStore, icon: const Icon(Icons.share_rounded), label: const Text('Compartir enlace'))),
         ])),
         const SizedBox(height: 12),
-        _adminCard('WhatsApp', 'NÃºmero que recibirÃ¡ las consultas y pedidos de la tienda.', Column(children: [TextField(controller: _whatsapp, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'WhatsApp de la tienda', hintText: 'Ej. 17865551234', prefixIcon: Icon(Icons.chat_rounded))), const SizedBox(height: 6), Align(alignment: Alignment.centerLeft, child: Text('Usa el nÃºmero con cÃ³digo de paÃ­s, sin espacios ni sÃ­mbolos.', style: TextStyle(color: muted, fontSize: 9)))])),
+        _adminCard('WhatsApp', 'Número que recibirá las consultas y pedidos de la tienda.', Column(children: [TextField(controller: _whatsapp, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'WhatsApp de la tienda', hintText: 'Ej. 17865551234', prefixIcon: Icon(Icons.chat_rounded))), const SizedBox(height: 6), Align(alignment: Alignment.centerLeft, child: Text('Usa el número con código de país, sin espacios ni símbolos.', style: TextStyle(color: muted, fontSize: 9)))])),
         const SizedBox(height: 12),
-        _adminCard('Portada', 'Banners de promociÃ³n. La tienda los rota automÃ¡ticamente.', Column(children: [
-          Row(children: [Expanded(child: TextField(controller: _title, decoration: const InputDecoration(labelText: 'TÃ­tulo'))), const SizedBox(width: 9), Expanded(child: TextField(controller: _button, decoration: const InputDecoration(labelText: 'BotÃ³n')))]),
-          TextField(controller: _subtitle, decoration: const InputDecoration(labelText: 'SubtÃ­tulo')),
+        _adminCard('Portada', 'Banners de promoción. La tienda los rota automáticamente.', Column(children: [
+          Row(children: [Expanded(child: TextField(controller: _title, decoration: const InputDecoration(labelText: 'Título'))), const SizedBox(width: 9), Expanded(child: TextField(controller: _button, decoration: const InputDecoration(labelText: 'Botón')))]),
+          TextField(controller: _subtitle, decoration: const InputDecoration(labelText: 'Subtítulo')),
           const SizedBox(height: 10),
-          Row(children: [Expanded(child: OutlinedButton.icon(onPressed: _pickBanner, icon: const Icon(Icons.image_outlined), label: Text(_bannerImage == null ? 'Seleccionar imagen' : 'Imagen seleccionada'))), const SizedBox(width: 9), FilledButton.icon(onPressed: _addBanner, icon: const Icon(Icons.add_rounded), label: const Text('AÃ±adir'))]),
+          Row(children: [Expanded(child: OutlinedButton.icon(onPressed: _pickBanner, icon: const Icon(Icons.image_outlined), label: Text(_bannerImage == null ? 'Seleccionar imagen' : 'Imagen seleccionada'))), const SizedBox(width: 9), FilledButton.icon(onPressed: _addBanner, icon: const Icon(Icons.add_rounded), label: const Text('Añadir'))]),
           if (_bannerImage != null) Padding(padding: const EdgeInsets.only(top: 12), child: ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.memory(base64Decode(_bannerImage!), height: 145, width: double.infinity, fit: BoxFit.cover))),
         ])),
         const SizedBox(height: 12),
-        _adminCard('CatÃ¡logo conectado', 'La tienda utiliza los mismos productos y categorÃ­as del POS.', Row(children: [Expanded(child: _miniStat('${_productos.length}', 'Productos')), Expanded(child: _miniStat('${_categorias.length}', 'CategorÃ­as')), Expanded(child: _miniStat('${_productos.where((p) => (int.tryParse((p['destacado'] ?? 0).toString()) ?? 0) > 0).length}', 'Destacados'))])),
+        _adminCard('Catálogo conectado', 'La tienda utiliza los mismos productos y categorías del POS.', Row(children: [Expanded(child: _miniStat('${_productos.length}', 'Productos')), Expanded(child: _miniStat('${_categorias.length}', 'Categorías')), Expanded(child: _miniStat('${_productos.where((p) => (int.tryParse((p['destacado'] ?? 0).toString()) ?? 0) > 0).length}', 'Destacados'))])),
         const SizedBox(height: 12),
         if (_banners.isNotEmpty) ...[
           Padding(padding: const EdgeInsets.only(bottom: 8, left: 2), child: Text('Banners activos', style: TextStyle(color: ink, fontSize: 14, fontWeight: FontWeight.w900))),
           ..._banners.asMap().entries.map((entry) { final index = entry.key; final banner = entry.value; final image = banner['image']?.toString() ?? ''; final active = banner['active'] ?? true; return Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFE4E7EC))), child: Row(children: [ClipRRect(borderRadius: BorderRadius.circular(12), child: image.isEmpty ? const SizedBox(width: 92, height: 62, child: Icon(Icons.image_outlined)) : Image.memory(base64Decode(image), width: 92, height: 62, fit: BoxFit.cover)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(banner['title']?.toString() ?? 'Banner', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11)), const SizedBox(height: 2), Text(active ? 'Visible en la tienda' : 'Oculto', style: TextStyle(fontSize: 8.5, color: active ? AppColors.success : AppColors.danger, fontWeight: FontWeight.w800))])), Switch(value: active, onChanged: (_) => _toggle(index)), IconButton(onPressed: () => _delete(index), tooltip: 'Eliminar', icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger))])); }),
         ],
         const SizedBox(height: 4),
-        _adminCard('CatÃ¡logo pÃºblico', 'Genera una copia para respaldo. La publicaciÃ³n web usa tienda.html y el catÃ¡logo remoto.', Column(children: [
-          Row(children: [const Icon(Icons.cloud_done_rounded, color: AppColors.success, size: 19), const SizedBox(width: 9), Expanded(child: Text('Productos del POS â†’ sincronizaciÃ³n â†’ tienda pÃºblica', style: TextStyle(color: ink, fontSize: 10, fontWeight: FontWeight.w700)))]),
+        _adminCard('Catálogo público', 'Genera una copia para respaldo. La publicación web usa tienda.html y el catálogo remoto.', Column(children: [
+          Row(children: [const Icon(Icons.cloud_done_rounded, color: AppColors.success, size: 19), const SizedBox(width: 9), Expanded(child: Text('Productos del POS → sincronización → tienda pública', style: TextStyle(color: ink, fontSize: 10, fontWeight: FontWeight.w700)))]),
           const SizedBox(height: 11),
-          SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _exportarCatalogoPublico, icon: const Icon(Icons.file_download_outlined), label: const Text('Exportar catÃ¡logo'))),
+          SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _exportarCatalogoPublico, icon: const Icon(Icons.file_download_outlined), label: const Text('Exportar catálogo'))),
         ])),
       ]),
     );
@@ -15044,7 +16046,7 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
                   style: TextStyle(color: AppColors.text(isDark)),
                   keyboardType: TextInputType.phone,
                   decoration: InputDecoration(
-                    labelText: 'TelÃ©fono',
+                    labelText: 'Teléfono',
                     labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                     filled: true,
                     fillColor: AppColors.background(isDark),
@@ -15343,7 +16345,7 @@ class _PromocionesScreenState extends State<PromocionesScreen> {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text(
-            promocion != null ? 'Editar PromociÃ³n' : 'Nueva PromociÃ³n',
+            promocion != null ? 'Editar Promoción' : 'Nueva Promoción',
             style: TextStyle(
                 color: AppColors.text(isDark), fontWeight: FontWeight.w700),
           ),
@@ -15447,7 +16449,7 @@ class _PromocionesScreenState extends State<PromocionesScreen> {
                         _cargarPromociones();
                       } catch (e) {
                         setDialogState(() => guardando = false);
-                        debugPrint('Error guardando promociÃ³n: $e');
+                        debugPrint('Error guardando promoción: $e');
                       }
                     },
               icon: guardando
@@ -15622,7 +16624,7 @@ const SizedBox(width: 14),
                   onPressed: () => _mostrarDialogo(),
                   icon: const Icon(Icons.add_rounded,
                       color: Colors.white, size: 24),
-                  label: const Text('AGREGAR PROMOCIÃ“N',
+                  label: const Text('AGREGAR PROMOCIÓN',
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 14,
@@ -15906,7 +16908,7 @@ class _RolesScreenState extends State<RolesScreen> {
                 obscureText: true,
                 decoration: InputDecoration(
                   labelText:
-                      usuario != null ? 'Nueva ContraseÃ±a' : 'ContraseÃ±a *',
+                      usuario != null ? 'Nueva Contraseña' : 'Contraseña *',
                   labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                   filled: true,
                   fillColor: AppColors.background(isDark),
@@ -16243,9 +17245,9 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
       late DateTime inicio;
       if (_periodo == 'Hoy') {
         inicio = DateTime(ahora.year, ahora.month, ahora.day);
-      } else if (_periodo == '7 dÃ­as') {
+      } else if (_periodo == '7 días') {
         inicio = DateTime(ahora.year, ahora.month, ahora.day).subtract(const Duration(days: 6));
-      } else if (_periodo == '30 dÃ­as') {
+      } else if (_periodo == '30 días') {
         inicio = DateTime(ahora.year, ahora.month, ahora.day).subtract(const Duration(days: 29));
       } else {
         inicio = DateTime(ahora.year, ahora.month, 1);
@@ -16261,7 +17263,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
       }
       _porMetodo = mapa;
     } catch (e) {
-      debugPrint('Error cargando estadÃ­sticas profesionales: $e');
+      debugPrint('Error cargando estadísticas profesionales: $e');
       _ventas = []; _masVendidos = []; _porMetodo = {}; _gastos = 0;
     } finally {
       if (mounted) setState(() => _cargando = false);
@@ -16292,7 +17294,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
   }
 
   Widget _paymentChart(bool dark) {
-    if (_porMetodo.isEmpty) return Center(child: Padding(padding: const EdgeInsets.all(18), child: Text('AÃºn no hay pagos registrados en este periodo.', style: TextStyle(color: AppColors.subtext(dark), fontSize: 11))));
+    if (_porMetodo.isEmpty) return Center(child: Padding(padding: const EdgeInsets.all(18), child: Text('Aún no hay pagos registrados en este periodo.', style: TextStyle(color: AppColors.subtext(dark), fontSize: 11))));
     final entries = _porMetodo.entries.toList()..sort((a,b)=>b.value.compareTo(a.value));
     final total = _ventasTotal <= 0 ? 1 : _ventasTotal;
     final colors = [AppColors.primary, AppColors.info, AppColors.success, AppColors.warning, AppColors.secondary, AppColors.danger];
@@ -16314,7 +17316,7 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
   }
 
   Widget _topProducts(bool dark) {
-    if (_masVendidos.isEmpty) return Text('Sin productos vendidos todavÃ­a.', style: TextStyle(color: AppColors.subtext(dark), fontSize: 11));
+    if (_masVendidos.isEmpty) return Text('Sin productos vendidos todavía.', style: TextStyle(color: AppColors.subtext(dark), fontSize: 11));
     final top=_masVendidos.take(6).toList();
     final max=top.fold<double>(1,(m,p)=>_num(p['cantidad'])>m?_num(p['cantidad']):m);
     return Column(children:[for(final p in top) Padding(padding:const EdgeInsets.symmetric(vertical:5),child:Row(children:[Expanded(flex:3,child:Text('${p['nombre']??''}',maxLines:1,overflow:TextOverflow.ellipsis,style:TextStyle(color:AppColors.text(dark),fontSize:10,fontWeight:FontWeight.w700))),Expanded(flex:4,child:Padding(padding:const EdgeInsets.symmetric(horizontal:8),child:ClipRRect(borderRadius:BorderRadius.circular(8),child:LinearProgressIndicator(value:_num(p['cantidad'])/max,minHeight:8,backgroundColor:AppColors.divider(dark),valueColor:AlwaysStoppedAnimation(AppColors.primary))))),SizedBox(width:55,child:Text('${p['cantidad']} uds',textAlign:TextAlign.right,style:TextStyle(color:AppColors.subtext(dark),fontSize:9,fontWeight:FontWeight.w700))) ]))]);
@@ -16324,20 +17326,20 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
   Widget build(BuildContext context) {
     final dark=widget.modoOscuro;
     final fecha=DateFormat('dd MMM yyyy', 'es').format(DateTime.now());
-    return Scaffold(backgroundColor:AppColors.background(dark),appBar:AppBar(backgroundColor:Colors.transparent,elevation:0,leading:IconButton(onPressed:widget.onAbrirSidebar,tooltip:'Abrir menÃº',icon:Icon(Icons.menu_rounded,color:AppColors.text(dark))),title:Text('EstadÃ­sticas y mÃ©tricas',style:TextStyle(color:AppColors.text(dark),fontSize:18,fontWeight:FontWeight.w900))),body:_cargando?const Center(child:CircularProgressIndicator(color:AppColors.primary)):RefreshIndicator(onRefresh:_cargarDatos,child:ListView(padding:const EdgeInsets.fromLTRB(14,4,14,28),children:[
+    return Scaffold(backgroundColor:AppColors.background(dark),appBar:AppBar(backgroundColor:Colors.transparent,elevation:0,leading:IconButton(onPressed:widget.onAbrirSidebar,tooltip:'Abrir menú',icon:Icon(Icons.menu_rounded,color:AppColors.text(dark))),title:Text('Estadísticas y métricas',style:TextStyle(color:AppColors.text(dark),fontSize:18,fontWeight:FontWeight.w900))),body:_cargando?const Center(child:CircularProgressIndicator(color:AppColors.primary)):RefreshIndicator(onRefresh:_cargarDatos,child:ListView(padding:const EdgeInsets.fromLTRB(14,4,14,28),children:[
       Row(children:[Expanded(child:Text('Resumen del negocio',style:TextStyle(color:AppColors.text(dark),fontSize:20,fontWeight:FontWeight.w900))),Container(padding:const EdgeInsets.symmetric(horizontal:9,vertical:5),decoration:BoxDecoration(color:AppColors.primary.withValues(alpha:.08),borderRadius:BorderRadius.circular(10)),child:Text(fecha,style:TextStyle(color:AppColors.primary,fontSize:9,fontWeight:FontWeight.w800)))]),
       const SizedBox(height:10),
-      SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(children:[for(final p in ['Hoy','7 dÃ­as','30 dÃ­as','Mes']) Padding(padding:const EdgeInsets.only(right:7),child:ChoiceChip(label:Text(p),selected:_periodo==p,onSelected:(_){if(_){setState(()=>_periodo=p);_cargarDatos();}}))])),
+      SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(children:[for(final p in ['Hoy','7 días','30 días','Mes']) Padding(padding:const EdgeInsets.only(right:7),child:ChoiceChip(label:Text(p),selected:_periodo==p,onSelected:(_){if(_){setState(()=>_periodo=p);_cargarDatos();}}))])),
       const SizedBox(height:10),
       LayoutBuilder(builder:(ctx,c)=>GridView.count(crossAxisCount:c.maxWidth>700?4:2,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),crossAxisSpacing:8,mainAxisSpacing:8,childAspectRatio:c.maxWidth>700?2.5:1.8,children:[_card(title:'Ventas',value:_money(_ventasTotal),icon:Icons.point_of_sale_outlined,detail:'Ingresos por ventas',dark:dark),_card(title:'Transacciones',value:'${_ventas.length}',icon:Icons.receipt_long_outlined,detail:'Tickets procesados',dark:dark),_card(title:'Ticket promedio',value:_money(_ticketPromedio),icon:Icons.analytics_outlined,detail:'Venta media',dark:dark),_card(title:'Ganancia',value:_money(_ganancia),icon:Icons.trending_up_rounded,detail:'Utilidad registrada',dark:dark)])),
       const SizedBox(height:10),
-      _section('Dinero recogido',Row(children:[Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(_money(_ventasTotal),style:TextStyle(color:AppColors.text(dark),fontSize:25,fontWeight:FontWeight.w900)),Text('Total cobrado en ventas',style:TextStyle(color:AppColors.subtext(dark),fontSize:10)),const SizedBox(height:9),Row(children:[Expanded(child:Text('Efectivo\n${_money(_efectivo)}',style:TextStyle(color:AppColors.text(dark),fontSize:11,fontWeight:FontWeight.w800))),Expanded(child:Text('Digital\n${_money(_digital)}',style:TextStyle(color:AppColors.text(dark),fontSize:11,fontWeight:FontWeight.w800))),Expanded(child:Text('Gastos\n${_money(_gastos)}',style:TextStyle(color:AppColors.danger,fontSize:11,fontWeight:FontWeight.w800)))])])),Container(width:95,height:95,decoration:BoxDecoration(shape:BoxShape.circle,color:AppColors.success.withValues(alpha:.10)),child:Icon(Icons.account_balance_wallet_rounded,color:AppColors.success,size:42))]),dark,subtitle:'CuÃ¡nto dinero entrÃ³ y cuÃ¡nto saliÃ³ durante el periodo.'),
+      _section('Dinero recogido',Row(children:[Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(_money(_ventasTotal),style:TextStyle(color:AppColors.text(dark),fontSize:25,fontWeight:FontWeight.w900)),Text('Total cobrado en ventas',style:TextStyle(color:AppColors.subtext(dark),fontSize:10)),const SizedBox(height:9),Row(children:[Expanded(child:Text('Efectivo\n${_money(_efectivo)}',style:TextStyle(color:AppColors.text(dark),fontSize:11,fontWeight:FontWeight.w800))),Expanded(child:Text('Digital\n${_money(_digital)}',style:TextStyle(color:AppColors.text(dark),fontSize:11,fontWeight:FontWeight.w800))),Expanded(child:Text('Gastos\n${_money(_gastos)}',style:TextStyle(color:AppColors.danger,fontSize:11,fontWeight:FontWeight.w800)))])])),Container(width:95,height:95,decoration:BoxDecoration(shape:BoxShape.circle,color:AppColors.success.withValues(alpha:.10)),child:Icon(Icons.account_balance_wallet_rounded,color:AppColors.success,size:42))]),dark,subtitle:'Cuánto dinero entró y cuánto salió durante el periodo.'),
       const SizedBox(height:10),
-      _section('Pagos por mÃ©todo',_paymentChart(dark),dark,subtitle:'Monto recaudado por cada forma de pago.'),
+      _section('Pagos por método',_paymentChart(dark),dark,subtitle:'Monto recaudado por cada forma de pago.'),
       const SizedBox(height:10),
-      _section('Ventas por hora',_hourChart(dark),dark,subtitle:'DistribuciÃ³n de ingresos durante el dÃ­a.'),
+      _section('Ventas por hora',_hourChart(dark),dark,subtitle:'Distribución de ingresos durante el día.'),
       const SizedBox(height:10),
-      _section('Productos mÃ¡s vendidos',_topProducts(dark),dark,subtitle:'Unidades vendidas y ranking del catÃ¡logo.'),
+      _section('Productos más vendidos',_topProducts(dark),dark,subtitle:'Unidades vendidas y ranking del catálogo.'),
       const SizedBox(height:10),
       _section('Indicadores adicionales',Column(children:[_metricRow('Efectivo recaudado',_money(_efectivo),Icons.payments_outlined,dark),_metricRow('Pagos digitales',_money(_digital),Icons.credit_card_outlined,dark),_metricRow('Gastos registrados',_money(_gastos),Icons.remove_circle_outline,dark),_metricRow('Margen de ganancia',_ventasTotal<=0?'0%':'${(_ganancia/_ventasTotal*100).toStringAsFixed(1)}%',Icons.percent_rounded,dark)]),dark),
     ])));
@@ -16383,5 +17385,4 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
 
   Widget _metricRow(String label,String value,IconData icon,bool dark)=>Container(padding:const EdgeInsets.symmetric(vertical:9),decoration:BoxDecoration(border:Border(bottom:BorderSide(color:AppColors.divider(dark)))),child:Row(children:[Icon(icon,color:AppColors.primary,size:18),const SizedBox(width:10),Expanded(child:Text(label,style:TextStyle(color:AppColors.text(dark),fontSize:11,fontWeight:FontWeight.w700))),Text(value,style:TextStyle(color:AppColors.text(dark),fontSize:12,fontWeight:FontWeight.w900))]));
 }
-
 
