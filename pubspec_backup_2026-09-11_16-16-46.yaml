@@ -1,0 +1,59 @@
+﻿name: sinthetix_pro
+description: SINTHETIX PRO - Sistema de Punto de Venta Offline
+publish_to: "none"
+
+version: 7.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ BASE DE DATOS SQLITE Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+  sqflite: ^2.3.0
+  sqflite_common_ffi_web: 1.1.2
+  path: ^1.9.0
+  path_provider: ^2.1.4
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ INTERFAZ / NAVEGACIÃƒâ€œN Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+  cupertino_icons: ^1.0.8
+  curved_labeled_navigation_bar: ^2.0.3
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ ESCÃƒÂNER / IMÃƒÂGENES Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+  image_picker: ^1.1.2
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ IMPRESIÃƒâ€œN / PDF Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+  printing: ^5.13.2
+  pdf: ^3.11.1
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ GRÃƒÂFICOS / QR / CÃƒâ€œDIGOS Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+  fl_chart: ^0.66.0
+  qr_flutter: ^4.1.0
+  barcode: ^2.2.6
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ VOZ Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+  speech_to_text: ^6.6.0
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ ARCHIVOS / COMPARTIR Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+  file_picker: ^8.1.2
+  share_plus: ^10.0.2
+
+  # Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ UTILIDADES Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+  intl: ^0.19.0
+  url_launcher: ^6.3.0
+  shared_preferences: ^2.3.2
+  mobile_scanner: 7.4.1
+  audioplayers: 6.8.1
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:`r`n  assets:`r`n    - assets/bit.mp3
+  assets:
+    - assets/sounds/bit.mp3
+  uses-material-design: true
+
+

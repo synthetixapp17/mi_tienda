@@ -1,8 +1,10 @@
+import 'pagos/pago_mixto.dart';
+import 'profesional/pro_features.dart';
 // SINTHETIX PRO V37 - PARCHE INTEGRAL
 // Navbar morado + tarjetas POS/TIENDA mejoradas.
 // ============================================
 // SINTHETIX PRO - V25 ESTADISTICAS + ETIQUETAS COMPACTAS
-// V25: métricas profesionales + impresión térmica compacta + diseño sincronizado
+// V25: mÃ©tricas profesionales + impresiÃ³n tÃ©rmica compacta + diseÃ±o sincronizado
 // ============================================
 
 import 'dart:async';
@@ -46,7 +48,7 @@ Map<String, String> simbolosMoneda = {'USD': '\$', 'COP': '\$', 'VES': 'Bs.'};
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 // ============================================
-// COLORES DE LA APLICACIÓN - DISEÑO PROFESIONAL
+// COLORES DE LA APLICACIÃ“N - DISEÃ‘O PROFESIONAL
 // ============================================
 class AppColors {
   static Color background(bool isDark) =>
@@ -152,17 +154,29 @@ Future<void> launchURL(String url) async {
 // SERVICIO DE SONIDO
 // ============================================
 class SoundService {
-  static final SoundService _instance=SoundService._();
-  factory SoundService()=>_instance;
+  static final SoundService _instance = SoundService._();
+  factory SoundService() => _instance;
   SoundService._();
-  final AudioPlayer _player=AudioPlayer();
+  final AudioPlayer _player = AudioPlayer();
   Future<void> playBeep() async {
-    try { await _player.stop(); await _player.play(AssetSource('bit.mp3'),volume:.85); }
-    catch(e){ debugPrint('Error sonido assets/bit.mp3: $e'); try{await SystemSound.play(SystemSoundType.click);}catch(_){}}
-    try{HapticFeedback.selectionClick();}catch(_){}
+    try {
+      await _player.stop();
+      await _player.play(AssetSource('bit.mp3'), volume: .85);
+    } catch (e) {
+      debugPrint('Error sonido assets/bit.mp3: $e');
+      try {
+        await SystemSound.play(SystemSoundType.click);
+      } catch (_) {}
+    }
+    try {
+      HapticFeedback.selectionClick();
+    } catch (_) {}
   }
-  Future<void> playSuccess()=>playBeep();
-  void dispose(){_player.dispose();}
+
+  Future<void> playSuccess() => playBeep();
+  void dispose() {
+    _player.dispose();
+  }
 }
 
 // ============================================
@@ -207,10 +221,17 @@ class LocalDatabase {
                 'ALTER TABLE productos ADD COLUMN marca TEXT',
                 "ALTER TABLE productos ADD COLUMN sync_estado TEXT DEFAULT 'pendiente'",
                 'ALTER TABLE productos ADD COLUMN sync_error TEXT',
-              ]) { try { await db.execute(sql); } catch (_) {} }
+              ]) {
+                try {
+                  await db.execute(sql);
+                } catch (_) {}
+              }
             }
             if (oldVersion < 4) {
-              try { await db.execute('ALTER TABLE productos ADD COLUMN opciones_json TEXT'); } catch (_) {}
+              try {
+                await db.execute(
+                    'ALTER TABLE productos ADD COLUMN opciones_json TEXT');
+              } catch (_) {}
             }
           },
         ),
@@ -232,10 +253,17 @@ class LocalDatabase {
             'ALTER TABLE productos ADD COLUMN marca TEXT',
             "ALTER TABLE productos ADD COLUMN sync_estado TEXT DEFAULT 'pendiente'",
             'ALTER TABLE productos ADD COLUMN sync_error TEXT',
-          ]) { try { await db.execute(sql); } catch (_) {} }
+          ]) {
+            try {
+              await db.execute(sql);
+            } catch (_) {}
+          }
         }
         if (oldVersion < 4) {
-          try { await db.execute('ALTER TABLE productos ADD COLUMN opciones_json TEXT'); } catch (_) {}
+          try {
+            await db
+                .execute('ALTER TABLE productos ADD COLUMN opciones_json TEXT');
+          } catch (_) {}
         }
       },
     );
@@ -406,7 +434,7 @@ class LocalDatabase {
         numero_copias INTEGER DEFAULT 1,
         usar_misma_impresora INTEGER DEFAULT 1,
         tamano_etiqueta TEXT DEFAULT '40x30mm',
-        mensaje_pie TEXT DEFAULT '¡Gracias por su compra!',
+        mensaje_pie TEXT DEFAULT 'Â¡Gracias por su compra!',
         mensaje_adicional TEXT,
         actualizado_en TEXT
       )
@@ -542,13 +570,15 @@ class LocalDatabase {
       });
       await db.insert('metodos_pago', {
         'id': 'mp_pago_movil',
-        'nombre': 'Pago Móvil',
+        'nombre': 'Pago MÃ³vil',
         'activo': 1,
         'creado_en': DateTime.now().toIso8601String(),
       });
     }
 
-    try { await db.execute('ALTER TABLE metodos_pago ADD COLUMN tipo TEXT'); } catch (_) {}
+    try {
+      await db.execute('ALTER TABLE metodos_pago ADD COLUMN tipo TEXT');
+    } catch (_) {}
 
     final usuariosExist = await db.query('usuarios');
     if (usuariosExist.isEmpty) {
@@ -570,7 +600,7 @@ class LocalDatabase {
         'Ropa',
         'Calzado',
         'Accesorios',
-        'Electrónica',
+        'ElectrÃ³nica',
         'Alimentos'
       ];
       for (var i = 0; i < categoriasDefault.length; i++) {
@@ -648,7 +678,7 @@ class LocalDatabase {
 }
 
 // ============================================
-// SERVICIO DE BASE DE DATOS - CORREGIDO CON GUARDADO AUTOMÁTICO
+// SERVICIO DE BASE DE DATOS - CORREGIDO CON GUARDADO AUTOMÃTICO
 // ============================================
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._();
@@ -658,7 +688,8 @@ class DatabaseService {
   final LocalDatabase _db = LocalDatabase();
 
   // Consulta SQL publica para reportes y metricas.
-  Future<List<Map<String, dynamic>>> query(String sql, [List<dynamic>? args]) async {
+  Future<List<Map<String, dynamic>>> query(String sql,
+      [List<dynamic>? args]) async {
     try {
       return await _db.query(sql, args);
     } catch (e) {
@@ -694,31 +725,38 @@ class DatabaseService {
       prod['creado_en'] = DateTime.now().toIso8601String();
       prod['actualizado_en'] = DateTime.now().toIso8601String();
       final codigo = prod['codigo_barras']?.toString().trim() ?? '';
-      prod['codigo_barras'] = codigo.isEmpty
-          ? await BarcodeService().generarCodigoEAN13()
-          : codigo;
+      prod['codigo_barras'] =
+          codigo.isEmpty ? await BarcodeService().generarCodigoEAN13() : codigo;
       prod['nombre'] = prod['nombre']?.toString().trim() ?? '';
       prod['precio'] = (prod['precio'] as num?)?.toDouble() ??
-          double.tryParse(prod['precio']?.toString() ?? '') ?? 0.0;
+          double.tryParse(prod['precio']?.toString() ?? '') ??
+          0.0;
       prod['costo'] = (prod['costo'] as num?)?.toDouble() ??
-          double.tryParse(prod['costo']?.toString() ?? '') ?? 0.0;
+          double.tryParse(prod['costo']?.toString() ?? '') ??
+          0.0;
       prod['stock'] = (prod['stock'] as num?)?.toInt() ??
-          int.tryParse(prod['stock']?.toString() ?? '') ?? 0;
+          int.tryParse(prod['stock']?.toString() ?? '') ??
+          0;
       prod['stock_minimo'] = (prod['stock_minimo'] as num?)?.toInt() ??
-          int.tryParse(prod['stock_minimo']?.toString() ?? '') ?? 5;
+          int.tryParse(prod['stock_minimo']?.toString() ?? '') ??
+          5;
       final result = await _db.insert('productos', prod);
       debugPrint(
           'Producto insertado con ID: ${prod['id']}, resultado: $result');
       if (result > 0) {
         productosVersion.value++;
         // LOCAL FIRST: el producto queda guardado inmediatamente aunque no haya
-        // internet. La sincronización con Supabase/Cloudinary continúa en segundo plano.
+        // internet. La sincronizaciÃ³n con Supabase/Cloudinary continÃºa en segundo plano.
         prod['sync_estado'] = 'pendiente';
         prod['sync_error'] = null;
-        await _db.update('productos', {
-          'sync_estado': 'pendiente',
-          'sync_error': null,
-        }, 'id = ?', [prod['id']]);
+        await _db.update(
+            'productos',
+            {
+              'sync_estado': 'pendiente',
+              'sync_error': null,
+            },
+            'id = ?',
+            [prod['id']]);
         unawaited(SupabaseSyncService.syncPendingProducts());
         return prod;
       }
@@ -729,11 +767,16 @@ class DatabaseService {
     }
   }
 
-  Future<void> marcarProductoSincronizado(String id, bool ok, [String? error]) async {
-    await _db.update('productos', {
-      'sync_estado': ok ? 'sincronizado' : 'pendiente',
-      'sync_error': ok ? null : error,
-    }, 'id = ?', [id]);
+  Future<void> marcarProductoSincronizado(String id, bool ok,
+      [String? error]) async {
+    await _db.update(
+        'productos',
+        {
+          'sync_estado': ok ? 'sincronizado' : 'pendiente',
+          'sync_error': ok ? null : error,
+        },
+        'id = ?',
+        [id]);
   }
 
   Future<bool> actualizarProducto(String id, Map<String, dynamic> prod) async {
@@ -744,7 +787,7 @@ class DatabaseService {
       final result = await _db.update('productos', prod, 'id = ?', [id]);
       debugPrint('Producto actualizado: $id, filas: $result');
       if (result > 0) {
-        // La edición también es local-first; no bloquea la pantalla si la nube está offline.
+        // La ediciÃ³n tambiÃ©n es local-first; no bloquea la pantalla si la nube estÃ¡ offline.
         unawaited(SupabaseSyncService.syncPendingProducts());
       }
       return result > 0;
@@ -787,10 +830,10 @@ class DatabaseService {
     }
   }
 
-  // ============ CATEGORÍAS ============
+  // ============ CATEGORÃAS ============
   Future<List<Map<String, dynamic>>> getCategorias() async {
     final result = await _db.getAll('categorias', orderBy: 'nombre');
-    debugPrint('Categorías cargadas: ${result.length}');
+    debugPrint('CategorÃ­as cargadas: ${result.length}');
     return result;
   }
 
@@ -800,9 +843,9 @@ class DatabaseService {
       categoria['creado_en'] = DateTime.now().toIso8601String();
       final result = await _db.insert('categorias', categoria);
       debugPrint(
-          'Categoría guardada: ${categoria['nombre']} - Resultado: $result');
+          'CategorÃ­a guardada: ${categoria['nombre']} - Resultado: $result');
     } catch (e) {
-      debugPrint('Error creando categoría: $e');
+      debugPrint('Error creando categorÃ­a: $e');
     }
   }
 
@@ -811,7 +854,7 @@ class DatabaseService {
     try {
       await _db.update('categorias', categoria, 'id = ?', [id]);
     } catch (e) {
-      debugPrint('Error actualizando categoría: $e');
+      debugPrint('Error actualizando categorÃ­a: $e');
     }
   }
 
@@ -819,11 +862,11 @@ class DatabaseService {
     try {
       await _db.delete('categorias', 'id = ?', [id]);
     } catch (e) {
-      debugPrint('Error eliminando categoría: $e');
+      debugPrint('Error eliminando categorÃ­a: $e');
     }
   }
 
-  // ============ MÉTODOS DE PAGO ============
+  // ============ MÃ‰TODOS DE PAGO ============
   Future<List<Map<String, dynamic>>> getMetodosPago() async {
     return await _db.getAll('metodos_pago', orderBy: 'nombre');
   }
@@ -833,9 +876,9 @@ class DatabaseService {
       metodo['id'] = metodo['id'] ?? _generateId();
       metodo['creado_en'] = DateTime.now().toIso8601String();
       await _db.insert('metodos_pago', metodo);
-      debugPrint('Método de pago guardado: ${metodo['nombre']}');
+      debugPrint('MÃ©todo de pago guardado: ${metodo['nombre']}');
     } catch (e) {
-      debugPrint('Error creando método de pago: $e');
+      debugPrint('Error creando mÃ©todo de pago: $e');
     }
   }
 
@@ -844,7 +887,7 @@ class DatabaseService {
     try {
       await _db.update('metodos_pago', metodo, 'id = ?', [id]);
     } catch (e) {
-      debugPrint('Error actualizando método de pago: $e');
+      debugPrint('Error actualizando mÃ©todo de pago: $e');
     }
   }
 
@@ -852,7 +895,7 @@ class DatabaseService {
     try {
       await _db.delete('metodos_pago', 'id = ?', [id]);
     } catch (e) {
-      debugPrint('Error eliminando método de pago: $e');
+      debugPrint('Error eliminando mÃ©todo de pago: $e');
     }
   }
 
@@ -988,8 +1031,8 @@ class DatabaseService {
         return null;
       }
 
-      // Verificación real: evita mostrar una venta como exitosa si SQLite/Web
-      // no la dejó persistida.
+      // VerificaciÃ³n real: evita mostrar una venta como exitosa si SQLite/Web
+      // no la dejÃ³ persistida.
       final verificada = await _db.query(
         'SELECT * FROM ventas WHERE id = ?',
         [venta['id']],
@@ -1087,7 +1130,7 @@ class DatabaseService {
     return await _db.getAll('movimientos_inventario', orderBy: 'fecha DESC');
   }
 
-  // ============ CONFIGURACIÓN ============
+  // ============ CONFIGURACIÃ“N ============
   Future<Map<String, dynamic>?> getConfiguracion() async {
     final results = await _db.query('SELECT * FROM configuracion WHERE id = 1');
     if (results.isEmpty) return null;
@@ -1099,9 +1142,9 @@ class DatabaseService {
       config['id'] = 1;
       config['actualizado_en'] = DateTime.now().toIso8601String();
       await _db.insert('configuracion', config, replace: true);
-      debugPrint('Configuración guardada correctamente');
+      debugPrint('ConfiguraciÃ³n guardada correctamente');
     } catch (e) {
-      debugPrint('Error guardando configuración: $e');
+      debugPrint('Error guardando configuraciÃ³n: $e');
     }
   }
 
@@ -1117,9 +1160,9 @@ class DatabaseService {
       config['id'] = 1;
       config['actualizado_en'] = DateTime.now().toIso8601String();
       await _db.insert('configuracion_ticket', config, replace: true);
-      debugPrint('Configuración ticket guardada');
+      debugPrint('ConfiguraciÃ³n ticket guardada');
     } catch (e) {
-      debugPrint('Error guardando configuración ticket: $e');
+      debugPrint('Error guardando configuraciÃ³n ticket: $e');
     }
   }
 
@@ -1187,9 +1230,9 @@ class DatabaseService {
       promocion['id'] = promocion['id'] ?? _generateId();
       promocion['creado_en'] = DateTime.now().toIso8601String();
       await _db.insert('promociones', promocion);
-      debugPrint('Promoción guardada: ${promocion['nombre']}');
+      debugPrint('PromociÃ³n guardada: ${promocion['nombre']}');
     } catch (e) {
-      debugPrint('Error creando promoción: $e');
+      debugPrint('Error creando promociÃ³n: $e');
     }
   }
 
@@ -1198,7 +1241,7 @@ class DatabaseService {
     try {
       await _db.update('promociones', promocion, 'id = ?', [id]);
     } catch (e) {
-      debugPrint('Error actualizando promoción: $e');
+      debugPrint('Error actualizando promociÃ³n: $e');
     }
   }
 
@@ -1206,7 +1249,7 @@ class DatabaseService {
     try {
       await _db.delete('promociones', 'id = ?', [id]);
     } catch (e) {
-      debugPrint('Error eliminando promoción: $e');
+      debugPrint('Error eliminando promociÃ³n: $e');
     }
   }
 
@@ -1261,7 +1304,7 @@ class DatabaseService {
 }
 
 // ============================================
-// SERVICIO DE CÓDIGOS DE BARRAS
+// SERVICIO DE CÃ“DIGOS DE BARRAS
 // ============================================
 class BarcodeService {
   static final BarcodeService _instance = BarcodeService._();
@@ -1455,7 +1498,7 @@ class TicketService {
                 pw.SizedBox(height: 5),
                 pw.Center(
                   child: pw.Text(
-                    config?['mensaje_pie'] ?? '¡Gracias por su compra!',
+                    config?['mensaje_pie'] ?? 'Â¡Gracias por su compra!',
                     style: const pw.TextStyle(
                         fontSize: 10, fontWeight: pw.FontWeight.bold),
                   ),
@@ -1469,8 +1512,8 @@ class TicketService {
       final bytes = await pdf.save();
 
       // WEB: path_provider no implementa getTemporaryDirectory() en esta
-      // configuración del proyecto. En navegador entregamos el PDF mediante
-      // el plugin de impresión, que sí tiene implementación para Web.
+      // configuraciÃ³n del proyecto. En navegador entregamos el PDF mediante
+      // el plugin de impresiÃ³n, que sÃ­ tiene implementaciÃ³n para Web.
       if (kIsWeb) {
         await Printing.sharePdf(
           bytes: bytes,
@@ -1532,7 +1575,11 @@ class ImagenProducto extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (imagenUrl != null && imagenUrl!.startsWith('http')) {
-      return Image.network(imagenUrl!, width: width, height: height, fit: fit, errorBuilder: (_, __, ___) => _placeholder());
+      return Image.network(imagenUrl!,
+          width: width,
+          height: height,
+          fit: fit,
+          errorBuilder: (_, __, ___) => _placeholder());
     }
     if (imagenBase64 != null && imagenBase64!.isNotEmpty) {
       try {
@@ -1561,16 +1608,18 @@ class ImagenProducto extends StatelessWidget {
     );
   }
 }
+
 // ============================================
-// OPCIONES DE PRODUCTO (extras, tamaños, salsas, etc.)
-// Genérico para cualquier tipo de negocio: comida, ropa, calzado...
+// OPCIONES DE PRODUCTO (extras, tamaÃ±os, salsas, etc.)
+// GenÃ©rico para cualquier tipo de negocio: comida, ropa, calzado...
 // ============================================
 class ValorOpcion {
   String nombre;
   double precioExtra;
   ValorOpcion({required this.nombre, this.precioExtra = 0});
 
-  Map<String, dynamic> toJson() => {'nombre': nombre, 'precio_extra': precioExtra};
+  Map<String, dynamic> toJson() =>
+      {'nombre': nombre, 'precio_extra': precioExtra};
   factory ValorOpcion.fromJson(Map<String, dynamic> j) => ValorOpcion(
         nombre: j['nombre']?.toString() ?? '',
         precioExtra: (j['precio_extra'] as num?)?.toDouble() ?? 0,
@@ -1623,11 +1672,11 @@ class OpcionesProducto {
 }
 
 // ============================================
-// CONTINUACIÓN - ETAPA 2 de 6
+// CONTINUACIÃ“N - ETAPA 2 de 6
 // ============================================
 
 // ============================================
-// WIDGET: SELECTOR DE TALLAS - DISEÑO PROFESIONAL
+// WIDGET: SELECTOR DE TALLAS - DISEÃ‘O PROFESIONAL
 // ============================================
 class SelectorTallas extends StatefulWidget {
   final List<Map<String, dynamic>> tallas;
@@ -1729,7 +1778,7 @@ class _SelectorTallasState extends State<SelectorTallas> {
 }
 
 // ============================================
-// WIDGET: SELECTOR DE COLORES - DISEÑO PROFESIONAL
+// WIDGET: SELECTOR DE COLORES - DISEÃ‘O PROFESIONAL
 // ============================================
 class SelectorColores extends StatefulWidget {
   final List<Map<String, dynamic>> colores;
@@ -1851,7 +1900,7 @@ class _SelectorColoresState extends State<SelectorColores> {
 }
 
 // ============================================
-// WIDGET: SCANNER RÁPIDO REUTILIZABLE
+// WIDGET: SCANNER RÃPIDO REUTILIZABLE
 // ============================================
 class ScannerRapido extends StatefulWidget {
   final bool isDark;
@@ -1869,7 +1918,8 @@ class ScannerRapido extends StatefulWidget {
   State<ScannerRapido> createState() => _ScannerRapidoState();
 }
 
-class _ScannerRapidoState extends State<ScannerRapido> with SingleTickerProviderStateMixin {
+class _ScannerRapidoState extends State<ScannerRapido>
+    with SingleTickerProviderStateMixin {
   late final MobileScannerController _controller;
   bool _linternaEncendida = false;
   bool _procesando = false;
@@ -1881,7 +1931,9 @@ class _ScannerRapidoState extends State<ScannerRapido> with SingleTickerProvider
   @override
   void initState() {
     super.initState();
-    _scanAnimation = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat(reverse: true);
+    _scanAnimation = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1500))
+      ..repeat(reverse: true);
     _controller = MobileScannerController(
       formats: const [
         BarcodeFormat.ean13,
@@ -1980,7 +2032,8 @@ class _ScannerRapidoState extends State<ScannerRapido> with SingleTickerProvider
                 child: AnimatedBuilder(
                   animation: _scanAnimation,
                   builder: (_, __) => CustomPaint(
-                    painter: _ScannerOverlayPainter(_scanAnimation.value, _procesando),
+                    painter: _ScannerOverlayPainter(
+                        _scanAnimation.value, _procesando),
                   ),
                 ),
               ),
@@ -1991,7 +2044,8 @@ class _ScannerRapidoState extends State<ScannerRapido> with SingleTickerProvider
                 height: 145,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white.withValues(alpha: .10), width: 1),
+                  border: Border.all(
+                      color: Colors.white.withValues(alpha: .10), width: 1),
                 ),
               ),
             ),
@@ -2058,7 +2112,7 @@ class _ScannerRapidoState extends State<ScannerRapido> with SingleTickerProvider
                     ),
                   ),
                   child: const Text(
-                    'Apunte la cámara al código de barras',
+                    'Apunte la cÃ¡mara al cÃ³digo de barras',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 12,
@@ -2098,7 +2152,6 @@ class _ScannerRapidoState extends State<ScannerRapido> with SingleTickerProvider
   }
 }
 
-
 class _ScannerOverlayPainter extends CustomPainter {
   final double progress;
   final bool processing;
@@ -2109,51 +2162,76 @@ class _ScannerOverlayPainter extends CustomPainter {
     final frameW = size.width.clamp(220.0, 420.0);
     final frameH = size.height.clamp(130.0, 230.0);
     final frame = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset(size.width / 2, size.height / 2), width: frameW, height: frameH),
+      Rect.fromCenter(
+          center: Offset(size.width / 2, size.height / 2),
+          width: frameW,
+          height: frameH),
       const Radius.circular(18),
     );
     final shade = Paint()..color = Colors.black.withValues(alpha: .40);
     final outside = Path()..addRect(Offset.zero & size);
     final hole = Path()..addRRect(frame);
-    canvas.drawPath(Path.combine(PathOperation.difference, outside, hole), shade);
+    canvas.drawPath(
+        Path.combine(PathOperation.difference, outside, hole), shade);
 
     final accent = processing ? AppColors.success : AppColors.primary;
-    final stroke = Paint()..color = accent..style = PaintingStyle.stroke..strokeWidth = 3.2..strokeCap = StrokeCap.round;
+    final stroke = Paint()
+      ..color = accent
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.2
+      ..strokeCap = StrokeCap.round;
     const corner = 24.0;
     final l = frame.left, r = frame.right, t = frame.top, b = frame.bottom;
     final p = Path()
-      ..moveTo(l + corner, t)..lineTo(l, t)..lineTo(l, t + corner)
-      ..moveTo(r - corner, t)..lineTo(r, t)..lineTo(r, t + corner)
-      ..moveTo(l + corner, b)..lineTo(l, b)..lineTo(l, b - corner)
-      ..moveTo(r - corner, b)..lineTo(r, b)..lineTo(r, b - corner);
+      ..moveTo(l + corner, t)
+      ..lineTo(l, t)
+      ..lineTo(l, t + corner)
+      ..moveTo(r - corner, t)
+      ..lineTo(r, t)
+      ..lineTo(r, t + corner)
+      ..moveTo(l + corner, b)
+      ..lineTo(l, b)
+      ..lineTo(l, b - corner)
+      ..moveTo(r - corner, b)
+      ..lineTo(r, b)
+      ..lineTo(r, b - corner);
     canvas.drawPath(p, stroke);
 
     final y = t + 12 + (frameH - 24) * progress;
-    final line = Paint()..shader = LinearGradient(colors: [accent.withValues(alpha: 0), accent, accent.withValues(alpha: 0)]).createShader(Rect.fromLTWH(l, y, frameW, 2));
+    final line = Paint()
+      ..shader = LinearGradient(colors: [
+        accent.withValues(alpha: 0),
+        accent,
+        accent.withValues(alpha: 0)
+      ]).createShader(Rect.fromLTWH(l, y, frameW, 2));
     canvas.drawRect(Rect.fromLTWH(l + 14, y, frameW - 28, 2), line);
   }
 
   @override
-  bool shouldRepaint(covariant _ScannerOverlayPainter oldDelegate) => oldDelegate.progress != progress || oldDelegate.processing != processing;
+  bool shouldRepaint(covariant _ScannerOverlayPainter oldDelegate) =>
+      oldDelegate.progress != progress || oldDelegate.processing != processing;
 }
 
 // ============================================
-// SINCRONIZACIÓN ONLINE: SUPABASE + CLOUDINARY
+// SINCRONIZACIÃ“N ONLINE: SUPABASE + CLOUDINARY
 // ============================================
 class CloudinaryService {
-  static const String cloudName = 'jn';
+  static const String cloudName = 'jnebeaoq';
   static const String uploadPreset = 'mi_tienda_preset';
 
-  static Future<String?> upload(XFile file, {String folder = 'sinthetix/productos'}) async {
+  static Future<String?> upload(XFile file,
+      {String folder = 'sinthetix/productos'}) async {
     try {
       final bytes = await file.readAsBytes();
-      final uri = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/auto/upload');
+      final uri =
+          Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/auto/upload');
       final request = http.MultipartRequest('POST', uri)
         ..fields['upload_preset'] = uploadPreset
         ..fields['folder'] = folder
         ..files.add(http.MultipartFile.fromBytes('file', bytes,
             filename: file.name.isEmpty ? 'imagen.jpg' : file.name));
-      final response = await request.send().timeout(const Duration(seconds: 20));
+      final response =
+          await request.send().timeout(const Duration(seconds: 20));
       final body = await response.stream.bytesToString();
       if (response.statusCode < 200 || response.statusCode >= 300) {
         debugPrint('Cloudinary error ${response.statusCode}: $body');
@@ -2170,7 +2248,8 @@ class CloudinaryService {
 
 class SupabaseSyncService {
   static const String url = 'https://euujrzmhhzikwwwmxgep.supabase.co';
-  static const String anonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV1d2pyem1oaHppa3d3d214Z2VwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0ODIxOTcsImV4cCI6MjEwNTA1ODE5N30.VWMnbhdcmoO6g_QkY019essMUlrYbhJP0TPjKznTJ4A';
+  static const String anonKey =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV1dWpyem1oaHppa3d3d214Z2VwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0ODIxOTcsImV4cCI6MjEwNTA1ODE5N30.VWMnbhdcmoO6g_QkY019essMUlrYbhJP0TPjKznTJ4A';
   static bool ready = false;
 
   static bool _syncing = false;
@@ -2186,18 +2265,19 @@ class SupabaseSyncService {
       final c = Supabase.instance.client;
       ready = true;
 
-      // El POS usa una sesión anónima para que RLS permita escribir
-      // productos/categorías sin exponer una service_role key.
+      // El POS usa una sesiÃ³n anÃ³nima para que RLS permita escribir
+      // productos/categorÃ­as sin exponer una service_role key.
       if (c.auth.currentSession == null) {
         try {
           await c.auth.signInAnonymously();
         } catch (authError) {
-          debugPrint('Supabase Auth anónimo no disponible: $authError');
+          debugPrint('Supabase Auth anÃ³nimo no disponible: $authError');
         }
       }
 
       final session = c.auth.currentSession;
-      debugPrint('Supabase inicializado. Sesión POS: ${session != null ? 'OK' : 'NO'}');
+      debugPrint(
+          'Supabase inicializado. SesiÃ³n POS: ${session != null ? 'OK' : 'NO'}');
     } catch (e) {
       ready = false;
       debugPrint('Supabase no disponible: $e');
@@ -2206,19 +2286,27 @@ class SupabaseSyncService {
 
   static SupabaseClient? get client {
     if (!ready) return null;
-    try { return Supabase.instance.client; } catch (_) { return null; }
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
   }
 
-  static Future<String?> uploadBase64(String encoded, {String folder = 'sinthetix/productos'}) async {
+  static Future<String?> uploadBase64(String encoded,
+      {String folder = 'sinthetix/productos'}) async {
     try {
       if (encoded.isEmpty) return null;
       final bytes = base64Decode(encoded);
-      final uri = Uri.parse('https://api.cloudinary.com/v1_1/${CloudinaryService.cloudName}/auto/upload');
+      final uri = Uri.parse(
+          'https://api.cloudinary.com/v1_1/${CloudinaryService.cloudName}/auto/upload');
       final request = http.MultipartRequest('POST', uri)
         ..fields['upload_preset'] = CloudinaryService.uploadPreset
         ..fields['folder'] = folder
-        ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: 'producto_${DateTime.now().millisecondsSinceEpoch}.jpg'));
-      final response = await request.send().timeout(const Duration(seconds: 20));
+        ..files.add(http.MultipartFile.fromBytes('file', bytes,
+            filename: 'producto_${DateTime.now().millisecondsSinceEpoch}.jpg'));
+      final response =
+          await request.send().timeout(const Duration(seconds: 20));
       final body = await response.stream.bytesToString();
       if (response.statusCode < 200 || response.statusCode >= 300) return null;
       return jsonDecode(body)['secure_url']?.toString();
@@ -2231,12 +2319,14 @@ class SupabaseSyncService {
     final c = client;
     if (c == null) return false;
     try {
-      // La escritura requiere sesión authenticated (anónima).
+      // La escritura requiere sesiÃ³n authenticated (anÃ³nima).
       if (c.auth.currentSession == null) {
-        try { await c.auth.signInAnonymously(); } catch (_) {}
+        try {
+          await c.auth.signInAnonymously();
+        } catch (_) {}
       }
       if (c.auth.currentSession == null) {
-        debugPrint('SYNC producto: sin sesión autenticada');
+        debugPrint('SYNC producto: sin sesiÃ³n autenticada');
         return false;
       }
 
@@ -2246,17 +2336,22 @@ class SupabaseSyncService {
       String? categoryId;
       final categoryName = p['categoria']?.toString().trim();
       if (categoryName != null && categoryName.isNotEmpty) {
-        final existing = await c.from('store_categories')
+        final existing = await c
+            .from('store_categories')
             .select('id')
             .eq('name', categoryName)
             .maybeSingle();
         if (existing != null) {
           categoryId = existing['id']?.toString();
         } else {
-          final created = await c.from('store_categories').insert({
-            'name': categoryName,
-            'active': true,
-          }).select('id').single();
+          final created = await c
+              .from('store_categories')
+              .insert({
+                'name': categoryName,
+                'active': true,
+              })
+              .select('id')
+              .single();
           categoryId = created['id']?.toString();
         }
       }
@@ -2268,8 +2363,12 @@ class SupabaseSyncService {
         'description': p['descripcion']?.toString(),
         'sku': p['sku']?.toString(),
         'barcode': p['codigo_barras']?.toString().trim(),
-        'price': (p['precio'] as num?)?.toDouble() ?? double.tryParse('${p['precio']}') ?? 0,
-        'stock': (p['stock'] as num?)?.toDouble() ?? double.tryParse('${p['stock']}') ?? 0,
+        'price': (p['precio'] as num?)?.toDouble() ??
+            double.tryParse('${p['precio']}') ??
+            0,
+        'stock': (p['stock'] as num?)?.toDouble() ??
+            double.tryParse('${p['stock']}') ??
+            0,
         'category_id': categoryId,
         'brand': p['marca']?.toString(),
         'color': p['color']?.toString(),
@@ -2296,7 +2395,11 @@ class SupabaseSyncService {
     try {
       final name = cat['nombre']?.toString().trim();
       if (name == null || name.isEmpty) return false;
-      final existing = await c.from('store_categories').select('id').eq('name', name).maybeSingle();
+      final existing = await c
+          .from('store_categories')
+          .select('id')
+          .eq('name', name)
+          .maybeSingle();
       final data = {
         'name': name,
         'description': cat['descripcion']?.toString(),
@@ -2309,7 +2412,7 @@ class SupabaseSyncService {
       }
       return true;
     } catch (e) {
-      debugPrint('Supabase categoría pendiente: $e');
+      debugPrint('Supabase categorÃ­a pendiente: $e');
       return false;
     }
   }
@@ -2318,32 +2421,39 @@ class SupabaseSyncService {
     if (_syncing) return;
     _syncing = true;
     try {
-      // Si la app arrancó sin internet, reintentamos inicializar/auth al volver a tener red.
+      // Si la app arrancÃ³ sin internet, reintentamos inicializar/auth al volver a tener red.
       if (!ready) {
         await initialize();
       }
       final db = DatabaseService();
-      final products = await db.query("SELECT * FROM productos WHERE sync_estado IS NULL OR sync_estado != 'sincronizado' ORDER BY actualizado_en DESC");
+      final products = await db.query(
+          "SELECT * FROM productos WHERE sync_estado IS NULL OR sync_estado != 'sincronizado' ORDER BY actualizado_en DESC");
       debugPrint('SYNC pendientes: ${products.length}');
       for (final original in products) {
         final p = Map<String, dynamic>.from(original);
 
-        // 1) Si la imagen aún está solo en local, primero la subimos a Cloudinary.
+        // 1) Si la imagen aÃºn estÃ¡ solo en local, primero la subimos a Cloudinary.
         if ((p['imagen_url']?.toString() ?? '').trim().isEmpty &&
             (p['imagen_base64']?.toString() ?? '').trim().isNotEmpty) {
-          final urlCloudinary = await uploadBase64(p['imagen_base64'].toString());
+          final urlCloudinary =
+              await uploadBase64(p['imagen_base64'].toString());
           if (urlCloudinary != null && urlCloudinary.isNotEmpty) {
             p['imagen_url'] = urlCloudinary;
-            await db.update('productos', {
-              'imagen_url': urlCloudinary,
-              'sync_estado': 'pendiente',
-              'sync_error': null,
-            }, 'id = ?', [p['id']]);
+            await db.update(
+                'productos',
+                {
+                  'imagen_url': urlCloudinary,
+                  'sync_estado': 'pendiente',
+                  'sync_error': null,
+                },
+                'id = ?',
+                [p['id']]);
           }
         }
 
-        // 2) Solo después de tener la URL, sincronizamos el registro en Supabase.
-        final ok = await upsertProduct(p).timeout(const Duration(seconds: 15), onTimeout: () => false);
+        // 2) Solo despuÃ©s de tener la URL, sincronizamos el registro en Supabase.
+        final ok = await upsertProduct(p)
+            .timeout(const Duration(seconds: 15), onTimeout: () => false);
         await db.marcarProductoSincronizado(
           p['id'].toString(),
           ok,
@@ -2356,13 +2466,163 @@ class SupabaseSyncService {
       _syncing = false;
     }
   }
+
+  // ============================================
+  // PULL: Bajar productos de Supabase a local
+  // ============================================
+  static Future<int> pullFromSupabase() async {
+    final c = client;
+    if (c == null) {
+      debugPrint('PULL: Supabase no disponible');
+      return 0;
+    }
+    try {
+      if (c.auth.currentSession == null) {
+        try {
+          await c.auth.signInAnonymously();
+        } catch (_) {}
+      }
+      if (c.auth.currentSession == null) {
+        debugPrint('PULL: sin sesion autenticada');
+        return 0;
+      }
+
+      final db = DatabaseService();
+      int totalBajados = 0;
+
+      // 1) CATEGORIAS
+      try {
+        final cats = await c
+            .from('store_categories')
+            .select('id, name, description, active, created_at');
+        for (final cat in (cats as List)) {
+          final name = cat['name']?.toString().trim() ?? '';
+          if (name.isEmpty) continue;
+          final localId = cat['id']?.toString() ?? '';
+          if (localId.isEmpty) continue;
+          final existing = await db.query(
+            'SELECT id FROM categorias WHERE nombre = ? LIMIT 1',
+            [name],
+          );
+          if (existing.isEmpty) {
+            await db.query(
+              'INSERT OR REPLACE INTO categorias (id, nombre, descripcion, activo, sync_estado, creado_en) VALUES (?, ?, ?, ?, ?, ?)',
+              [
+                localId,
+                name,
+                cat['description']?.toString(),
+                (cat['active'] == true) ? 1 : 0,
+                'sincronizado',
+                cat['created_at']?.toString() ??
+                    DateTime.now().toIso8601String(),
+              ],
+            );
+            totalBajados++;
+          }
+        }
+        debugPrint('PULL: categorias OK');
+      } catch (e) {
+        debugPrint('PULL categorias error: $e');
+      }
+
+      // 2) PRODUCTOS
+      final prods = await c
+          .from('store_products')
+          .select('*')
+          .order('updated_at', ascending: false);
+      for (final p in (prods as List)) {
+        final localId = p['local_id']?.toString().trim() ?? '';
+        if (localId.isEmpty) continue;
+
+        String categoriaNombre = 'General';
+        final catId = p['category_id']?.toString();
+        if (catId != null && catId.isNotEmpty) {
+          try {
+            final catResult = await c
+                .from('store_categories')
+                .select('name')
+                .eq('id', catId)
+                .maybeSingle();
+            if (catResult != null && catResult['name'] != null) {
+              categoriaNombre = catResult['name'].toString();
+            }
+          } catch (_) {}
+        }
+
+        final localData = <String, dynamic>{
+          'id': localId,
+          'nombre': p['name']?.toString() ?? '',
+          'codigo_barras': p['barcode']?.toString(),
+          'precio': (p['price'] as num?)?.toDouble() ?? 0.0,
+          'stock': (p['stock'] as num?)?.toInt() ?? 0,
+          'categoria': categoriaNombre,
+          'descripcion': p['description']?.toString(),
+          'imagen_url': p['image_url']?.toString(),
+          'marca': p['brand']?.toString(),
+          'talla': p['size']?.toString(),
+          'color': p['color']?.toString(),
+          'activo': (p['active'] == true) ? 1 : 0,
+          'destacado': (p['featured'] == true) ? 1 : 0,
+          'sync_estado': 'sincronizado',
+          'sync_error': null,
+          'creado_en':
+              p['created_at']?.toString() ?? DateTime.now().toIso8601String(),
+          'actualizado_en':
+              p['updated_at']?.toString() ?? DateTime.now().toIso8601String(),
+        };
+
+        final existe = await db.query(
+          'SELECT id FROM productos WHERE id = ? LIMIT 1',
+          [localId],
+        );
+        if (existe.isEmpty) {
+          final cols = localData.keys.join(', ');
+          final placeholders = localData.keys.map((_) => '?').join(', ');
+          final values = localData.values.toList();
+          await db.query(
+            'INSERT OR REPLACE INTO productos ($cols) VALUES ($placeholders)',
+            values,
+          );
+        } else {
+          await db.update('productos', localData, 'id = ?', [localId]);
+        }
+        totalBajados++;
+      }
+
+      debugPrint('PULL: total $totalBajados registros bajados');
+      return totalBajados;
+    } catch (e) {
+      debugPrint('PULL ERROR: $e');
+      return 0;
+    }
+  }
+
+  // ============================================
+  // SYNC FROM CLOUD
+  // ============================================
+  static Future<int> syncFromCloud() async {
+    try {
+      debugPrint('SYNC FROM CLOUD: iniciando...');
+      final n = await pullFromSupabase();
+      if (n > 0) {
+        productosVersion.value++;
+        debugPrint('SYNC FROM CLOUD: $n registros bajados');
+      } else {
+        debugPrint('SYNC FROM CLOUD: sin cambios');
+      }
+      return n;
+    } catch (e) {
+      debugPrint('SYNC FROM CLOUD error: $e');
+      return 0;
+    }
+  }
 }
 
 // ============================================
 // APP PRINCIPAL
 // ============================================
 
-/// Señal global para sincronizar automáticamente los productos en todas las pantallas.
+/// SeÃ±al global para sincronizar automÃ¡ticamente los productos en todas las pantallas.
 final ValueNotifier<int> productosVersion = ValueNotifier<int>(0);
 final ValueNotifier<int> ventasVersion = ValueNotifier<int>(0);
 
@@ -2376,7 +2636,8 @@ class _MiAppState extends State<MiApp> {
   bool _modoOscuro = false;
   int _currentIndex = 0;
   int _solicitudNuevoProducto = 0;
-  final GlobalKey<_DashboardScreenState> _dashboardKey = GlobalKey<_DashboardScreenState>();
+  final GlobalKey<_DashboardScreenState> _dashboardKey =
+      GlobalKey<_DashboardScreenState>();
   int _stockBajoCount = 0;
   Timer? _stockTimer;
 
@@ -2384,7 +2645,10 @@ class _MiAppState extends State<MiApp> {
   void initState() {
     super.initState();
     _actualizarStockBajo();
-    _stockTimer = Timer.periodic(const Duration(seconds: 45), (_) => _actualizarStockBajo());
+    // Bajar de Supabase en segundo plano (no bloquea arranque)
+    Future.microtask(() => SupabaseSyncService.syncFromCloud());
+    _stockTimer = Timer.periodic(
+        const Duration(seconds: 45), (_) => _actualizarStockBajo());
   }
 
   @override
@@ -2395,10 +2659,12 @@ class _MiAppState extends State<MiApp> {
 
   Future<void> _actualizarStockBajo() async {
     try {
-      final rows = await DatabaseService()
-          .query('SELECT COUNT(*) as c FROM productos WHERE stock <= stock_minimo');
-      final count = rows.isNotEmpty ? (rows.first['c'] as num?)?.toInt() ?? 0 : 0;
-      if (mounted && count != _stockBajoCount) setState(() => _stockBajoCount = count);
+      final rows = await DatabaseService().query(
+          'SELECT COUNT(*) as c FROM productos WHERE stock <= stock_minimo');
+      final count =
+          rows.isNotEmpty ? (rows.first['c'] as num?)?.toInt() ?? 0 : 0;
+      if (mounted && count != _stockBajoCount)
+        setState(() => _stockBajoCount = count);
     } catch (_) {
       // Silencioso: si falla, simplemente no se muestra la insignia.
     }
@@ -2410,7 +2676,7 @@ class _MiAppState extends State<MiApp> {
     showGeneralDialog(
       context: navContext,
       barrierDismissible: true,
-      barrierLabel: 'Cerrar menú',
+      barrierLabel: 'Cerrar menÃº',
       barrierColor: Colors.black.withValues(alpha: 0.48),
       transitionDuration: const Duration(milliseconds: 260),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
@@ -2474,9 +2740,33 @@ class _MiAppState extends State<MiApp> {
 
   String _rutaActual() {
     const rutas = [
-      'pos','dashboard','configuracion','categorias','metodos_pago','vendedores','clientes','reportes','impresora','configurar_ticket','variantes','codigos_barras','backup','caja','perfil','inventario','tienda','tienda_admin','proveedores','promociones','compras','roles','estadisticas'
+      'pos',
+      'dashboard',
+      'configuracion',
+      'categorias',
+      'metodos_pago',
+      'vendedores',
+      'clientes',
+      'reportes',
+      'impresora',
+      'configurar_ticket',
+      'variantes',
+      'codigos_barras',
+      'backup',
+      'caja',
+      'perfil',
+      'inventario',
+      'tienda',
+      'tienda_admin',
+      'proveedores',
+      'promociones',
+      'compras',
+      'roles',
+      'estadisticas'
     ];
-    return (_currentIndex >= 0 && _currentIndex < rutas.length) ? rutas[_currentIndex] : '';
+    return (_currentIndex >= 0 && _currentIndex < rutas.length)
+        ? rutas[_currentIndex]
+        : '';
   }
 
   void _navegar(String ruta) {
@@ -2504,6 +2794,7 @@ class _MiAppState extends State<MiApp> {
       'compras': 20,
       'roles': 21,
       'estadisticas': 22,
+      'profesional': 23,
     };
     if (m.containsKey(ruta)) {
       setState(() => _currentIndex = m[ruta]!);
@@ -2603,8 +2894,10 @@ class _MiAppState extends State<MiApp> {
                 children: [
                   EscanerVentas(
                     onAbrirSidebar: _abrirSidebar,
-                    onNavigateToDashboard: () => setState(() => _currentIndex = 1),
-                    onNavigateToPerfil: () => setState(() => _currentIndex = 14),
+                    onNavigateToDashboard: () =>
+                        setState(() => _currentIndex = 1),
+                    onNavigateToPerfil: () =>
+                        setState(() => _currentIndex = 14),
                     modoOscuro: _modoOscuro,
                     onToggleModoOscuro: _toggleModoOscuro,
                     solicitudNuevoProducto: _solicitudNuevoProducto,
@@ -2613,37 +2906,59 @@ class _MiAppState extends State<MiApp> {
                     key: _dashboardKey,
                     onAbrirSidebar: _abrirSidebar,
                     onNavigateToPOS: () => setState(() => _currentIndex = 0),
-                    onNavigateToInventario: () => setState(() => _currentIndex = 15),
-                    onNavigateToClientes: () => setState(() => _currentIndex = 6),
+                    onNavigateToInventario: () =>
+                        setState(() => _currentIndex = 15),
+                    onNavigateToClientes: () =>
+                        setState(() => _currentIndex = 6),
                     onNavigateToCaja: () => setState(() => _currentIndex = 13),
                     modoOscuro: _modoOscuro,
                     onToggleModoOscuro: _toggleModoOscuro,
                   ),
-                  ConfiguracionScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
-                  CategoriasScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
-                  MetodosPagoScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
-                  VendedoresScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
-                  ClientesScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
-                  ReportesScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
-                  ImpresoraScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
-                  ConfigurarTicketScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
-                  ConfiguracionVariantesScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
-                  CodigosBarrasScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
-                  BackupScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
-                  CajaScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
-                  PerfilScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
-                  InventarioScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  ConfiguracionScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  CategoriasScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  MetodosPagoScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  VendedoresScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  ClientesScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  ReportesScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  ImpresoraScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  ConfigurarTicketScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  ConfiguracionVariantesScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  CodigosBarrasScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  BackupScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  CajaScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  PerfilScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  InventarioScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
                   UniversalFlyCartStore(onAbrirSidebar: _abrirSidebar),
                   TiendaAdminScreen(onAbrirSidebar: _abrirSidebar),
-                  ProveedoresScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
-                  PromocionesScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
-                  ComprasScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
-                  RolesScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
-                  EstadisticasScreen(onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  ProveedoresScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  PromocionesScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  ComprasScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  RolesScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  EstadisticasScreen(
+                      onAbrirSidebar: _abrirSidebar, modoOscuro: _modoOscuro),
+                  const SizedBox.shrink(),
                 ],
               );
 
-if (!sidebarVisible) return content;
+              if (!sidebarVisible) return content;
 
               return Row(
                 children: [
@@ -2685,7 +3000,7 @@ if (!sidebarVisible) return content;
       selectedSlot: selectedSlot,
       onSelect: select,
       onCreateProduct: () {
-        // El botón + es una ACCIÓN: abre Crear producto directamente.
+        // El botÃ³n + es una ACCIÃ“N: abre Crear producto directamente.
         setState(() {
           _currentIndex = 1;
           _solicitudNuevoProducto++;
@@ -2697,7 +3012,6 @@ if (!sidebarVisible) return content;
       },
     );
   }
-
 
   // ============================================
   // RAIL LATERAL PERSISTENTE (tablet / escritorio)
@@ -2713,18 +3027,43 @@ if (!sidebarVisible) return content;
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         child: Material(
-          color: selected ? active.withValues(alpha: dark ? .20 : .10) : Colors.transparent,
+          color: selected
+              ? active.withValues(alpha: dark ? .20 : .10)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
           child: InkWell(
             borderRadius: BorderRadius.circular(14),
-            onTap: () {
+            onTap: () async {
+              if (index == -1) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Sincronizando con la nube...'),
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+                final n = await SupabaseSyncService.syncFromCloud();
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(n > 0
+                        ? 'Sincronizado: $n registros'
+                        : 'Todo actualizado'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+                return;
+              }
               setState(() => _currentIndex = index);
-              if (index == 15 || index == 0 || index == 1) _actualizarStockBajo();
+              if (index == 15 || index == 0 || index == 1)
+                _actualizarStockBajo();
             },
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: expanded ? 14 : 0, vertical: 12),
+              padding: EdgeInsets.symmetric(
+                  horizontal: expanded ? 14 : 0, vertical: 12),
               child: Row(
-                mainAxisAlignment: expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
+                mainAxisAlignment: expanded
+                    ? MainAxisAlignment.start
+                    : MainAxisAlignment.center,
                 children: [
                   Stack(
                     clipBehavior: Clip.none,
@@ -2736,10 +3075,17 @@ if (!sidebarVisible) return content;
                           top: -4,
                           child: Container(
                             padding: const EdgeInsets.all(3),
-                            constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
-                            decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
-                            child: Text('$badge', textAlign: TextAlign.center,
-                                style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.w900)),
+                            constraints: const BoxConstraints(
+                                minWidth: 15, minHeight: 15),
+                            decoration: const BoxDecoration(
+                                color: Colors.redAccent,
+                                shape: BoxShape.circle),
+                            child: Text('$badge',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 8.5,
+                                    fontWeight: FontWeight.w900)),
                           ),
                         ),
                     ],
@@ -2748,8 +3094,12 @@ if (!sidebarVisible) return content;
                     const SizedBox(width: 14),
                     Expanded(
                       child: Text(label,
-                          style: TextStyle(color: selected ? active : muted, fontSize: 12.5,
-                              fontWeight: selected ? FontWeight.w800 : FontWeight.w600)),
+                          style: TextStyle(
+                              color: selected ? active : muted,
+                              fontSize: 12.5,
+                              fontWeight: selected
+                                  ? FontWeight.w800
+                                  : FontWeight.w600)),
                     ),
                   ],
                 ],
@@ -2765,26 +3115,34 @@ if (!sidebarVisible) return content;
         width: 224,
         color: bg,
         child: Column(
-          crossAxisAlignment: expanded ? CrossAxisAlignment.stretch : CrossAxisAlignment.center,
+          crossAxisAlignment:
+              expanded ? CrossAxisAlignment.stretch : CrossAxisAlignment.center,
           children: [
             const SizedBox(height: 18),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: expanded ? 18 : 0),
               child: Row(
-                mainAxisAlignment: expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
+                mainAxisAlignment: expanded
+                    ? MainAxisAlignment.start
+                    : MainAxisAlignment.center,
                 children: [
                   Container(
-                    width: 38, height: 38,
+                    width: 38,
+                    height: 38,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [AppColors.primary, AppColors.secondary]),
+                      gradient: const LinearGradient(
+                          colors: [AppColors.primary, AppColors.secondary]),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 20),
+                    child: const Icon(Icons.auto_awesome_rounded,
+                        color: Colors.white, size: 20),
                   ),
                   if (expanded) ...[
                     const SizedBox(width: 10),
                     const Expanded(
-                      child: Text('SINTHETIX', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                      child: Text('SINTHETIX',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w900, fontSize: 14)),
                     ),
                   ],
                 ],
@@ -2797,11 +3155,13 @@ if (!sidebarVisible) return content;
                   children: [
                     railItem('Venta', Icons.point_of_sale_rounded, 0),
                     railItem('Dashboard', Icons.grid_view_rounded, 1),
-                    railItem('Inventario', Icons.inventory_2_rounded, 15, badge: _stockBajoCount),
+                    railItem('Inventario', Icons.inventory_2_rounded, 15,
+                        badge: _stockBajoCount),
                     railItem('Clientes', Icons.groups_rounded, 6),
                     railItem('Caja', Icons.account_balance_wallet_outlined, 13),
                     railItem('Reportes', Icons.bar_chart_rounded, 7),
-                    railItem('Estadísticas', Icons.insights_rounded, 22),
+                    railItem('EstadÃ­sticas', Icons.insights_rounded, 22),
+                    railItem('Sincronizar', Icons.sync_rounded, -1),
                   ],
                 ),
               ),
@@ -2812,14 +3172,21 @@ if (!sidebarVisible) return content;
                 borderRadius: BorderRadius.circular(14),
                 onTap: _abrirSidebar,
                 child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: expanded ? 18 : 0, vertical: 8),
+                  padding: EdgeInsets.symmetric(
+                      horizontal: expanded ? 18 : 0, vertical: 8),
                   child: Row(
-                    mainAxisAlignment: expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
+                    mainAxisAlignment: expanded
+                        ? MainAxisAlignment.start
+                        : MainAxisAlignment.center,
                     children: [
                       Icon(Icons.menu_rounded, size: 22, color: muted),
                       if (expanded) ...[
                         const SizedBox(width: 14),
-                        Text('Más', style: TextStyle(color: muted, fontSize: 12.5, fontWeight: FontWeight.w700)),
+                        Text('MÃ¡s',
+                            style: TextStyle(
+                                color: muted,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700)),
                       ],
                     ],
                   ),
@@ -2831,23 +3198,26 @@ if (!sidebarVisible) return content;
       ),
     );
   }
-
 }
 
 // ============================================
-// MENÚ GLOBAL - PANEL FLOTANTE ELEVADO
+// MENÃš GLOBAL - PANEL FLOTANTE ELEVADO
 // ============================================
 
 class _AnimatedMobileNavBackground extends StatefulWidget {
   final Color color;
   final double bumpCenterX;
   final Widget child;
-  const _AnimatedMobileNavBackground({required this.color, required this.bumpCenterX, required this.child});
+  const _AnimatedMobileNavBackground(
+      {required this.color, required this.bumpCenterX, required this.child});
   @override
-  State<_AnimatedMobileNavBackground> createState() => _AnimatedMobileNavBackgroundState();
+  State<_AnimatedMobileNavBackground> createState() =>
+      _AnimatedMobileNavBackgroundState();
 }
 
-class _AnimatedMobileNavBackgroundState extends State<_AnimatedMobileNavBackground> with SingleTickerProviderStateMixin {
+class _AnimatedMobileNavBackgroundState
+    extends State<_AnimatedMobileNavBackground>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
   double _from = 0;
@@ -2856,7 +3226,8 @@ class _AnimatedMobileNavBackgroundState extends State<_AnimatedMobileNavBackgrou
   void initState() {
     super.initState();
     _from = widget.bumpCenterX;
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 420));
+    _controller = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 420));
     _animation = AlwaysStoppedAnimation(_from);
   }
 
@@ -2865,20 +3236,25 @@ class _AnimatedMobileNavBackgroundState extends State<_AnimatedMobileNavBackgrou
     super.didUpdateWidget(oldWidget);
     if ((oldWidget.bumpCenterX - widget.bumpCenterX).abs() > .5) {
       _from = _animation.value;
-      _animation = Tween<double>(begin: _from, end: widget.bumpCenterX).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+      _animation = Tween<double>(begin: _from, end: widget.bumpCenterX).animate(
+          CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
       _controller.forward(from: 0);
     }
   }
 
   @override
-  void dispose() { _controller.dispose(); super.dispose(); }
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, _) => CustomPaint(
-        painter: _MobileNavBackgroundPainter(color: widget.color, bumpCenterX: _animation.value),
+        painter: _MobileNavBackgroundPainter(
+            color: widget.color, bumpCenterX: _animation.value),
         child: widget.child,
       ),
     );
@@ -2888,7 +3264,8 @@ class _AnimatedMobileNavBackgroundState extends State<_AnimatedMobileNavBackgrou
 class _MobileNavBackgroundPainter extends CustomPainter {
   final Color color;
   final double bumpCenterX;
-  const _MobileNavBackgroundPainter({required this.color, required this.bumpCenterX});
+  const _MobileNavBackgroundPainter(
+      {required this.color, required this.bumpCenterX});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -2901,7 +3278,8 @@ class _MobileNavBackgroundPainter extends CustomPainter {
     path.lineTo(size.width - r, 12);
     path.quadraticBezierTo(size.width, 12, size.width, 12 + r);
     path.lineTo(size.width, size.height - r);
-    path.quadraticBezierTo(size.width, size.height, size.width - r, size.height);
+    path.quadraticBezierTo(
+        size.width, size.height, size.width - r, size.height);
     path.lineTo(r, size.height);
     path.quadraticBezierTo(0, size.height, 0, size.height - r);
     path.lineTo(0, 12 + r);
@@ -2911,13 +3289,18 @@ class _MobileNavBackgroundPainter extends CustomPainter {
     final shadow = Paint()..color = Colors.black.withValues(alpha: .24);
     canvas.drawShadow(path, Colors.black.withValues(alpha: .30), 18, false);
     canvas.drawPath(path, Paint()..color = color);
-    canvas.drawPath(path, Paint()..style = PaintingStyle.stroke..strokeWidth = 1..color = Colors.white.withValues(alpha: .07));
+    canvas.drawPath(
+        path,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..color = Colors.white.withValues(alpha: .07));
   }
 
   @override
-  bool shouldRepaint(covariant _MobileNavBackgroundPainter oldDelegate) => oldDelegate.color != color || oldDelegate.bumpCenterX != bumpCenterX;
+  bool shouldRepaint(covariant _MobileNavBackgroundPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.bumpCenterX != bumpCenterX;
 }
-
 
 class _ProMobileNav extends StatefulWidget {
   final int selectedSlot;
@@ -2995,10 +3378,8 @@ class _ProMobileNavState extends State<_ProMobileNav>
           child: LayoutBuilder(
             builder: (context, constraints) {
               final slotWidth = constraints.maxWidth / 5;
-              final targetX = slotWidth * widget.selectedSlot +
-                  slotWidth / 2;
-              final previousX =
-                  slotWidth * _previousSlot + slotWidth / 2;
+              final targetX = slotWidth * widget.selectedSlot + slotWidth / 2;
+              final previousX = slotWidth * _previousSlot + slotWidth / 2;
 
               return AnimatedBuilder(
                 animation: CurvedAnimation(
@@ -3007,8 +3388,7 @@ class _ProMobileNavState extends State<_ProMobileNav>
                 ),
                 builder: (context, child) {
                   final t = _controller.value;
-                  final selectedX =
-                      previousX + (targetX - previousX) * t;
+                  final selectedX = previousX + (targetX - previousX) * t;
                   final settledX =
                       _controller.isAnimating ? selectedX : targetX;
 
@@ -3103,8 +3483,8 @@ class _ProMobileNavState extends State<_ProMobileNav>
                                       Icon(
                                         icons[slot],
                                         size: 21,
-                                        color: Colors.white
-                                            .withValues(alpha: .72),
+                                        color:
+                                            Colors.white.withValues(alpha: .72),
                                       )
                                     else
                                       const SizedBox(height: 21),
@@ -3148,8 +3528,7 @@ class _ProMobileNavState extends State<_ProMobileNav>
                             tween: Tween(begin: .82, end: 1),
                             duration: const Duration(milliseconds: 430),
                             curve: Curves.elasticOut,
-                            builder: (context, scale, child) =>
-                                Transform.scale(
+                            builder: (context, scale, child) => Transform.scale(
                               scale: scale,
                               child: child,
                             ),
@@ -3235,7 +3614,8 @@ class _SidebarMenuState extends State<SidebarMenu> {
     final panel = dark ? const Color(0xFF151827) : Colors.white;
     final text = dark ? Colors.white : const Color(0xFF20212A);
     final muted = dark ? const Color(0xFF9EA3B4) : const Color(0xFF747887);
-    final border = dark ? Colors.white.withValues(alpha: .07) : const Color(0xFFE9E7F0);
+    final border =
+        dark ? Colors.white.withValues(alpha: .07) : const Color(0xFFE9E7F0);
     const violet = AppColors.primary;
     const violet2 = AppColors.secondary;
 
@@ -3255,10 +3635,10 @@ class _SidebarMenuState extends State<SidebarMenu> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: const [
-                      Color(0xFF24104F),
-                      Color(0xFF32156E),
-                      Color(0xFF1749A6),
-                    ],
+                    Color(0xFF24104F),
+                    Color(0xFF32156E),
+                    Color(0xFF1749A6),
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -3286,26 +3666,41 @@ class _SidebarMenuState extends State<SidebarMenu> {
                             ),
                           ],
                         ),
-                        child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 25),
+                        child: const Icon(Icons.auto_awesome_rounded,
+                            color: Colors.white, size: 25),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('SINTHETIX PRO', style: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w900, letterSpacing: -.3)),
+                            Text('SINTHETIX PRO',
+                                style: TextStyle(
+                                    color: text,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -.3)),
                             const SizedBox(height: 2),
-                            Text('Punto de Venta Offline', style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w600)),
+                            Text('Punto de Venta Offline',
+                                style: TextStyle(
+                                    color: muted,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600)),
                           ],
                         ),
                       ),
                       Material(
-                        color: dark ? Colors.white.withValues(alpha: .07) : Colors.white.withValues(alpha: .8),
+                        color: dark
+                            ? Colors.white.withValues(alpha: .07)
+                            : Colors.white.withValues(alpha: .8),
                         borderRadius: BorderRadius.circular(13),
                         child: InkWell(
                           onTap: () => Navigator.of(context).pop(),
                           borderRadius: BorderRadius.circular(13),
-                          child: const SizedBox(width: 42, height: 42, child: Icon(Icons.close_rounded, size: 20)),
+                          child: const SizedBox(
+                              width: 42,
+                              height: 42,
+                              child: Icon(Icons.close_rounded, size: 20)),
                         ),
                       ),
                     ],
@@ -3314,7 +3709,9 @@ class _SidebarMenuState extends State<SidebarMenu> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: dark ? Colors.black.withValues(alpha: .16) : Colors.white.withValues(alpha: .76),
+                      color: dark
+                          ? Colors.black.withValues(alpha: .16)
+                          : Colors.white.withValues(alpha: .76),
                       borderRadius: BorderRadius.circular(17),
                       border: Border.all(color: border),
                     ),
@@ -3323,17 +3720,27 @@ class _SidebarMenuState extends State<SidebarMenu> {
                         Container(
                           width: 40,
                           height: 40,
-                          decoration: BoxDecoration(color: dark ? Colors.white.withValues(alpha: .08) : const Color(0xFFEDE8FA), shape: BoxShape.circle),
-                          child: Icon(Icons.person_rounded, color: dark ? Colors.white : violet, size: 21),
+                          decoration: BoxDecoration(
+                              color: dark
+                                  ? Colors.white.withValues(alpha: .08)
+                                  : const Color(0xFFEDE8FA),
+                              shape: BoxShape.circle),
+                          child: Icon(Icons.person_rounded,
+                              color: dark ? Colors.white : violet, size: 21),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Administrador', style: TextStyle(color: text, fontWeight: FontWeight.w800, fontSize: 12)),
+                              Text('Administrador',
+                                  style: TextStyle(
+                                      color: text,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12)),
                               const SizedBox(height: 2),
-                              Text('Sesión activa · Local', style: TextStyle(color: muted, fontSize: 9)),
+                              Text('SesiÃ³n activa Â· Local',
+                                  style: TextStyle(color: muted, fontSize: 9)),
                             ],
                           ),
                         ),
@@ -3351,52 +3758,264 @@ class _SidebarMenuState extends State<SidebarMenu> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _sectionLabel('PRINCIPAL', muted),
-                    _menuItem('pos', Icons.point_of_sale_rounded, 'Punto de venta', 'Vender y cobrar', text, muted, border, violet, dark),
-                    _menuItem('dashboard', Icons.grid_view_rounded, 'Dashboard', 'Resumen del negocio', text, muted, border, violet, dark),
+                    _menuItem(
+                        'pos',
+                        Icons.point_of_sale_rounded,
+                        'Punto de venta',
+                        'Vender y cobrar',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
+                    _menuItem(
+                        'dashboard',
+                        Icons.grid_view_rounded,
+                        'Dashboard',
+                        'Resumen del negocio',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
                     const SizedBox(height: 12),
-                    _sectionLabel('OPERACIÓN', muted),
-                    _menuItem('inventario', Icons.inventory_2_outlined, 'Inventario', 'Productos y existencias', text, muted, border, violet, dark),
-                    _menuItem('categorias', Icons.sell_outlined, 'Categorías', 'Organiza tu catálogo', text, muted, border, violet, dark),
-                    _menuItem('clientes', Icons.groups_rounded, 'Clientes', 'Agenda y compradores', text, muted, border, violet, dark),
-                    _menuItem('proveedores', Icons.local_shipping_outlined, 'Proveedores', 'Compras y abastecimiento', text, muted, border, violet, dark),
-                    _menuItem('compras', Icons.shopping_cart_checkout_rounded, 'Compras', 'Entradas de mercancía', text, muted, border, violet, dark),
-                    _menuItem('promociones', Icons.local_offer_rounded, 'Promociones', 'Descuentos y ofertas', text, muted, border, violet, dark),
+                    _sectionLabel('OPERACIÃ“N', muted),
+                    _menuItem(
+                        'inventario',
+                        Icons.inventory_2_outlined,
+                        'Inventario',
+                        'Productos y existencias',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
+                    _menuItem(
+                        'categorias',
+                        Icons.sell_outlined,
+                        'CategorÃ­as',
+                        'Organiza tu catÃ¡logo',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
+                    _menuItem(
+                        'clientes',
+                        Icons.groups_rounded,
+                        'Clientes',
+                        'Agenda y compradores',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
+                    _menuItem(
+                        'proveedores',
+                        Icons.local_shipping_outlined,
+                        'Proveedores',
+                        'Compras y abastecimiento',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
+                    _menuItem(
+                        'compras',
+                        Icons.shopping_cart_checkout_rounded,
+                        'Compras',
+                        'Entradas de mercancÃ­a',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
+                    _menuItem(
+                        'promociones',
+                        Icons.local_offer_rounded,
+                        'Promociones',
+                        'Descuentos y ofertas',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
                     const SizedBox(height: 12),
                     _sectionLabel('CONTROL', muted),
-                    _menuItem('caja', Icons.account_balance_wallet_outlined, 'Caja', 'Movimientos y cierre', text, muted, border, violet, dark),
-                    _menuItem('reportes', Icons.bar_chart_rounded, 'Reportes', 'Ventas y rendimiento', text, muted, border, violet, dark),
-                    _menuItem('estadisticas', Icons.insights_rounded, 'Estadísticas', 'Indicadores del negocio', text, muted, border, violet, dark),
+                    _menuItem(
+                        'caja',
+                        Icons.account_balance_wallet_outlined,
+                        'Caja',
+                        'Movimientos y cierre',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
+                    _menuItem(
+                        'reportes',
+                        Icons.bar_chart_rounded,
+                        'Reportes',
+                        'Ventas y rendimiento',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
+                    _menuItem(
+                        'estadisticas',
+                        Icons.insights_rounded,
+                        'EstadÃ­sticas',
+                        'Indicadores del negocio',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
                     const SizedBox(height: 12),
                     const SizedBox(height: 12),
                     _sectionLabel('TIENDA ONLINE', muted),
-                    _menuItem('tienda', Icons.storefront_rounded, 'Tienda virtual', 'Vista de la tienda para clientes', text, muted, border, violet, dark),
-                    _menuItem('tienda_admin', Icons.dashboard_customize_rounded, 'Administrar tienda', 'Banners, destacados y portada', text, muted, border, violet, dark),
-                    _sectionLabel('CONFIGURACIÓN POS', muted),
-                    _menuItem('impresora', Icons.print_outlined, 'Impresora', 'Prueba y conexión de impresión', text, muted, border, violet, dark),
-                    _menuItem('configurar_ticket', Icons.receipt_long_outlined, 'Configurar ticket', 'Empresa, impuestos y diseño', text, muted, border, violet, dark),
-                    _menuItem('codigos_barras', Icons.qr_code_2_rounded, 'Códigos de barras', 'Escanear, generar e imprimir etiquetas', text, muted, border, violet, dark),
-                    _menuItem('variantes', Icons.tune_rounded, 'Variantes', 'Tallas, colores y opciones', text, muted, border, violet, dark),
-                    _menuItem('metodos_pago', Icons.credit_card_rounded, 'Métodos de pago', 'Efectivo, tarjeta y transferencias', text, muted, border, violet, dark),
+                    _menuItem(
+                        'tienda',
+                        Icons.storefront_rounded,
+                        'Tienda virtual',
+                        'Vista de la tienda para clientes',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
+                    _menuItem(
+                        'tienda_admin',
+                        Icons.dashboard_customize_rounded,
+                        'Administrar tienda',
+                        'Banners, destacados y portada',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
+                    _sectionLabel('CONFIGURACIÃ“N POS', muted),
+                    _menuItem(
+                        'impresora',
+                        Icons.print_outlined,
+                        'Impresora',
+                        'Prueba y conexiÃ³n de impresiÃ³n',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
+                    _menuItem(
+                        'configurar_ticket',
+                        Icons.receipt_long_outlined,
+                        'Configurar ticket',
+                        'Empresa, impuestos y diseÃ±o',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
+                    _menuItem(
+                        'codigos_barras',
+                        Icons.qr_code_2_rounded,
+                        'CÃ³digos de barras',
+                        'Escanear, generar e imprimir etiquetas',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
+                    _menuItem(
+                        'variantes',
+                        Icons.tune_rounded,
+                        'Variantes',
+                        'Tallas, colores y opciones',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
+                    _menuItem(
+                        'metodos_pago',
+                        Icons.credit_card_rounded,
+                        'MÃ©todos de pago',
+                        'Efectivo, tarjeta y transferencias',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
                     const SizedBox(height: 12),
                     _sectionLabel('SISTEMA', muted),
-                    _menuItem('configuracion', Icons.settings_outlined, 'Configuración', 'Preferencias del sistema', text, muted, border, violet, dark),
-                    _menuItem('perfil', Icons.manage_accounts_outlined, 'Perfil', 'Cuenta y datos', text, muted, border, violet, dark),
-                    _menuItem('backup', Icons.cloud_sync_outlined, 'Copias de seguridad', 'Respaldo local', text, muted, border, violet, dark),
-                    _menuItem('roles', Icons.admin_panel_settings_outlined, 'Roles y permisos', 'Accesos por usuario', text, muted, border, violet, dark),
+                    _menuItem(
+                        'configuracion',
+                        Icons.settings_outlined,
+                        'ConfiguraciÃ³n',
+                        'Preferencias del sistema',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
+                    _menuItem(
+                        'perfil',
+                        Icons.manage_accounts_outlined,
+                        'Perfil',
+                        'Cuenta y datos',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
+                    _menuItem(
+                        'backup',
+                        Icons.cloud_sync_outlined,
+                        'Copias de seguridad',
+                        'Respaldo local',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
+                    _menuItem(
+                        'roles',
+                        Icons.admin_panel_settings_outlined,
+                        'Roles y permisos',
+                        'Accesos por usuario',
+                        text,
+                        muted,
+                        border,
+                        violet,
+                        dark),
                     const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.all(13),
                       decoration: BoxDecoration(
-                        color: dark ? Colors.white.withValues(alpha: .045) : const Color(0xFFF7F5FB),
+                        color: dark
+                            ? Colors.white.withValues(alpha: .045)
+                            : const Color(0xFFF7F5FB),
                         borderRadius: BorderRadius.circular(17),
                         border: Border.all(color: border),
                       ),
                       child: Row(
                         children: [
-                          Icon(dark ? Icons.dark_mode_rounded : Icons.light_mode_rounded, color: violet, size: 19),
+                          Icon(
+                              dark
+                                  ? Icons.dark_mode_rounded
+                                  : Icons.light_mode_rounded,
+                              color: violet,
+                              size: 19),
                           const SizedBox(width: 10),
-                          Expanded(child: Text(dark ? 'Modo oscuro' : 'Modo claro', style: TextStyle(color: text, fontSize: 12, fontWeight: FontWeight.w700))),
-                          Switch.adaptive(value: dark, onChanged: (_) => widget.onToggleModoOscuro()),
+                          Expanded(
+                              child: Text(dark ? 'Modo oscuro' : 'Modo claro',
+                                  style: TextStyle(
+                                      color: text,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700))),
+                          Switch.adaptive(
+                              value: dark,
+                              onChanged: (_) => widget.onToggleModoOscuro()),
                         ],
                       ),
                     ),
@@ -3406,13 +4025,23 @@ class _SidebarMenuState extends State<SidebarMenu> {
             ),
             Container(
               padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
-              decoration: BoxDecoration(border: Border(top: BorderSide(color: border))),
+              decoration:
+                  BoxDecoration(border: Border(top: BorderSide(color: border))),
               child: Row(
                 children: [
                   Icon(Icons.offline_bolt_rounded, color: violet, size: 17),
                   const SizedBox(width: 8),
-                  Expanded(child: Text('Offline + nube · SINTHETIX PRO', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w600))),
-                  Text('7.0', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w800)),
+                  Expanded(
+                      child: Text('Offline + nube Â· SINTHETIX PRO',
+                          style: TextStyle(
+                              color: muted,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600))),
+                  Text('7.0',
+                      style: TextStyle(
+                          color: muted,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800)),
                 ],
               ),
             ),
@@ -3423,11 +4052,17 @@ class _SidebarMenuState extends State<SidebarMenu> {
   }
 
   Widget _sectionLabel(String text, Color color) => Padding(
-    padding: const EdgeInsets.fromLTRB(10, 0, 10, 7),
-    child: Text(text, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.4)),
-  );
+        padding: const EdgeInsets.fromLTRB(10, 0, 10, 7),
+        child: Text(text,
+            style: TextStyle(
+                color: color,
+                fontSize: 9,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.4)),
+      );
 
-  Widget _menuItem(String route, IconData icon, String title, String subtitle, Color text, Color muted, Color border, Color accent, bool dark) {
+  Widget _menuItem(String route, IconData icon, String title, String subtitle,
+      Color text, Color muted, Color border, Color accent, bool dark) {
     final selected = widget.currentRoute == route;
     final hover = _hovered == route;
     return Padding(
@@ -3440,11 +4075,22 @@ class _SidebarMenuState extends State<SidebarMenu> {
           curve: Curves.easeOut,
           decoration: BoxDecoration(
             gradient: selected
-                ? const LinearGradient(colors: const [Color(0xFF6D28D9), Color(0xFF2563EB)], begin: Alignment.centerLeft, end: Alignment.centerRight)
+                ? const LinearGradient(
+                    colors: const [Color(0xFF6D28D9), Color(0xFF2563EB)],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight)
                 : null,
-            color: selected ? null : (hover ? (dark ? Colors.white.withValues(alpha: .055) : const Color(0xFFF6F3FB)) : Colors.transparent),
+            color: selected
+                ? null
+                : (hover
+                    ? (dark
+                        ? Colors.white.withValues(alpha: .055)
+                        : const Color(0xFFF6F3FB))
+                    : Colors.transparent),
             borderRadius: BorderRadius.circular(15),
-            border: selected ? Border.all(color: Colors.white.withValues(alpha: .12)) : Border.all(color: Colors.transparent),
+            border: selected
+                ? Border.all(color: Colors.white.withValues(alpha: .12))
+                : Border.all(color: Colors.transparent),
           ),
           child: InkWell(
             onTap: () => widget.onNavigate(route),
@@ -3453,10 +4099,42 @@ class _SidebarMenuState extends State<SidebarMenu> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Row(
                 children: [
-                  Container(width: 36, height: 36, decoration: BoxDecoration(color: selected ? Colors.white.withValues(alpha: .14) : (dark ? Colors.white.withValues(alpha: .045) : const Color(0xFFF3F1F7)), borderRadius: BorderRadius.circular(11)), child: Icon(icon, color: selected ? Colors.white : text, size: 18)),
+                  Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                          color: selected
+                              ? Colors.white.withValues(alpha: .14)
+                              : (dark
+                                  ? Colors.white.withValues(alpha: .045)
+                                  : const Color(0xFFF3F1F7)),
+                          borderRadius: BorderRadius.circular(11)),
+                      child: Icon(icon,
+                          color: selected ? Colors.white : text, size: 18)),
                   const SizedBox(width: 11),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: TextStyle(color: selected ? Colors.white : text, fontSize: 12, fontWeight: FontWeight.w800)), const SizedBox(height: 2), Text(subtitle, style: TextStyle(color: selected ? Colors.white.withValues(alpha: .72) : muted, fontSize: 8.5, fontWeight: FontWeight.w500))])),
-                  Icon(Icons.chevron_right_rounded, color: selected ? Colors.white.withValues(alpha: .8) : muted.withValues(alpha: .55), size: 17),
+                  Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Text(title,
+                            style: TextStyle(
+                                color: selected ? Colors.white : text,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 2),
+                        Text(subtitle,
+                            style: TextStyle(
+                                color: selected
+                                    ? Colors.white.withValues(alpha: .72)
+                                    : muted,
+                                fontSize: 8.5,
+                                fontWeight: FontWeight.w500))
+                      ])),
+                  Icon(Icons.chevron_right_rounded,
+                      color: selected
+                          ? Colors.white.withValues(alpha: .8)
+                          : muted.withValues(alpha: .55),
+                      size: 17),
                 ],
               ),
             ),
@@ -3466,7 +4144,6 @@ class _SidebarMenuState extends State<SidebarMenu> {
     );
   }
 }
-
 
 class EscanerVentas extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -3500,7 +4177,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
   final SoundService _soundService = SoundService();
   Uint8List? _logoNegocio;
   List<Map<String, dynamic>> carrito = [];
-  final ValueNotifier<int> _carritoVersion=ValueNotifier<int>(0);
+  final ValueNotifier<int> _carritoVersion = ValueNotifier<int>(0);
   List<Map<String, dynamic>> listaProductos = [];
   List<Map<String, dynamic>> busqueda = [];
   List<Map<String, dynamic>> _tallas = [];
@@ -3524,7 +4201,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
   bool get _isDesktop => MediaQuery.of(context).size.width >= 1024;
 
   void _vibrar() => HapticFeedback.heavyImpact();
-  void _notificarCambioCarrito()=>_carritoVersion.value++;
+  void _notificarCambioCarrito() => _carritoVersion.value++;
 
   void _sonidoExito() {
     _soundService.playBeep();
@@ -3556,7 +4233,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
   }
 
   void _agregar(Map<String, dynamic> prod) {
-    final grupos = OpcionesProducto.decodificar(prod['opciones_json']?.toString());
+    final grupos =
+        OpcionesProducto.decodificar(prod['opciones_json']?.toString());
     if (prod['tiene_variantes'] == 1 ||
         prod['tiene_variantes'] == true ||
         (prod['talla'] != null && prod['talla'].toString().isNotEmpty) ||
@@ -3596,16 +4274,19 @@ class _EscanerVentasState extends State<EscanerVentas> {
     _sonidoExito();
   }
 
-  void _agregarConVariante(Map<String, dynamic> prod, [List<GrupoOpciones>? gruposOpciones]) {
+  void _agregarConVariante(Map<String, dynamic> prod,
+      [List<GrupoOpciones>? gruposOpciones]) {
     final grupos = gruposOpciones ?? const <GrupoOpciones>[];
     String tallaSeleccionada = '';
     String colorSeleccionado = '';
     final cantidadCtrl = TextEditingController(text: '1');
     // grupo.nombre -> nombres de valores seleccionados
-    final Map<String, Set<String>> seleccion = {for (final g in grupos) g.nombre: <String>{}};
+    final Map<String, Set<String>> seleccion = {
+      for (final g in grupos) g.nombre: <String>{}
+    };
 
-    bool faltanObligatorios() =>
-        grupos.any((g) => g.obligatorio && (seleccion[g.nombre]?.isEmpty ?? true));
+    bool faltanObligatorios() => grupos
+        .any((g) => g.obligatorio && (seleccion[g.nombre]?.isEmpty ?? true));
 
     double extraPorUnidad() {
       double extra = 0;
@@ -3624,7 +4305,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
         final sel = seleccion[g.nombre] ?? {};
         if (sel.isNotEmpty) partes.add('${g.nombre}: ${sel.join(', ')}');
       }
-      return partes.join(' · ');
+      return partes.join(' Â· ');
     }
 
     showDialog(
@@ -3688,12 +4369,17 @@ class _EscanerVentasState extends State<EscanerVentas> {
                             fontWeight: FontWeight.w700)),
                     if (g.obligatorio) ...[
                       const SizedBox(width: 6),
-                      Text('· obligatorio',
-                          style: TextStyle(color: AppColors.danger, fontSize: 9.5, fontWeight: FontWeight.w700)),
+                      Text('Â· obligatorio',
+                          style: TextStyle(
+                              color: AppColors.danger,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700)),
                     ] else ...[
                       const SizedBox(width: 6),
-                      Text('· opcional',
-                          style: TextStyle(color: AppColors.subtext(widget.modoOscuro), fontSize: 9.5)),
+                      Text('Â· opcional',
+                          style: TextStyle(
+                              color: AppColors.subtext(widget.modoOscuro),
+                              fontSize: 9.5)),
                     ],
                   ]),
                   const SizedBox(height: 8),
@@ -3701,7 +4387,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
                     spacing: 8,
                     runSpacing: 8,
                     children: g.valores.map((v) {
-                      final activo = seleccion[g.nombre]?.contains(v.nombre) ?? false;
+                      final activo =
+                          seleccion[g.nombre]?.contains(v.nombre) ?? false;
                       final etiqueta = v.precioExtra > 0
                           ? '${v.nombre} (+${_precio(v.precioExtra)})'
                           : v.nombre;
@@ -3710,13 +4397,17 @@ class _EscanerVentasState extends State<EscanerVentas> {
                             style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
-                                color: activo ? Colors.white : AppColors.text(widget.modoOscuro))),
+                                color: activo
+                                    ? Colors.white
+                                    : AppColors.text(widget.modoOscuro))),
                         selected: activo,
                         selectedColor: AppColors.primary,
-                        backgroundColor: AppColors.background(widget.modoOscuro),
+                        backgroundColor:
+                            AppColors.background(widget.modoOscuro),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(color: AppColors.divider(widget.modoOscuro))),
+                            side: BorderSide(
+                                color: AppColors.divider(widget.modoOscuro))),
                         onSelected: (_) {
                           setDialogState(() {
                             final sel = seleccion[g.nombre] ?? <String>{};
@@ -3762,35 +4453,36 @@ class _EscanerVentasState extends State<EscanerVentas> {
               onPressed: faltanObligatorios()
                   ? null
                   : () {
-                final cantidad = int.tryParse(cantidadCtrl.text) ?? 1;
-                if (cantidad <= 0) return;
-                final descOpciones = descripcionOpciones();
-                final variante =
-                    '${tallaSeleccionada.isNotEmpty ? 'Talla: $tallaSeleccionada' : ''}${colorSeleccionado.isNotEmpty ? ' Color: $colorSeleccionado' : ''}${descOpciones.isNotEmpty ? (tallaSeleccionada.isNotEmpty || colorSeleccionado.isNotEmpty ? ' · ' : '') + descOpciones : ''}'
-                        .trim();
-                final precioFinal = (prod['precio'] as num).toDouble() + extraPorUnidad();
+                      final cantidad = int.tryParse(cantidadCtrl.text) ?? 1;
+                      if (cantidad <= 0) return;
+                      final descOpciones = descripcionOpciones();
+                      final variante =
+                          '${tallaSeleccionada.isNotEmpty ? 'Talla: $tallaSeleccionada' : ''}${colorSeleccionado.isNotEmpty ? ' Color: $colorSeleccionado' : ''}${descOpciones.isNotEmpty ? (tallaSeleccionada.isNotEmpty || colorSeleccionado.isNotEmpty ? ' Â· ' : '') + descOpciones : ''}'
+                              .trim();
+                      final precioFinal =
+                          (prod['precio'] as num).toDouble() + extraPorUnidad();
 
-                setState(() {
-                  carrito.add({
-                    'id': prod['id'] ??
-                        DateTime.now().millisecondsSinceEpoch.toString(),
-                    'codigo_barras': prod['codigo_barras'],
-                    'nombre':
-                        '${prod['nombre']}${variante.isNotEmpty ? ' ($variante)' : ''}',
-                    'precio': precioFinal,
-                    'costo': (prod['costo'] as num? ?? 0).toDouble(),
-                    'imagen_base64': prod['imagen_base64'] ?? '',
-                    'cantidad': cantidad,
-                    'tipo': 'variante',
-                    'unidad_medida': 'pieza',
-                    'variante': variante,
-                    'peso': 0.0,
-                  });
-                });
-                _notificarCambioCarrito();
-                Navigator.pop(ctx);
-                _sonidoExito();
-              },
+                      setState(() {
+                        carrito.add({
+                          'id': prod['id'] ??
+                              DateTime.now().millisecondsSinceEpoch.toString(),
+                          'codigo_barras': prod['codigo_barras'],
+                          'nombre':
+                              '${prod['nombre']}${variante.isNotEmpty ? ' ($variante)' : ''}',
+                          'precio': precioFinal,
+                          'costo': (prod['costo'] as num? ?? 0).toDouble(),
+                          'imagen_base64': prod['imagen_base64'] ?? '',
+                          'cantidad': cantidad,
+                          'tipo': 'variante',
+                          'unidad_medida': 'pieza',
+                          'variante': variante,
+                          'peso': 0.0,
+                        });
+                      });
+                      _notificarCambioCarrito();
+                      Navigator.pop(ctx);
+                      _sonidoExito();
+                    },
               icon: const Icon(Icons.add_shopping_cart,
                   color: Colors.white, size: 18),
               label: const Text('Agregar',
@@ -3798,7 +4490,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
                       color: Colors.white, fontWeight: FontWeight.w600)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
-                disabledBackgroundColor: AppColors.primary.withValues(alpha: .35),
+                disabledBackgroundColor:
+                    AppColors.primary.withValues(alpha: .35),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
               ),
@@ -3985,12 +4678,13 @@ class _EscanerVentasState extends State<EscanerVentas> {
         _tallas = tallasActualizadas;
         _colores = coloresActualizados;
 
-        // Mantener búsqueda/filtros y reconstruir resultados con los datos nuevos.
+        // Mantener bÃºsqueda/filtros y reconstruir resultados con los datos nuevos.
         final q = _buscador.text.trim().toLowerCase();
         if (q.isNotEmpty) {
           busqueda = listaProductos.where((prod) {
             final nombre = (prod['nombre'] ?? '').toString().toLowerCase();
-            final codigo = (prod['codigo_barras'] ?? '').toString().toLowerCase();
+            final codigo =
+                (prod['codigo_barras'] ?? '').toString().toLowerCase();
             return nombre.contains(q) || codigo.contains(q);
           }).toList();
           _mostrarBusqueda = busqueda.isNotEmpty;
@@ -4083,7 +4777,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
 
   void _cobrar() {
     if (carrito.isEmpty) {
-      _snack('Carrito vacío', AppColors.warning);
+      _snack('Carrito vacÃ­o', AppColors.warning);
       return;
     }
     showModalBottomSheet(
@@ -4129,7 +4823,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
         'ganancia_total': gananciaTotal,
         'metodo_pago': metodo,
         'moneda': 'USD',
-        'cliente_nombre': nombre.isNotEmpty ? nombre : 'Público General',
+        'cliente_nombre': nombre.isNotEmpty ? nombre : 'PÃºblico General',
         'cliente_telefono': telefono,
         'cliente_cedula': cedula,
         'estado': 'Pagada',
@@ -4154,7 +4848,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
             'descuento_aplicado': 0,
           });
           if (!detalleGuardado) {
-            throw Exception('No se pudo guardar el detalle de la venta ${fac}.');
+            throw Exception(
+                'No se pudo guardar el detalle de la venta ${fac}.');
           }
 
           if (i['id'] != null) {
@@ -4212,7 +4907,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
         try {
           pdfPath = await _ticketService.generarPDFTicket(
             numeroFactura: fac,
-            clienteNombre: nombre.isNotEmpty ? nombre : 'Público General',
+            clienteNombre: nombre.isNotEmpty ? nombre : 'PÃºblico General',
             clienteTelefono: telefono,
             metodoPago: metodo,
             total: totalVenta,
@@ -4266,10 +4961,17 @@ class _EscanerVentasState extends State<EscanerVentas> {
         ),
       ),
       transitionBuilder: (ctx, animation, secondary, child) {
-        final scale = CurvedAnimation(parent: animation, curve: Curves.easeOutBack);
-        final slide = Tween<Offset>(begin: const Offset(0, .12), end: Offset.zero)
-            .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
-        return FadeTransition(opacity: animation, child: SlideTransition(position: slide, child: ScaleTransition(scale: scale, child: child)));
+        final scale =
+            CurvedAnimation(parent: animation, curve: Curves.easeOutBack);
+        final slide = Tween<Offset>(
+                begin: const Offset(0, .12), end: Offset.zero)
+            .animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+        return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+                position: slide,
+                child: ScaleTransition(scale: scale, child: child)));
       },
     );
   }
@@ -4369,20 +5071,20 @@ class _EscanerVentasState extends State<EscanerVentas> {
   void _enviarWhatsAppCliente(
       String nombre, String telefono, String factura, double totalVenta) {
     if (telefono.isEmpty) {
-      _snack('El cliente no tiene número de teléfono', AppColors.warning);
+      _snack('El cliente no tiene nÃºmero de telÃ©fono', AppColors.warning);
       return;
     }
     String phone = telefono.replaceAll(RegExp(r'[^0-9]'), '');
     if (phone.startsWith('0')) {
       phone = '58${phone.substring(1)}';
     }
-    String message = "🛍️ *SINTHETIX - COMPROBANTE DE VENTA*\n\n";
-    message += "📄 Factura: $factura\n";
-    message += "👤 Cliente: $nombre\n";
-    message += "💰 Total: \$${totalVenta.toStringAsFixed(2)}\n";
+    String message = "ðŸ›ï¸ *SINTHETIX - COMPROBANTE DE VENTA*\n\n";
+    message += "ðŸ“„ Factura: $factura\n";
+    message += "ðŸ‘¤ Cliente: $nombre\n";
+    message += "ðŸ’° Total: \$${totalVenta.toStringAsFixed(2)}\n";
     message +=
-        "📅 Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}\n\n";
-    message += "¡Gracias por su compra! 🎉";
+        "ðŸ“… Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}\n\n";
+    message += "Â¡Gracias por su compra! ðŸŽ‰";
 
     final whatsappUrl =
         "https://wa.me/$phone?text=${Uri.encodeComponent(message)}";
@@ -4413,7 +5115,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
 
     HapticFeedback.heavyImpact();
     await _procesarCodigo(codigo);
-    
+
     if (mounted) {
       setState(() => _procesandoCodigo = false);
     }
@@ -4434,7 +5136,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
     if (prod != null) {
       _agregar(prod);
       _snack('${prod['nombre']} agregado', AppColors.success);
-            _sonidoExito();
+      _sonidoExito();
     } else {
       _snack('Producto no encontrado: $codigo', AppColors.danger);
       HapticFeedback.vibrate();
@@ -4478,7 +5180,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
           child: InkWell(
             onTap: widget.onAbrirSidebar,
             borderRadius: BorderRadius.circular(16),
-            child: const Icon(Icons.menu_rounded, color: AppColors.primary, size: 23),
+            child: const Icon(Icons.menu_rounded,
+                color: AppColors.primary, size: 23),
           ),
         ),
       ),
@@ -4495,24 +5198,44 @@ class _EscanerVentasState extends State<EscanerVentas> {
               ),
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
-                BoxShadow(color: AppColors.primary.withValues(alpha: .18), blurRadius: 14, offset: const Offset(0, 5)),
+                BoxShadow(
+                    color: AppColors.primary.withValues(alpha: .18),
+                    blurRadius: 14,
+                    offset: const Offset(0, 5)),
               ],
             ),
-            child: const Icon(Icons.point_of_sale_rounded, color: Colors.white, size: 23),
+            child: const Icon(Icons.point_of_sale_rounded,
+                color: Colors.white, size: 23),
           ),
           const SizedBox(width: 11),
           Flexible(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('PUNTO DE VENTA', maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: ink, fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: .2)),
+                Text('PUNTO DE VENTA',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: ink,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: .2)),
                 const SizedBox(height: 2),
                 Row(children: [
-                  Container(width: 7, height: 7, decoration: const BoxDecoration(color: AppColors.success, shape: BoxShape.circle)),
+                  Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(
+                          color: AppColors.success, shape: BoxShape.circle)),
                   const SizedBox(width: 6),
-                  Text('${listaProductos.length} productos · ${carrito.length} en venta', maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: muted, fontSize: 9.5, fontWeight: FontWeight.w600)),
+                  Text(
+                      '${listaProductos.length} productos Â· ${carrito.length} en venta',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: muted,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w600)),
                 ]),
               ],
             ),
@@ -4531,40 +5254,75 @@ class _EscanerVentasState extends State<EscanerVentas> {
               if (value == 'sync') SupabaseSyncService.syncPendingProducts();
             },
             offset: const Offset(0, 52),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
             itemBuilder: (context) => [
               PopupMenuItem<String>(
                 enabled: false,
                 child: Row(children: [
-                  const CircleAvatar(radius: 18, backgroundColor: AppColors.primary,
-                      child: Icon(Icons.person_rounded, color: Colors.white, size: 18)),
+                  const CircleAvatar(
+                      radius: 18,
+                      backgroundColor: AppColors.primary,
+                      child: Icon(Icons.person_rounded,
+                          color: Colors.white, size: 18)),
                   const SizedBox(width: 10),
-                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Administrador', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
-                    Text('Sesión activa · Local', style: TextStyle(color: muted, fontSize: 9)),
-                  ]),
+                  Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Administrador',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w900, fontSize: 12)),
+                        Text('SesiÃ³n activa Â· Local',
+                            style: TextStyle(color: muted, fontSize: 9)),
+                      ]),
                 ]),
               ),
               const PopupMenuDivider(),
-              const PopupMenuItem(value: 'perfil', child: ListTile(contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.person_outline_rounded), title: Text('Mi perfil'))),
-              const PopupMenuItem(value: 'sync', child: ListTile(contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.sync_rounded), title: Text('Sincronizar'))),
-              const PopupMenuItem(value: 'menu', child: ListTile(contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.menu_rounded), title: Text('Menú principal'))),
-              PopupMenuItem(value: 'theme', child: ListTile(contentPadding: EdgeInsets.zero,
-                  leading: Icon(dark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-                  ), title: Text(dark ? 'Modo claro' : 'Modo oscuro'))),
+              const PopupMenuItem(
+                  value: 'perfil',
+                  child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.person_outline_rounded),
+                      title: Text('Mi perfil'))),
+              const PopupMenuItem(
+                  value: 'sync',
+                  child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.sync_rounded),
+                      title: Text('Sincronizar'))),
+              const PopupMenuItem(
+                  value: 'menu',
+                  child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.menu_rounded),
+                      title: Text('MenÃº principal'))),
+              PopupMenuItem(
+                  value: 'theme',
+                  child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        dark
+                            ? Icons.light_mode_rounded
+                            : Icons.dark_mode_rounded,
+                      ),
+                      title: Text(dark ? 'Modo claro' : 'Modo oscuro'))),
             ],
             child: Container(
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [AppColors.primary, AppColors.info]),
+                gradient: const LinearGradient(
+                    colors: [AppColors.primary, AppColors.info]),
                 borderRadius: BorderRadius.circular(15),
-                boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: .16), blurRadius: 12, offset: const Offset(0, 4))],
+                boxShadow: [
+                  BoxShadow(
+                      color: AppColors.primary.withValues(alpha: .16),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4))
+                ],
               ),
-              child: const Icon(Icons.more_horiz_rounded, color: Colors.white, size: 25),
+              child: const Icon(Icons.more_horiz_rounded,
+                  color: Colors.white, size: 25),
             ),
           ),
         ),
@@ -4584,7 +5342,9 @@ class _EscanerVentasState extends State<EscanerVentas> {
         children: [
           Icon(icon, size: 15, color: muted),
           const SizedBox(width: 6),
-          Text(label, style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w800)),
+          Text(label,
+              style: TextStyle(
+                  color: muted, fontSize: 9, fontWeight: FontWeight.w800)),
         ],
       ),
     );
@@ -4597,18 +5357,24 @@ class _EscanerVentasState extends State<EscanerVentas> {
     return Container(
       decoration: BoxDecoration(
         color: surface,
-        border: Border(right: BorderSide(color: dark ? Colors.white10 : const Color(0xFFE1E6EC))),
+        border: Border(
+            right: BorderSide(
+                color: dark ? Colors.white10 : const Color(0xFFE1E6EC))),
       ),
       child: Column(
         children: [
           const SizedBox(height: 18),
           _railButton(Icons.point_of_sale_rounded, 'Venta', true, dark, () {}),
-          _railButton(Icons.receipt_long_outlined, 'Pedidos', false, dark, () {}),
-          _railButton(Icons.inventory_2_outlined, 'Stock', false, dark, widget.onNavigateToDashboard),
+          _railButton(
+              Icons.receipt_long_outlined, 'Pedidos', false, dark, () {}),
+          _railButton(Icons.inventory_2_outlined, 'Stock', false, dark,
+              widget.onNavigateToDashboard),
           const Spacer(),
           Icon(Icons.lock_outline_rounded, color: muted, size: 19),
           const SizedBox(height: 6),
-          Text('OFFLINE', style: TextStyle(color: muted, fontSize: 7, fontWeight: FontWeight.w900)),
+          Text('OFFLINE',
+              style: TextStyle(
+                  color: muted, fontSize: 7, fontWeight: FontWeight.w900)),
           const SizedBox(height: 20),
         ],
       ),
@@ -4628,9 +5394,7 @@ class _EscanerVentasState extends State<EscanerVentas> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       child: Material(
-        color: active
-            ? accent.withValues(alpha: .12)
-            : Colors.transparent,
+        color: active ? accent.withValues(alpha: .12) : Colors.transparent,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: onTap,
@@ -4690,7 +5454,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
 
     Widget productsPanel() {
       if (_cargando) {
-        return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+        return const Center(
+            child: CircularProgressIndicator(color: AppColors.primary));
       }
 
       if (listaProductos.isEmpty) {
@@ -4702,7 +5467,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
               const SizedBox(height: 16),
               Text(
                 'No hay productos disponibles',
-                style: TextStyle(color: ink, fontSize: 18, fontWeight: FontWeight.w900),
+                style: TextStyle(
+                    color: ink, fontSize: 18, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 7),
               Text(
@@ -4725,7 +5491,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
         final categoria = (prod['categoria'] ?? 'General').toString();
         final stock = (prod['stock'] as num?)?.toDouble() ?? 0;
         final precio = (prod['precio'] as num?)?.toDouble() ?? 0;
-        return (_filtroCategoriaPOS == 'Todas' || categoria == _filtroCategoriaPOS) &&
+        return (_filtroCategoriaPOS == 'Todas' ||
+                categoria == _filtroCategoriaPOS) &&
             (!_soloDisponiblesPOS || stock > 0) &&
             (_precioMinPOS == null || precio >= _precioMinPOS!) &&
             (_precioMaxPOS == null || precio <= _precioMaxPOS!);
@@ -4774,13 +5541,19 @@ class _EscanerVentasState extends State<EscanerVentas> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Catálogo',
-                      style: TextStyle(color: ink, fontSize: 19, fontWeight: FontWeight.w900),
+                      'CatÃ¡logo',
+                      style: TextStyle(
+                          color: ink,
+                          fontSize: 19,
+                          fontWeight: FontWeight.w900),
                     ),
                   ),
                   Text(
-                    '${listaProductos.length} artículos',
-                    style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w700),
+                    '${listaProductos.length} artÃ­culos',
+                    style: TextStyle(
+                        color: muted,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700),
                   ),
                 ],
               ),
@@ -4792,7 +5565,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
                 children: [
                   Expanded(child: _buildSearchField(dark)),
                   const SizedBox(width: 8),
-                  _squareAction(Icons.tune_rounded, _filtrosActivos, () => _mostrarFiltrosPOS(dark), dark),
+                  _squareAction(Icons.tune_rounded, _filtrosActivos,
+                      () => _mostrarFiltrosPOS(dark), dark),
                   const SizedBox(width: 7),
                   _squareAction(
                     Icons.qr_code_scanner_rounded,
@@ -4824,10 +5598,13 @@ class _EscanerVentasState extends State<EscanerVentas> {
                   ),
                   selected: selected,
                   selectedColor: AppColors.primary,
-                  backgroundColor: dark ? const Color(0xFF171D26) : const Color(0xFFF4F6F9),
-                  side: BorderSide(color: selected ? AppColors.primary : border),
+                  backgroundColor:
+                      dark ? const Color(0xFF171D26) : const Color(0xFFF4F6F9),
+                  side:
+                      BorderSide(color: selected ? AppColors.primary : border),
                   onSelected: (_) => setState(() => _filtroCategoriaPOS = c),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                 );
               },
             ),
@@ -4855,10 +5632,16 @@ class _EscanerVentasState extends State<EscanerVentas> {
       decoration: BoxDecoration(
         color: surface,
         borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: dark ? Colors.white10 : const Color(0xFFEFE7DC)),
+        border:
+            Border.all(color: dark ? Colors.white10 : const Color(0xFFEFE7DC)),
         boxShadow: dark
             ? null
-            : [BoxShadow(color: Colors.black.withValues(alpha: .04), blurRadius: 14, offset: const Offset(0, 6))],
+            : [
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: .04),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6))
+              ],
       ),
       child: TextField(
         controller: _buscador,
@@ -4873,7 +5656,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
                   icon: Icon(Icons.close_rounded, color: muted, size: 18),
                 ),
           hintText: 'Buscar productos, marcas...',
-          hintStyle: TextStyle(color: muted, fontSize: 12, fontWeight: FontWeight.w500),
+          hintStyle: TextStyle(
+              color: muted, fontSize: 12, fontWeight: FontWeight.w500),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 14),
         ),
@@ -4888,13 +5672,15 @@ class _EscanerVentasState extends State<EscanerVentas> {
         children: [
           Expanded(child: _buildSearchField(dark)),
           const SizedBox(width: 8),
-          _squareAction(Icons.qr_code_scanner_rounded, _camara, () => setState(() => _camara = !_camara), dark),
+          _squareAction(Icons.qr_code_scanner_rounded, _camara,
+              () => setState(() => _camara = !_camara), dark),
         ],
       ),
     );
   }
 
-  Widget _squareAction(IconData icon, bool active, VoidCallback onTap, bool dark) {
+  Widget _squareAction(
+      IconData icon, bool active, VoidCallback onTap, bool dark) {
     return Material(
       color: active
           ? AppColors.primary.withValues(alpha: .13)
@@ -4908,7 +5694,9 @@ class _EscanerVentasState extends State<EscanerVentas> {
           height: 48,
           child: Icon(
             icon,
-            color: active ? AppColors.primary : (dark ? Colors.white70 : const Color(0xFF697382)),
+            color: active
+                ? AppColors.primary
+                : (dark ? Colors.white70 : const Color(0xFF697382)),
             size: 20,
           ),
         ),
@@ -4924,7 +5712,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
     final finalPrice = discount > 0 ? price * (1 - discount / 100) : price;
     final category = (prod['categoria'] ?? 'General').toString();
     final surface = dark ? const Color(0xFF151A24) : Colors.white;
-    final border = dark ? Colors.white.withValues(alpha: .07) : const Color(0xFFE8EAF0);
+    final border =
+        dark ? Colors.white.withValues(alpha: .07) : const Color(0xFFE8EAF0);
     final ink = dark ? Colors.white : const Color(0xFF151827);
     final muted = dark ? const Color(0xFF8F97A8) : const Color(0xFF707789);
     final status = stock <= 0
@@ -4956,7 +5745,9 @@ class _EscanerVentasState extends State<EscanerVentas> {
                   fit: StackFit.expand,
                   children: [
                     Container(
-                      color: dark ? const Color(0xFF202633) : const Color(0xFFF2F3F5),
+                      color: dark
+                          ? const Color(0xFF202633)
+                          : const Color(0xFFF2F3F5),
                       child: ImagenProducto(
                         imagenBase64: prod['imagen_base64']?.toString(),
                         width: double.infinity,
@@ -4968,25 +5759,35 @@ class _EscanerVentasState extends State<EscanerVentas> {
                       left: 10,
                       top: 10,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 5),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: .93),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Text(category, style: const TextStyle(color: Color(0xFF263042), fontSize: 8.5, fontWeight: FontWeight.w900)),
+                        child: Text(category,
+                            style: const TextStyle(
+                                color: Color(0xFF263042),
+                                fontSize: 8.5,
+                                fontWeight: FontWeight.w900)),
                       ),
                     ),
                     Positioned(
                       right: 10,
                       top: 10,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 5),
                         decoration: BoxDecoration(
                           color: status,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Text(stock <= 0 ? 'Agotado' : '$stock disponibles',
-                            style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900)),
+                        child: Text(
+                            stock <= 0 ? 'Agotado' : '$stock disponibles',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 8,
+                                fontWeight: FontWeight.w900)),
                       ),
                     ),
                   ],
@@ -4997,17 +5798,29 @@ class _EscanerVentasState extends State<EscanerVentas> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(prod['nombre']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w900)),
+                    Text(prod['nombre']?.toString() ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: ink,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900)),
                     const SizedBox(height: 4),
                     Row(
                       children: [
                         Expanded(
                           child: Text(_precio(finalPrice),
-                              style: const TextStyle(color: Color(0xFF4A176B), fontSize: 17, fontWeight: FontWeight.w900)),
+                              style: const TextStyle(
+                                  color: Color(0xFF4A176B),
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w900)),
                         ),
                         if (discount > 0)
-                          Text('-${discount.toStringAsFixed(0)}%', style: const TextStyle(color: Color(0xFF0A9F6B), fontSize: 8, fontWeight: FontWeight.w900)),
+                          Text('-${discount.toStringAsFixed(0)}%',
+                              style: const TextStyle(
+                                  color: Color(0xFF0A9F6B),
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w900)),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -5017,14 +5830,17 @@ class _EscanerVentasState extends State<EscanerVentas> {
                       child: FilledButton.icon(
                         onPressed: stock > 0 ? () => _agregar(prod) : null,
                         icon: const Icon(Icons.shopping_bag_rounded, size: 15),
-                        label: const Text('Agregar al carrito', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900)),
+                        label: const Text('Agregar al carrito',
+                            style: TextStyle(
+                                fontSize: 9, fontWeight: FontWeight.w900)),
                         style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFF211C2B),
                           foregroundColor: Colors.white,
                           disabledBackgroundColor: const Color(0xFFE5E7EB),
                           disabledForegroundColor: const Color(0xFF9CA3AF),
                           padding: const EdgeInsets.symmetric(horizontal: 7),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
                         ),
                       ),
                     ),
@@ -5071,14 +5887,20 @@ class _EscanerVentasState extends State<EscanerVentas> {
                         children: [
                           Text(
                             'Venta actual',
-                            style: TextStyle(color: ink, fontSize: 19, fontWeight: FontWeight.w900),
+                            style: TextStyle(
+                                color: ink,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w900),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             carrito.isEmpty
                                 ? 'Agrega productos al pedido'
-                                : '$units unidades · ${carrito.length} líneas',
-                            style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w600),
+                                : '$units unidades Â· ${carrito.length} lÃ­neas',
+                            style: TextStyle(
+                                color: muted,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
@@ -5090,7 +5912,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
                           setState(() => carrito.clear());
                           _notificarCambioCarrito();
                         },
-                        icon: const Icon(Icons.delete_sweep_outlined, color: Color(0xFFE25C5C)),
+                        icon: const Icon(Icons.delete_sweep_outlined,
+                            color: Color(0xFFE25C5C)),
                       ),
                   ],
                 ),
@@ -5109,16 +5932,20 @@ class _EscanerVentasState extends State<EscanerVentas> {
                                 color: AppColors.primary.withValues(alpha: .09),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.shopping_cart_outlined, color: AppColors.primary, size: 32),
+                              child: const Icon(Icons.shopping_cart_outlined,
+                                  color: AppColors.primary, size: 32),
                             ),
                             const SizedBox(height: 14),
                             Text(
-                              'La venta está vacía',
-                              style: TextStyle(color: ink, fontSize: 14, fontWeight: FontWeight.w900),
+                              'La venta estÃ¡ vacÃ­a',
+                              style: TextStyle(
+                                  color: ink,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900),
                             ),
                             const SizedBox(height: 5),
                             Text(
-                              'Selecciona productos del catálogo',
+                              'Selecciona productos del catÃ¡logo',
                               style: TextStyle(color: muted, fontSize: 10),
                             ),
                           ],
@@ -5127,13 +5954,15 @@ class _EscanerVentasState extends State<EscanerVentas> {
                     : ListView.builder(
                         padding: const EdgeInsets.all(12),
                         itemCount: carrito.length,
-                        itemBuilder: (_, i) => _buildModernCartItem(carrito[i], i, dark),
+                        itemBuilder: (_, i) =>
+                            _buildModernCartItem(carrito[i], i, dark),
                       ),
               ),
               Container(
                 padding: const EdgeInsets.fromLTRB(18, 15, 18, 18),
                 decoration: BoxDecoration(
-                  color: dark ? const Color(0xFF151B23) : const Color(0xFFF7F9FB),
+                  color:
+                      dark ? const Color(0xFF151B23) : const Color(0xFFF7F9FB),
                   border: Border(top: BorderSide(color: border)),
                 ),
                 child: Column(
@@ -5144,11 +5973,19 @@ class _EscanerVentasState extends State<EscanerVentas> {
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        Text('TOTAL', style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.1)),
+                        Text('TOTAL',
+                            style: TextStyle(
+                                color: muted,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.1)),
                         const Spacer(),
                         Text(
                           _precio(total),
-                          style: const TextStyle(color: AppColors.primary, fontSize: 27, fontWeight: FontWeight.w900),
+                          style: const TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 27,
+                              fontWeight: FontWeight.w900),
                         ),
                       ],
                     ),
@@ -5160,15 +5997,21 @@ class _EscanerVentasState extends State<EscanerVentas> {
                         onPressed: carrito.isEmpty ? null : _cobrar,
                         icon: const Icon(Icons.payments_rounded, size: 20),
                         label: Text(
-                          carrito.isEmpty ? 'AGREGA PRODUCTOS' : 'CONTINUAR AL PAGO',
-                          style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: .2),
+                          carrito.isEmpty
+                              ? 'AGREGA PRODUCTOS'
+                              : 'CONTINUAR AL PAGO',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w900, letterSpacing: .2),
                         ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
-                          disabledBackgroundColor: dark ? const Color(0xFF252C36) : const Color(0xFFDCE1E7),
+                          disabledBackgroundColor: dark
+                              ? const Color(0xFF252C36)
+                              : const Color(0xFFDCE1E7),
                           foregroundColor: Colors.white,
                           elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
                         ),
                       ),
                     ),
@@ -5185,9 +6028,13 @@ class _EscanerVentasState extends State<EscanerVentas> {
   Widget _summaryRow(String label, String value, Color muted, Color ink) {
     return Row(
       children: [
-        Text(label, style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w600)),
+        Text(label,
+            style: TextStyle(
+                color: muted, fontSize: 10, fontWeight: FontWeight.w600)),
         const Spacer(),
-        Text(value, style: TextStyle(color: ink, fontSize: 11, fontWeight: FontWeight.w800)),
+        Text(value,
+            style: TextStyle(
+                color: ink, fontSize: 11, fontWeight: FontWeight.w800)),
       ],
     );
   }
@@ -5232,14 +6079,19 @@ class _EscanerVentasState extends State<EscanerVentas> {
                   item['nombre']?.toString() ?? '',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: ink, fontSize: 11, fontWeight: FontWeight.w800),
+                  style: TextStyle(
+                      color: ink, fontSize: 11, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 3),
-                Text(_precio(unit), style: TextStyle(color: muted, fontSize: 9)),
+                Text(_precio(unit),
+                    style: TextStyle(color: muted, fontSize: 9)),
                 const SizedBox(height: 4),
                 Text(
                   _precio(amount),
-                  style: const TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w900),
+                  style: const TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900),
                 ),
               ],
             ),
@@ -5248,7 +6100,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
             decoration: BoxDecoration(
               color: dark ? const Color(0xFF222A35) : Colors.white,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: dark ? Colors.white10 : const Color(0xFFE0E5EB)),
+              border: Border.all(
+                  color: dark ? Colors.white10 : const Color(0xFFE0E5EB)),
             ),
             child: Row(
               children: [
@@ -5265,7 +6118,11 @@ class _EscanerVentasState extends State<EscanerVentas> {
                 SizedBox(
                   width: 28,
                   child: Center(
-                    child: Text('$q', style: TextStyle(color: ink, fontSize: 11, fontWeight: FontWeight.w900)),
+                    child: Text('$q',
+                        style: TextStyle(
+                            color: ink,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900)),
                   ),
                 ),
                 _cartQtyButton(Icons.add_rounded, () {
@@ -5326,7 +6183,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
                     height: MediaQuery.sizeOf(context).height * .88,
                     decoration: BoxDecoration(
                       color: surface,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                      borderRadius:
+                          const BorderRadius.vertical(top: Radius.circular(24)),
                     ),
                     child: _buildOrderWorkspace(dark),
                   ),
@@ -5343,7 +6201,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
                         color: AppColors.primary.withValues(alpha: .12),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(Icons.shopping_cart_rounded, color: AppColors.primary, size: 21),
+                      child: const Icon(Icons.shopping_cart_rounded,
+                          color: AppColors.primary, size: 21),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -5351,13 +6210,17 @@ class _EscanerVentasState extends State<EscanerVentas> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '$units unidades · revisar venta',
-                            style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w700),
+                            '$units unidades Â· revisar venta',
+                            style: TextStyle(
+                                color: muted,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700),
                           ),
                           Text(
                             _precio(total),
                             style: TextStyle(
-                              color: dark ? Colors.white : const Color(0xFF17202A),
+                              color:
+                                  dark ? Colors.white : const Color(0xFF17202A),
                               fontSize: 17,
                               fontWeight: FontWeight.w900,
                             ),
@@ -5365,7 +6228,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
                         ],
                       ),
                     ),
-                    const Icon(Icons.arrow_forward_rounded, color: AppColors.primary, size: 21),
+                    const Icon(Icons.arrow_forward_rounded,
+                        color: AppColors.primary, size: 21),
                   ],
                 ),
               ),
@@ -5379,7 +6243,8 @@ class _EscanerVentasState extends State<EscanerVentas> {
   Widget _buildCamaraEscaneo(bool isDark) {
     return Container(
       height: _isDesktop ? 300 : 250,
-      margin: EdgeInsets.fromLTRB(_isDesktop ? 18 : 12, 8, _isDesktop ? 18 : 12, 8),
+      margin:
+          EdgeInsets.fromLTRB(_isDesktop ? 18 : 12, 8, _isDesktop ? 18 : 12, 8),
       child: ScannerRapido(
         isDark: isDark,
         onCodigoDetectado: _procesarCodigoConDebounce,
@@ -5422,7 +6287,9 @@ class _EscanerVentasState extends State<EscanerVentas> {
                       child: Text(
                         'Rango de precio',
                         style: TextStyle(
-                          color: isDark ? const Color(0xFF818C9B) : const Color(0xFF737D89),
+                          color: isDark
+                              ? const Color(0xFF818C9B)
+                              : const Color(0xFF737D89),
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -5444,7 +6311,10 @@ class _EscanerVentasState extends State<EscanerVentas> {
                         contentPadding: EdgeInsets.zero,
                         title: Text(
                           'Solo productos disponibles',
-                          style: TextStyle(color: isDark ? Colors.white : const Color(0xFF17202A)),
+                          style: TextStyle(
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF17202A)),
                         ),
                         value: soloDisponibles,
                         onChanged: (v) => ds(() => soloDisponibles = v),
@@ -5476,14 +6346,13 @@ class _EscanerVentasState extends State<EscanerVentas> {
       },
     );
   }
-
 }
 // ============================================
-// CONTINUACIÓN - ETAPA 4 de 6
+// CONTINUACIÃ“N - ETAPA 4 de 6
 // ============================================
 
 // ============================================
-// PANTALLA DE COBRO - DISEÑO PROFESIONAL
+// PANTALLA DE COBRO - DISEÃ‘O PROFESIONAL
 // ============================================
 
 class _AnimatedSaleTicket extends StatefulWidget {
@@ -5507,10 +6376,16 @@ class _AnimatedSaleTicket extends StatefulWidget {
   State<_AnimatedSaleTicket> createState() => _AnimatedSaleTicketState();
 }
 
-class _AnimatedSaleTicketState extends State<_AnimatedSaleTicket> with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..forward();
+class _AnimatedSaleTicketState extends State<_AnimatedSaleTicket>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 900))
+    ..forward();
   @override
-  void dispose() { _controller.dispose(); super.dispose(); }
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -5528,7 +6403,12 @@ class _AnimatedSaleTicketState extends State<_AnimatedSaleTicket> with SingleTic
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(30),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .28), blurRadius: 40, offset: const Offset(0, 20))],
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: .28),
+                  blurRadius: 40,
+                  offset: const Offset(0, 20))
+            ],
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(30),
@@ -5537,8 +6417,13 @@ class _AnimatedSaleTicketState extends State<_AnimatedSaleTicket> with SingleTic
               child: Column(
                 children: [
                   Row(children: [
-                    const Expanded(child: Text('Venta completada', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900))),
-                    IconButton(onPressed: widget.onClose, icon: const Icon(Icons.close_rounded)),
+                    const Expanded(
+                        child: Text('Venta completada',
+                            style: TextStyle(
+                                fontSize: 19, fontWeight: FontWeight.w900))),
+                    IconButton(
+                        onPressed: widget.onClose,
+                        icon: const Icon(Icons.close_rounded)),
                   ]),
                   const SizedBox(height: 4),
                   Container(
@@ -5552,7 +6437,11 @@ class _AnimatedSaleTicketState extends State<_AnimatedSaleTicket> with SingleTic
                       alignment: Alignment.topCenter,
                       children: [
                         Positioned(
-                          top: -22 + (1 - Curves.easeOut.transform(_controller.value)) * 35,
+                          top: -22 +
+                              (1 -
+                                      Curves.easeOut
+                                          .transform(_controller.value)) *
+                                  35,
                           child: Container(
                             width: 82,
                             height: 82,
@@ -5560,7 +6449,8 @@ class _AnimatedSaleTicketState extends State<_AnimatedSaleTicket> with SingleTic
                               color: Color(0xFF20B486),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.check_rounded, color: Colors.white, size: 48),
+                            child: const Icon(Icons.check_rounded,
+                                color: Colors.white, size: 48),
                           ),
                         ),
                       ],
@@ -5573,41 +6463,113 @@ class _AnimatedSaleTicketState extends State<_AnimatedSaleTicket> with SingleTic
                       padding: const EdgeInsets.fromLTRB(18, 24, 18, 18),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .10), blurRadius: 18, offset: const Offset(0, 8))],
+                        boxShadow: [
+                          BoxShadow(
+                              color: Colors.black.withValues(alpha: .10),
+                              blurRadius: 18,
+                              offset: const Offset(0, 8))
+                        ],
                       ),
                       child: Column(
                         children: [
-                          const Text('SINTHETIX PRO', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 1.3, color: Color(0xFF202332))),
+                          const Text('SINTHETIX PRO',
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.3,
+                                  color: Color(0xFF202332))),
                           const SizedBox(height: 3),
-                          const Text('TICKET DE VENTA', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF707789), letterSpacing: 1.2)),
+                          const Text('TICKET DE VENTA',
+                              style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF707789),
+                                  letterSpacing: 1.2)),
                           const SizedBox(height: 16),
-                          Text(widget.factura, style: const TextStyle(fontFamily: 'monospace', fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF202332))),
+                          Text(widget.factura,
+                              style: const TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF202332))),
                           const SizedBox(height: 13),
-                          _ticketLine('Cliente', widget.nombre.isEmpty ? 'Público General' : widget.nombre),
+                          _ticketLine(
+                              'Cliente',
+                              widget.nombre.isEmpty
+                                  ? 'PÃºblico General'
+                                  : widget.nombre),
                           _ticketLine('Estado', 'PAGADO'),
                           const Divider(height: 24),
                           Row(children: const [
-                            Text('TOTAL', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF707789))),
+                            Text('TOTAL',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF707789))),
                             Spacer(),
                           ]),
                           const SizedBox(height: 3),
-                          Align(alignment: Alignment.centerRight, child: Text('\$${widget.total.toStringAsFixed(2)}', style: const TextStyle(fontSize: 27, fontWeight: FontWeight.w900, color: Color(0xFF202332)))),
+                          Align(
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                  '\$${widget.total.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                      fontSize: 27,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF202332)))),
                           const SizedBox(height: 16),
-                          Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(28, (i) => Container(width: i.isEven ? 2 : 1, height: 28 + (i % 3) * 5, margin: const EdgeInsets.symmetric(horizontal: 1), color: const Color(0xFF202332)))),
+                          Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(
+                                  28,
+                                  (i) => Container(
+                                      width: i.isEven ? 2 : 1,
+                                      height: 28 + (i % 3) * 5,
+                                      margin: const EdgeInsets.symmetric(
+                                          horizontal: 1),
+                                      color: const Color(0xFF202332)))),
                           const SizedBox(height: 8),
-                          const Text('¡Gracias por tu compra!', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF707789))),
+                          const Text('Â¡Gracias por tu compra!',
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF707789))),
                         ],
                       ),
                     ),
                   ),
                   const SizedBox(height: 14),
                   Row(children: [
-                    Expanded(child: FilledButton.icon(onPressed: widget.onWhatsApp, icon: const Icon(Icons.chat_rounded, size: 17), label: const Text('WhatsApp', style: TextStyle(fontWeight: FontWeight.w900)), style: FilledButton.styleFrom(backgroundColor: AppColors.whatsapp, minimumSize: const Size(0, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))))),
+                    Expanded(
+                        child: FilledButton.icon(
+                            onPressed: widget.onWhatsApp,
+                            icon: const Icon(Icons.chat_rounded, size: 17),
+                            label: const Text('WhatsApp',
+                                style: TextStyle(fontWeight: FontWeight.w900)),
+                            style: FilledButton.styleFrom(
+                                backgroundColor: AppColors.whatsapp,
+                                minimumSize: const Size(0, 48),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(15))))),
                     const SizedBox(width: 9),
-                    Expanded(child: FilledButton.icon(onPressed: widget.onPrint, icon: const Icon(Icons.print_rounded, size: 17), label: const Text('Imprimir', style: TextStyle(fontWeight: FontWeight.w900)), style: FilledButton.styleFrom(backgroundColor: const Color(0xFF25293A), minimumSize: const Size(0, 48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))))),
+                    Expanded(
+                        child: FilledButton.icon(
+                            onPressed: widget.onPrint,
+                            icon: const Icon(Icons.print_rounded, size: 17),
+                            label: const Text('Imprimir',
+                                style: TextStyle(fontWeight: FontWeight.w900)),
+                            style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF25293A),
+                                minimumSize: const Size(0, 48),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(15))))),
                   ]),
                   const SizedBox(height: 8),
-                  TextButton(onPressed: widget.onClose, child: Text('Cerrar', style: TextStyle(color: muted, fontWeight: FontWeight.w800))),
+                  TextButton(
+                      onPressed: widget.onClose,
+                      child: Text('Cerrar',
+                          style: TextStyle(
+                              color: muted, fontWeight: FontWeight.w800))),
                 ],
               ),
             ),
@@ -5618,14 +6580,306 @@ class _AnimatedSaleTicketState extends State<_AnimatedSaleTicket> with SingleTic
   }
 
   Widget _ticketLine(String a, String b) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 5),
-    child: Row(children: [
-      Text(a, style: const TextStyle(fontSize: 10, color: Color(0xFF707789), fontWeight: FontWeight.w700)),
-      const Spacer(),
-      Flexible(child: Text(b, textAlign: TextAlign.right, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Color(0xFF202332), fontWeight: FontWeight.w900))),
-    ]),
-  );
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(children: [
+          Text(a,
+              style: const TextStyle(
+                  fontSize: 10,
+                  color: Color(0xFF707789),
+                  fontWeight: FontWeight.w700)),
+          const Spacer(),
+          Flexible(
+              child: Text(b,
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 10,
+                      color: Color(0xFF202332),
+                      fontWeight: FontWeight.w900))),
+        ]),
+      );
 }
+
+// ==================== SINTHETIX UI PATCH 01 ====================
+// RediseÃ±o visual incremental.
+// NO modifica SQLite, ventas, inventario ni servicios.
+// ================================================================
+
+class SinthentixUI {
+  static const Color gold = Color(0xFFD4A72C);
+  static const Color goldLight = Color(0xFFF4D477);
+  static const Color navy = Color(0xFF111827);
+  static const Color navy2 = Color(0xFF182235);
+  static const Color surface = Color(0xFFF7F8FC);
+  static const Color text = Color(0xFF182033);
+  static const Color muted = Color(0xFF788197);
+  static const Color success = Color(0xFF20B486);
+
+  static BoxDecoration card({bool dark = false}) {
+    return BoxDecoration(
+      color: dark ? navy2 : Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(
+        color: dark
+            ? Colors.white.withValues(alpha: .06)
+            : const Color(0xFFE8EBF2),
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: dark ? .18 : .055),
+          blurRadius: 24,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    );
+  }
+
+  static TextStyle title({bool dark = false}) {
+    return TextStyle(
+      color: dark ? Colors.white : text,
+      fontSize: 20,
+      fontWeight: FontWeight.w900,
+      letterSpacing: -.3,
+    );
+  }
+
+  static TextStyle subtitle({bool dark = false}) {
+    return TextStyle(
+      color: dark ? Colors.white60 : muted,
+      fontSize: 12,
+      fontWeight: FontWeight.w600,
+    );
+  }
+}
+
+// ================================================================
+// TARJETA MODERNA DE PRODUCTO
+// ================================================================
+
+class SinthentixProductCard extends StatelessWidget {
+  final Map<String, dynamic> producto;
+  final VoidCallback onAgregar;
+  final bool isDark;
+
+  const SinthentixProductCard({
+    super.key,
+    required this.producto,
+    required this.onAgregar,
+    this.isDark = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final nombre = (producto['nombre'] ?? 'Producto').toString();
+
+    final categoria = (producto['categoria'] ?? 'General').toString();
+
+    final precio = producto['precio'] is num
+        ? (producto['precio'] as num).toDouble()
+        : double.tryParse(
+              producto['precio']?.toString() ?? '',
+            ) ??
+            0;
+
+    final stock = producto['stock'] is num
+        ? (producto['stock'] as num).toInt()
+        : int.tryParse(
+              producto['stock']?.toString() ?? '',
+            ) ??
+            0;
+
+    return Container(
+      decoration: SinthentixUI.card(dark: isDark),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 112,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: .04)
+                    : const Color(0xFFF4F5F8),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.inventory_2_outlined,
+                  size: 42,
+                  color: SinthentixUI.gold,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              categoria.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: SinthentixUI.gold,
+                fontSize: 9,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              nombre,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: isDark ? Colors.white : SinthentixUI.text,
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const Spacer(),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '\$${precio.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      color: isDark ? Colors.white : SinthentixUI.text,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: stock > 0
+                        ? SinthentixUI.success.withValues(alpha: .10)
+                        : Colors.red.withValues(alpha: .10),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(
+                    '$stock',
+                    style: TextStyle(
+                      color: stock > 0 ? SinthentixUI.success : Colors.red,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              height: 42,
+              child: FilledButton.icon(
+                onPressed: stock > 0 ? onAgregar : null,
+                icon: const Icon(
+                  Icons.add_shopping_cart_rounded,
+                  size: 17,
+                ),
+                label: const Text(
+                  'Agregar al carrito',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: SinthentixUI.gold,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: Colors.grey.shade300,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ================================================================
+// BADGE MODERNO
+// ================================================================
+
+class SinthentixBadge extends StatelessWidget {
+  final String text;
+  final IconData icon;
+  final Color color;
+
+  const SinthentixBadge({
+    super.key,
+    required this.text,
+    required this.icon,
+    this.color = SinthentixUI.gold,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 7,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .10),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 5),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ================================================================
+// BOTÃ“N FLOTANTE MODERNO PARA MÃ“VIL
+// ================================================================
+
+class SinthentixFloatingAddButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const SinthentixFloatingAddButton({
+    super.key,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FloatingActionButton(
+      onPressed: onPressed,
+      elevation: 8,
+      backgroundColor: SinthentixUI.gold,
+      foregroundColor: Colors.white,
+      child: const Icon(
+        Icons.add_rounded,
+        size: 30,
+      ),
+    );
+  }
+}
+
+// ==================== FIN SINTHETIX UI PATCH 01 ====================
 
 class PantallaCobro extends StatefulWidget {
   final List<Map<String, dynamic>> carrito;
@@ -5633,7 +6887,13 @@ class PantallaCobro extends StatefulWidget {
   final String Function(double) formatearPrecio;
   final Function(String, String, String, String, String) onVentaCompletada;
   final bool modoOscuro;
-  const PantallaCobro({super.key, required this.carrito, required this.total, required this.formatearPrecio, required this.onVentaCompletada, required this.modoOscuro});
+  const PantallaCobro(
+      {super.key,
+      required this.carrito,
+      required this.total,
+      required this.formatearPrecio,
+      required this.onVentaCompletada,
+      required this.modoOscuro});
   @override
   State<PantallaCobro> createState() => _PantallaCobroState();
 }
@@ -5650,6 +6910,217 @@ class _PantallaCobroState extends State<PantallaCobro> {
   List<Map<String, dynamic>> _metodosPago = [];
   bool _cargandoMetodos = true;
   bool _buscandoCliente = false;
+  bool _pagoMixtoActivo = false;
+  Map<String, double> _pagosMixtos = <String, double>{};
+
+  double _totalPagadoMixto() {
+    return _pagosMixtos.values.fold<double>(0, (s, v) => s + v);
+  }
+
+  double _saldoMixto() {
+    final saldo = widget.total - _totalPagadoMixto();
+    return saldo.abs() < 0.005 ? 0 : saldo;
+  }
+
+  double _vueltoMixto() {
+    final efectivo = _pagosMixtos.entries
+        .where((e) => e.key.toLowerCase().contains('efectivo'))
+        .fold<double>(0, (s, e) => s + e.value);
+    return efectivo > 0 && _totalPagadoMixto() > widget.total
+        ? _totalPagadoMixto() - widget.total
+        : 0;
+  }
+
+  String _resumenPagoMixto() {
+    final partes = _pagosMixtos.entries
+        .where((e) => e.value > 0)
+        .map((e) => '${e.key}: ${e.value.toStringAsFixed(2)}')
+        .toList();
+    return partes.isEmpty ? 'Pago Mixto' : 'Pago Mixto | ${partes.join(' | ')}';
+  }
+
+  Future<void> _abrirPagoMixto() async {
+    final metodos = _metodosPago
+        .map((e) => (e['nombre'] ?? '').toString().trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    final disponibles = metodos.isEmpty
+        ? <String>['Efectivo', 'Tarjeta', 'Transferencia', 'Pago MÃ³vil']
+        : metodos;
+
+    final controllers = <String, TextEditingController>{
+      for (final m in disponibles)
+        m: TextEditingController(
+          text: _pagosMixtos[m]?.toStringAsFixed(2) ?? '',
+        ),
+    };
+
+    final resultado = await showDialog<Map<String, double>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            double total = 0;
+            for (final c in controllers.values) {
+              total += double.tryParse(c.text.replaceAll(',', '.')) ?? 0;
+            }
+
+            final saldo = widget.total - total;
+            final efectivo = controllers.entries
+                .where((e) => e.key.toLowerCase().contains('efectivo'))
+                .fold<double>(
+                  0,
+                  (s, e) =>
+                      s +
+                      (double.tryParse(e.value.text.replaceAll(',', '.')) ?? 0),
+                );
+            final vuelto = efectivo > 0 && total > widget.total
+                ? total - widget.total
+                : 0.0;
+
+            return AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.call_split_rounded),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('Pago mÃºltiple / mixto')),
+                ],
+              ),
+              content: SizedBox(
+                width: 520,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Total de la venta: ${widget.formatearPrecio(widget.total)}',
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      ...controllers.entries.map(
+                        (entry) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: TextField(
+                            controller: entry.value,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            onChanged: (_) => setDialogState(() {}),
+                            decoration: InputDecoration(
+                              labelText: entry.key,
+                              prefixIcon: Icon(
+                                _iconoPagoMixto(entry.key),
+                              ),
+                              border: const OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _filaResumenMixto(
+                        'Total aplicado',
+                        total,
+                        total >= widget.total ? Colors.green : Colors.orange,
+                      ),
+                      _filaResumenMixto(
+                        'Saldo pendiente',
+                        saldo > 0 ? saldo : 0,
+                        saldo > 0 ? Colors.orange : Colors.green,
+                      ),
+                      if (vuelto > 0)
+                        _filaResumenMixto(
+                          'Vuelto',
+                          vuelto,
+                          Colors.green,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton.icon(
+                  onPressed: total + 0.005 < widget.total
+                      ? null
+                      : () {
+                          final values = <String, double>{};
+                          for (final e in controllers.entries) {
+                            final value = double.tryParse(
+                                  e.value.text.replaceAll(',', '.'),
+                                ) ??
+                                0;
+                            if (value > 0) values[e.key] = value;
+                          }
+                          Navigator.pop(ctx, values);
+                        },
+                  icon: const Icon(Icons.check_rounded),
+                  label: const Text('Aplicar distribuciÃ³n'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    for (final controller in controllers.values) {
+      controller.dispose();
+    }
+
+    if (!mounted || resultado == null) return;
+
+    setState(() {
+      _pagosMixtos = resultado;
+      _pagoMixtoActivo = resultado.length >= 2;
+      if (_pagoMixtoActivo) {
+        _metodo = _resumenPagoMixto();
+        _montoCtrl.text = _totalPagadoMixto().toStringAsFixed(2);
+      }
+    });
+  }
+
+  Widget _filaResumenMixto(String label, double value, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          Text(
+            widget.formatearPrecio(value),
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _iconoPagoMixto(String nombre) {
+    final n = nombre.toLowerCase();
+    if (n.contains('efect')) return Icons.payments_outlined;
+    if (n.contains('tarjet')) return Icons.credit_card_outlined;
+    if (n.contains('transfer')) return Icons.swap_horiz_rounded;
+    if (n.contains('mÃ³vil') || n.contains('movil')) {
+      return Icons.phone_android_rounded;
+    }
+    return Icons.payment_rounded;
+  }
+
   bool _clienteEncontrado = false;
 
   bool get _isTablet => MediaQuery.of(context).size.width >= 600;
@@ -5658,53 +7129,179 @@ class _PantallaCobroState extends State<PantallaCobro> {
   static const violet2 = AppColors.info;
 
   @override
-  void initState() { super.initState(); _cargarDatos(); }
+  void initState() {
+    super.initState();
+    _cargarDatos();
+  }
+
   @override
-  void dispose() { _montoCtrl.dispose(); _nombreCtrl.dispose(); _telefonoCtrl.dispose(); _cedulaCtrl.dispose(); _direccionCtrl.dispose(); super.dispose(); }
+  void dispose() {
+    _montoCtrl.dispose();
+    _nombreCtrl.dispose();
+    _telefonoCtrl.dispose();
+    _cedulaCtrl.dispose();
+    _direccionCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _cargarDatos() async {
     try {
       final metodos = await _db.getMetodosPago();
-      if (metodos.isNotEmpty) { _metodosPago = metodos; _metodo = (metodos.first['nombre'] ?? 'Efectivo').toString(); }
-    } catch (e) { debugPrint('Error cargando métodos de pago: $e'); }
+      if (metodos.isNotEmpty) {
+        _metodosPago = metodos;
+        _metodo = (metodos.first['nombre'] ?? 'Efectivo').toString();
+      }
+    } catch (e) {
+      debugPrint('Error cargando mÃ©todos de pago: $e');
+    }
     if (mounted) setState(() => _cargandoMetodos = false);
   }
 
   Future<void> _buscarClientePorCedula() async {
     final cedula = _cedulaCtrl.text.trim();
-    if (cedula.isEmpty) { _mostrarSnackbar('Escribe la identificación del cliente', Colors.orange); return; }
+    if (cedula.isEmpty) {
+      _mostrarSnackbar('Escribe la identificaciÃ³n del cliente', Colors.orange);
+      return;
+    }
     setState(() => _buscandoCliente = true);
     try {
       final cliente = await _db.buscarClientePorCedula(cedula);
       if (cliente != null) {
-        setState(() { _clienteEncontrado = true; _nombreCtrl.text = cliente['nombre']?.toString() ?? ''; _telefonoCtrl.text = cliente['telefono']?.toString() ?? ''; _direccionCtrl.text = cliente['direccion']?.toString() ?? ''; });
+        setState(() {
+          _clienteEncontrado = true;
+          _nombreCtrl.text = cliente['nombre']?.toString() ?? '';
+          _telefonoCtrl.text = cliente['telefono']?.toString() ?? '';
+          _direccionCtrl.text = cliente['direccion']?.toString() ?? '';
+        });
         _mostrarSnackbar('Cliente encontrado', Colors.green);
       } else {
         setState(() => _clienteEncontrado = false);
-        _mostrarSnackbar('Cliente nuevo: se registrará al confirmar', violet);
+        _mostrarSnackbar('Cliente nuevo: se registrarÃ¡ al confirmar', violet);
       }
-    } catch (e) { _mostrarSnackbar('No se pudo buscar el cliente', Colors.red); }
+    } catch (e) {
+      _mostrarSnackbar('No se pudo buscar el cliente', Colors.red);
+    }
     if (mounted) setState(() => _buscandoCliente = false);
   }
 
   double _totalEnMoneda() => widget.total * (tasasCambio[_moneda] ?? 1.0);
-  double _vuelto() => (double.tryParse(_montoCtrl.text) ?? 0) - _totalEnMoneda();
+  double _vuelto() =>
+      (double.tryParse(_montoCtrl.text) ?? 0) - _totalEnMoneda();
+
+  Widget _buildMixedPaymentSummary(
+    bool dark,
+    Color card,
+    Color text,
+    Color muted,
+  ) {
+    final aplicado = _totalPagadoMixto();
+    final saldo = _saldoMixto();
+    final vuelto = _vueltoMixto();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppColors.primary.withValues(alpha: .22),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'DISTRIBUCIÃ“N DEL PAGO',
+            style: TextStyle(
+              color: muted,
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ..._pagosMixtos.entries.map(
+            (e) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Expanded(child: Text(e.key, style: TextStyle(color: text))),
+                  Text(
+                    widget.formatearPrecio(e.value),
+                    style: TextStyle(
+                      color: text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const Divider(height: 18),
+          _filaResumenMixto('Total aplicado', aplicado, Colors.green),
+          _filaResumenMixto(
+            'Saldo pendiente',
+            saldo > 0 ? saldo : 0,
+            saldo > 0 ? Colors.orange : Colors.green,
+          ),
+          if (vuelto > 0) _filaResumenMixto('Vuelto', vuelto, Colors.green),
+        ],
+      ),
+    );
+  }
 
   Future<void> _confirmarVenta() async {
-    if (_metodo.toLowerCase() == 'efectivo' && _vuelto() < 0) { _mostrarSnackbar('El efectivo recibido es insuficiente', Colors.red); return; }
+    if (_pagoMixtoActivo) {
+      final aplicado = _totalPagadoMixto();
+      final saldo = _saldoMixto();
+
+      if (_pagosMixtos.isEmpty || aplicado <= 0) {
+        _mostrarSnackbar('Agrega al menos un mÃ©todo de pago', Colors.red);
+        return;
+      }
+
+      if (saldo > 0.005) {
+        _mostrarSnackbar(
+          'Falta pagar ',
+          Colors.orange,
+        );
+        return;
+      }
+    } else if (_metodo.toLowerCase() == 'efectivo' && _vuelto() < 0) {
+      _mostrarSnackbar('El efectivo recibido es insuficiente', Colors.red);
+      return;
+    }
     if (_cedulaCtrl.text.trim().isNotEmpty) {
       try {
-        final existente = await _db.buscarClientePorCedula(_cedulaCtrl.text.trim());
+        final existente =
+            await _db.buscarClientePorCedula(_cedulaCtrl.text.trim());
         if (existente == null && _nombreCtrl.text.trim().isNotEmpty) {
-          await _db.crearCliente({'nombre': _nombreCtrl.text.trim(), 'telefono': _telefonoCtrl.text.trim(), 'identificacion': _cedulaCtrl.text.trim(), 'direccion': _direccionCtrl.text.trim(), 'tipo': 'Regular'});
+          await _db.crearCliente({
+            'nombre': _nombreCtrl.text.trim(),
+            'telefono': _telefonoCtrl.text.trim(),
+            'identificacion': _cedulaCtrl.text.trim(),
+            'direccion': _direccionCtrl.text.trim(),
+            'tipo': 'Regular'
+          });
         }
-      } catch (e) { debugPrint('Error registrando cliente: $e'); }
+      } catch (e) {
+        debugPrint('Error registrando cliente: $e');
+      }
     }
-    widget.onVentaCompletada(_metodo, _montoCtrl.text, _nombreCtrl.text.trim(), _telefonoCtrl.text.trim(), _cedulaCtrl.text.trim());
+    widget.onVentaCompletada(_metodo, _montoCtrl.text, _nombreCtrl.text.trim(),
+        _telefonoCtrl.text.trim(), _cedulaCtrl.text.trim());
   }
 
   void _mostrarSnackbar(String mensaje, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensaje, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)), backgroundColor: color, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(mensaje,
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w700)),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))));
   }
 
   @override
@@ -5715,64 +7312,338 @@ class _PantallaCobroState extends State<PantallaCobro> {
     final soft = dark ? const Color(0xFF202438) : const Color(0xFFF4F1FA);
     final text = dark ? Colors.white : const Color(0xFF20212A);
     final muted = dark ? const Color(0xFF9CA3B8) : const Color(0xFF747887);
-    final border = dark ? Colors.white.withValues(alpha: .07) : const Color(0xFFE7E4EF);
-    final h = (MediaQuery.sizeOf(context).height * (_isDesktop ? .90 : .96)).clamp(520.0, MediaQuery.sizeOf(context).height);
+    final border =
+        dark ? Colors.white.withValues(alpha: .07) : const Color(0xFFE7E4EF);
+    final h = (MediaQuery.sizeOf(context).height * (_isDesktop ? .90 : .96))
+        .clamp(520.0, MediaQuery.sizeOf(context).height);
 
     return Container(
       height: h,
-      decoration: BoxDecoration(color: bg, borderRadius: const BorderRadius.vertical(top: Radius.circular(30))),
+      decoration: BoxDecoration(
+          color: bg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(30))),
       child: Column(children: [
         const SizedBox(height: 10),
-        Container(width: 46, height: 4, decoration: BoxDecoration(color: dark ? Colors.white24 : const Color(0xFFD5D1DC), borderRadius: BorderRadius.circular(8))),
-        Padding(padding: const EdgeInsets.fromLTRB(22, 14, 14, 14), child: Row(children: [
-          Container(width: 46, height: 46, decoration: BoxDecoration(gradient: const LinearGradient(colors: [violet, violet2]), borderRadius: BorderRadius.circular(15)), child: const Icon(Icons.credit_score_rounded, color: Colors.white, size: 23)),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Finalizar venta', style: TextStyle(color: text, fontSize: 20, fontWeight: FontWeight.w900, letterSpacing: -.4)), const SizedBox(height: 3), Text('${widget.carrito.length} productos · ${widget.formatearPrecio(widget.total)}', style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w600))])),
-          Material(color: dark ? Colors.white.withValues(alpha: .06) : const Color(0xFFF0EEF5), borderRadius: BorderRadius.circular(13), child: InkWell(onTap: () => Navigator.of(context).pop(), borderRadius: BorderRadius.circular(13), child: const SizedBox(width: 44, height: 44, child: Icon(Icons.close_rounded, size: 20)))),
-        ])),
+        Container(
+            width: 46,
+            height: 4,
+            decoration: BoxDecoration(
+                color: dark ? Colors.white24 : const Color(0xFFD5D1DC),
+                borderRadius: BorderRadius.circular(8))),
+        Padding(
+            padding: const EdgeInsets.fromLTRB(22, 14, 14, 14),
+            child: Row(children: [
+              Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [violet, violet2]),
+                      borderRadius: BorderRadius.circular(15)),
+                  child: const Icon(Icons.credit_score_rounded,
+                      color: Colors.white, size: 23)),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text('Finalizar venta',
+                        style: TextStyle(
+                            color: text,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -.4)),
+                    const SizedBox(height: 3),
+                    Text(
+                        '${widget.carrito.length} productos Â· ${widget.formatearPrecio(widget.total)}',
+                        style: TextStyle(
+                            color: muted,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600))
+                  ])),
+              Material(
+                  color: dark
+                      ? Colors.white.withValues(alpha: .06)
+                      : const Color(0xFFF0EEF5),
+                  borderRadius: BorderRadius.circular(13),
+                  child: InkWell(
+                      onTap: () => Navigator.of(context).pop(),
+                      borderRadius: BorderRadius.circular(13),
+                      child: const SizedBox(
+                          width: 44,
+                          height: 44,
+                          child: Icon(Icons.close_rounded, size: 20)))),
+            ])),
         Divider(height: 1, color: border),
         Expanded(child: LayoutBuilder(builder: (context, constraints) {
           final desktop = constraints.maxWidth >= 980;
-          final form = SingleChildScrollView(padding: EdgeInsets.fromLTRB(desktop ? 24 : 18, 18, desktop ? 12 : 18, 22), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _sectionHeader('Cliente', 'Identifica al comprador o usa Público general', Icons.person_outline_rounded, text, muted),
-            const SizedBox(height: 10),
-            _buildClienteCard(dark, card, soft, text, muted, border),
-            const SizedBox(height: 18),
-            _sectionHeader('Pago', 'Elige cómo se registra esta venta', Icons.payments_outlined, text, muted),
-            const SizedBox(height: 10),
-            _buildCurrencyAndPayment(dark, card, soft, text, muted, border),
-            const SizedBox(height: 18),
-            if (_metodo.toLowerCase() == 'efectivo') _buildCashCard(dark, card, soft, text, muted, border),
-          ]));
-          final summary = _buildSummaryCard(dark, card, soft, text, muted, border);
+          final form = SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                  desktop ? 24 : 18, 18, desktop ? 12 : 18, 22),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionHeader(
+                        'Cliente',
+                        'Identifica al comprador o usa PÃºblico general',
+                        Icons.person_outline_rounded,
+                        text,
+                        muted),
+                    const SizedBox(height: 10),
+                    _buildClienteCard(dark, card, soft, text, muted, border),
+                    const SizedBox(height: 18),
+                    _sectionHeader('Pago', 'Elige cÃ³mo se registra esta venta',
+                        Icons.payments_outlined, text, muted),
+                    const SizedBox(height: 10),
+                    _buildCurrencyAndPayment(
+                        dark, card, soft, text, muted, border),
+                    if (_pagoMixtoActivo) ...[
+                      const SizedBox(height: 12),
+                      _buildMixedPaymentSummary(
+                        dark,
+                        card,
+                        text,
+                        muted,
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    if (!_pagoMixtoActivo &&
+                        _metodo.toLowerCase() == 'efectivo')
+                      _buildCashCard(dark, card, soft, text, muted, border),
+                  ]));
+          final summary =
+              _buildSummaryCard(dark, card, soft, text, muted, border);
           if (!desktop) return form;
-          return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(flex: 7, child: form), Expanded(flex: 4, child: SingleChildScrollView(padding: const EdgeInsets.fromLTRB(12, 18, 24, 22), child: summary))]);
+          return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(flex: 7, child: form),
+            Expanded(
+                flex: 4,
+                child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(12, 18, 24, 22),
+                    child: summary))
+          ]);
         })),
-        Container(padding: const EdgeInsets.fromLTRB(18, 12, 18, 16), decoration: BoxDecoration(color: card, border: Border(top: BorderSide(color: border))), child: Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('TOTAL A COBRAR', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.1)), const SizedBox(height: 3), Text('${simbolosMoneda[_moneda] ?? '\$'} ${_totalEnMoneda().toStringAsFixed(2)}', style: TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w900))])),
-          SizedBox(height: 54, child: DecoratedBox(decoration: BoxDecoration(gradient: const LinearGradient(colors: [violet, violet2]), borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: violet.withValues(alpha: .25), blurRadius: 16, offset: const Offset(0, 7))]), child: ElevatedButton.icon(onPressed: _confirmarVenta, style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, elevation: 0, padding: const EdgeInsets.symmetric(horizontal: 20), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), icon: const Icon(Icons.check_rounded, color: Colors.white, size: 19), label: const Text('Confirmar venta', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900))))),
-        ])),
+        Container(
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
+            decoration: BoxDecoration(
+                color: card, border: Border(top: BorderSide(color: border))),
+            child: Row(children: [
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text('TOTAL A COBRAR',
+                        style: TextStyle(
+                            color: muted,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.1)),
+                    const SizedBox(height: 3),
+                    Text(
+                        '${simbolosMoneda[_moneda] ?? '\$'} ${_totalEnMoneda().toStringAsFixed(2)}',
+                        style: TextStyle(
+                            color: text,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900))
+                  ])),
+              SizedBox(
+                  height: 54,
+                  child: DecoratedBox(
+                      decoration: BoxDecoration(
+                          gradient:
+                              const LinearGradient(colors: [violet, violet2]),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                                color: violet.withValues(alpha: .25),
+                                blurRadius: 16,
+                                offset: const Offset(0, 7))
+                          ]),
+                      child: ElevatedButton.icon(
+                          onPressed: _confirmarVenta,
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              elevation: 0,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 20),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16))),
+                          icon: const Icon(Icons.check_rounded,
+                              color: Colors.white, size: 19),
+                          label: const Text('Confirmar venta',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w900))))),
+            ])),
       ]),
     );
   }
 
-  Widget _sectionHeader(String title, String subtitle, IconData icon, Color text, Color muted) => Row(children: [Container(width: 40, height: 40, decoration: BoxDecoration(color: violet.withValues(alpha: .10), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: violet, size: 20)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(subtitle, style: TextStyle(color: muted, fontSize: 9.5, fontWeight: FontWeight.w500))]))]);
+  Widget _sectionHeader(String title, String subtitle, IconData icon,
+          Color text, Color muted) =>
+      Row(children: [
+        Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+                color: violet.withValues(alpha: .10),
+                borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, color: violet, size: 20)),
+        const SizedBox(width: 10),
+        Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title,
+              style: TextStyle(
+                  color: text, fontSize: 15, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 2),
+          Text(subtitle,
+              style: TextStyle(
+                  color: muted, fontSize: 9.5, fontWeight: FontWeight.w500))
+        ]))
+      ]);
 
-  Widget _buildClienteCard(bool dark, Color card, Color soft, Color text, Color muted, Color border) {
-    return Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(20), border: Border.all(color: border), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: dark ? .12 : .035), blurRadius: 18, offset: const Offset(0, 8))]), child: Column(children: [
-      Row(children: [Container(width: 44, height: 44, decoration: BoxDecoration(gradient: const LinearGradient(colors: [violet, violet2]), borderRadius: BorderRadius.circular(14)), child: Icon(_clienteEncontrado ? Icons.person_rounded : Icons.groups_rounded, color: Colors.white, size: 22)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(_clienteEncontrado ? 'Cliente identificado' : 'Público general', style: TextStyle(color: text, fontSize: 13, fontWeight: FontWeight.w900)), const SizedBox(height: 2), Text(_clienteEncontrado ? _nombreCtrl.text : 'Venta sin datos de cliente', style: TextStyle(color: muted, fontSize: 9.5, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)])), TextButton(onPressed: () { setState(() { _clienteEncontrado = false; _cedulaCtrl.clear(); _nombreCtrl.clear(); _telefonoCtrl.clear(); _direccionCtrl.clear(); }); }, child: Text('Limpiar', style: TextStyle(color: violet, fontWeight: FontWeight.w800, fontSize: 10)))]),
-      const SizedBox(height: 13),
-      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: _field(_cedulaCtrl, 'Identificación', Icons.badge_outlined, dark, text, muted, border, onSubmitted: (_) => _buscarClientePorCedula())), const SizedBox(width: 8), SizedBox(width: 50, height: 50, child: Material(color: violet, borderRadius: BorderRadius.circular(14), child: InkWell(onTap: _buscandoCliente ? null : _buscarClientePorCedula, borderRadius: BorderRadius.circular(14), child: Center(child: _buscandoCliente ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.search_rounded, color: Colors.white, size: 21))))) ]),
-      const SizedBox(height: 9),
-      _field(_nombreCtrl, 'Nombre completo', Icons.person_outline_rounded, dark, text, muted, border),
-      const SizedBox(height: 9),
-      Row(children: [Expanded(child: _field(_telefonoCtrl, 'Teléfono', Icons.phone_outlined, dark, text, muted, border, keyboardType: TextInputType.phone)), const SizedBox(width: 9), Expanded(child: _field(_direccionCtrl, 'Dirección', Icons.location_on_outlined, dark, text, muted, border))]),
-    ]));
+  Widget _buildClienteCard(bool dark, Color card, Color soft, Color text,
+      Color muted, Color border) {
+    return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+            color: card,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: border),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: dark ? .12 : .035),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8))
+            ]),
+        child: Column(children: [
+          Row(children: [
+            Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [violet, violet2]),
+                    borderRadius: BorderRadius.circular(14)),
+                child: Icon(
+                    _clienteEncontrado
+                        ? Icons.person_rounded
+                        : Icons.groups_rounded,
+                    color: Colors.white,
+                    size: 22)),
+            const SizedBox(width: 10),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(
+                      _clienteEncontrado
+                          ? 'Cliente identificado'
+                          : 'PÃºblico general',
+                      style: TextStyle(
+                          color: text,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 2),
+                  Text(
+                      _clienteEncontrado
+                          ? _nombreCtrl.text
+                          : 'Venta sin datos de cliente',
+                      style: TextStyle(
+                          color: muted,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis)
+                ])),
+            TextButton(
+                onPressed: () {
+                  setState(() {
+                    _clienteEncontrado = false;
+                    _cedulaCtrl.clear();
+                    _nombreCtrl.clear();
+                    _telefonoCtrl.clear();
+                    _direccionCtrl.clear();
+                  });
+                },
+                child: Text('Limpiar',
+                    style: TextStyle(
+                        color: violet,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 10)))
+          ]),
+          const SizedBox(height: 13),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(
+                child: _field(_cedulaCtrl, 'IdentificaciÃ³n',
+                    Icons.badge_outlined, dark, text, muted, border,
+                    onSubmitted: (_) => _buscarClientePorCedula())),
+            const SizedBox(width: 8),
+            SizedBox(
+                width: 50,
+                height: 50,
+                child: Material(
+                    color: violet,
+                    borderRadius: BorderRadius.circular(14),
+                    child: InkWell(
+                        onTap:
+                            _buscandoCliente ? null : _buscarClientePorCedula,
+                        borderRadius: BorderRadius.circular(14),
+                        child: Center(
+                            child: _buscandoCliente
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        color: Colors.white, strokeWidth: 2))
+                                : const Icon(Icons.search_rounded,
+                                    color: Colors.white, size: 21)))))
+          ]),
+          const SizedBox(height: 9),
+          _field(_nombreCtrl, 'Nombre completo', Icons.person_outline_rounded,
+              dark, text, muted, border),
+          const SizedBox(height: 9),
+          Row(children: [
+            Expanded(
+                child: _field(_telefonoCtrl, 'TelÃ©fono', Icons.phone_outlined,
+                    dark, text, muted, border,
+                    keyboardType: TextInputType.phone)),
+            const SizedBox(width: 9),
+            Expanded(
+                child: _field(_direccionCtrl, 'DirecciÃ³n',
+                    Icons.location_on_outlined, dark, text, muted, border))
+          ]),
+        ]));
   }
 
-  Widget _field(TextEditingController controller, String label, IconData icon, bool dark, Color text, Color muted, Color border, {TextInputType? keyboardType, Function(String)? onSubmitted}) => TextField(controller: controller, onSubmitted: onSubmitted, keyboardType: keyboardType, style: TextStyle(color: text, fontSize: 12, fontWeight: FontWeight.w600), decoration: InputDecoration(labelText: label, labelStyle: TextStyle(color: muted, fontSize: 11), prefixIcon: Icon(icon, color: violet, size: 18), filled: true, fillColor: dark ? const Color(0xFF202438) : const Color(0xFFF8F7FB), isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15), enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: border)), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: const BorderSide(color: violet, width: 1.5))));
+  Widget _field(TextEditingController controller, String label, IconData icon,
+          bool dark, Color text, Color muted, Color border,
+          {TextInputType? keyboardType, Function(String)? onSubmitted}) =>
+      TextField(
+          controller: controller,
+          onSubmitted: onSubmitted,
+          keyboardType: keyboardType,
+          style:
+              TextStyle(color: text, fontSize: 12, fontWeight: FontWeight.w600),
+          decoration: InputDecoration(
+              labelText: label,
+              labelStyle: TextStyle(color: muted, fontSize: 11),
+              prefixIcon: Icon(icon, color: violet, size: 18),
+              filled: true,
+              fillColor:
+                  dark ? const Color(0xFF202438) : const Color(0xFFF8F7FB),
+              isDense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(13),
+                  borderSide: BorderSide(color: border)),
+              focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(13),
+                  borderSide: const BorderSide(color: violet, width: 1.5))));
 
-  Widget _buildCurrencyAndPayment(bool dark, Color card, Color soft, Color text, Color muted, Color border) {
+  Widget _buildCurrencyAndPayment(bool dark, Color card, Color soft, Color text,
+      Color muted, Color border) {
     final methods = _metodosPago.isEmpty
         ? ['Efectivo', 'Tarjeta', 'Transferencia']
         : _metodosPago
@@ -5790,7 +7661,12 @@ class _PantallaCobroState extends State<PantallaCobro> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Moneda', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1)),
+          Text('Moneda',
+              style: TextStyle(
+                  color: muted,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1)),
           const SizedBox(height: 7),
           Row(
             children: ['USD', 'COP', 'VES'].map((m) {
@@ -5812,7 +7688,10 @@ class _PantallaCobroState extends State<PantallaCobro> {
                       child: Center(
                         child: Text(
                           m,
-                          style: TextStyle(color: sel ? Colors.white : text, fontSize: 11, fontWeight: FontWeight.w900),
+                          style: TextStyle(
+                              color: sel ? Colors.white : text,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900),
                         ),
                       ),
                     ),
@@ -5822,35 +7701,122 @@ class _PantallaCobroState extends State<PantallaCobro> {
             }).toList(),
           ),
           const SizedBox(height: 15),
-          Text('Forma de pago', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1)),
+          Text('Forma de pago',
+              style: TextStyle(
+                  color: muted,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1)),
           const SizedBox(height: 7),
+          const SizedBox(height: 4),
+          InkWell(
+            onTap: _abrirPagoMixto,
+            borderRadius: BorderRadius.circular(15),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 13),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [violet, violet2],
+                ),
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: violet.withValues(alpha: .18),
+                    blurRadius: 14,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .16),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: const Icon(
+                      Icons.call_split_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Pago mÃºltiple / mixto',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Combina efectivo, tarjeta, transferencia y otros mÃ©todos',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: Colors.white,
+                    size: 15,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: methods.map((m) {
-              final sel = _metodo == m;
+              final sel = !_pagoMixtoActivo && _metodo == m;
               return InkWell(
-                onTap: () => setState(() => _metodo = m),
+                onTap: () => setState(() {
+                  _metodo = m;
+                  _pagoMixtoActivo = false;
+                  _pagosMixtos = <String, double>{};
+                }),
                 borderRadius: BorderRadius.circular(13),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 160),
                   width: _isDesktop ? 150 : 138,
-                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 11, vertical: 12),
                   decoration: BoxDecoration(
                     color: sel ? violet.withValues(alpha: .10) : soft,
                     borderRadius: BorderRadius.circular(13),
-                    border: Border.all(color: sel ? violet : border, width: sel ? 1.5 : 1),
+                    border: Border.all(
+                        color: sel ? violet : border, width: sel ? 1.5 : 1),
                   ),
                   child: Row(
                     children: [
-                      Icon(_getIconoMetodo(m), color: sel ? violet : muted, size: 18),
+                      Icon(_getIconoMetodo(m),
+                          color: sel ? violet : muted, size: 18),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           m,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: sel ? violet : text, fontSize: 10, fontWeight: FontWeight.w800),
+                          style: TextStyle(
+                              color: sel ? violet : text,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800),
                         ),
                       ),
                     ],
@@ -5864,46 +7830,78 @@ class _PantallaCobroState extends State<PantallaCobro> {
     );
   }
 
-  Widget _buildCashCard(bool dark, Color card, Color soft, Color text, Color muted, Color border) {
+  Widget _buildCashCard(bool dark, Color card, Color soft, Color text,
+      Color muted, Color border) {
     final vuelto = _vuelto();
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(20), border: Border.all(color: border)),
+      decoration: BoxDecoration(
+          color: card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: border)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Efectivo recibido', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1)),
+          Text('Efectivo recibido',
+              style: TextStyle(
+                  color: muted,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1)),
           const SizedBox(height: 7),
           TextField(
             controller: _montoCtrl,
             onChanged: (_) => setState(() {}),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: TextStyle(color: text, fontSize: 24, fontWeight: FontWeight.w900),
+            style: TextStyle(
+                color: text, fontSize: 24, fontWeight: FontWeight.w900),
             decoration: InputDecoration(
               prefixText: '${simbolosMoneda[_moneda] ?? '\$'} ',
-              prefixStyle: const TextStyle(color: violet, fontWeight: FontWeight.w900, fontSize: 20),
+              prefixStyle: const TextStyle(
+                  color: violet, fontWeight: FontWeight.w900, fontSize: 20),
               hintText: '0.00',
               hintStyle: TextStyle(color: muted),
               filled: true,
               fillColor: soft,
               prefixIcon: const Icon(Icons.payments_outlined, color: violet),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: border)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: const BorderSide(color: violet, width: 1.5)),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(15),
+                  borderSide: BorderSide(color: border)),
+              focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(15),
+                  borderSide: const BorderSide(color: violet, width: 1.5)),
             ),
           ),
           const SizedBox(height: 9),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
             decoration: BoxDecoration(
-              color: vuelto >= 0 ? Colors.green.withValues(alpha: .08) : Colors.red.withValues(alpha: .08),
+              color: vuelto >= 0
+                  ? Colors.green.withValues(alpha: .08)
+                  : Colors.red.withValues(alpha: .08),
               borderRadius: BorderRadius.circular(13),
             ),
             child: Row(
               children: [
-                Icon(vuelto >= 0 ? Icons.check_circle_outline : Icons.warning_amber_rounded, color: vuelto >= 0 ? Colors.green : Colors.red, size: 18),
+                Icon(
+                    vuelto >= 0
+                        ? Icons.check_circle_outline
+                        : Icons.warning_amber_rounded,
+                    color: vuelto >= 0 ? Colors.green : Colors.red,
+                    size: 18),
                 const SizedBox(width: 8),
-                Expanded(child: Text('Vuelto', style: TextStyle(color: muted, fontSize: 11, fontWeight: FontWeight.w700))),
-                Text('${simbolosMoneda[_moneda] ?? '\$'} ${vuelto.toStringAsFixed(2)}', style: TextStyle(color: vuelto >= 0 ? Colors.green : Colors.red, fontSize: 16, fontWeight: FontWeight.w900)),
+                Expanded(
+                    child: Text('Vuelto',
+                        style: TextStyle(
+                            color: muted,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700))),
+                Text(
+                    '${simbolosMoneda[_moneda] ?? '\$'} ${vuelto.toStringAsFixed(2)}',
+                    style: TextStyle(
+                        color: vuelto >= 0 ? Colors.green : Colors.red,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900)),
               ],
             ),
           ),
@@ -5912,16 +7910,124 @@ class _PantallaCobroState extends State<PantallaCobro> {
     );
   }
 
-  Widget _buildSummaryCard(bool dark, Color card, Color soft, Color text, Color muted, Color border) {
-    return Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(22), border: Border.all(color: border), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: dark ? .12 : .04), blurRadius: 22, offset: const Offset(0, 10))]), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [Container(width: 38, height: 38, decoration: BoxDecoration(color: violet.withValues(alpha: .10), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.receipt_long_rounded, color: violet, size: 19)), const SizedBox(width: 10), Expanded(child: Text('Resumen del pedido', style: TextStyle(color: text, fontSize: 14, fontWeight: FontWeight.w900)))]), const SizedBox(height: 14),
-      ...widget.carrito.map((item) { final q=(item['cantidad'] as num?)?.toInt()??1; final p=(item['precio'] as num?)?.toDouble()??0; return Padding(padding: const EdgeInsets.only(bottom: 10), child: Row(children: [Container(width: 36, height: 36, decoration: BoxDecoration(color: soft, borderRadius: BorderRadius.circular(10)), clipBehavior: Clip.antiAlias, child: ImagenProducto(imagenBase64: item['imagen_base64']?.toString(), width: 36, height: 36, fit: BoxFit.cover)), const SizedBox(width: 8), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(item['nombre']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: text, fontSize: 10, fontWeight: FontWeight.w800)), const SizedBox(height: 2), Text('$q × ${widget.formatearPrecio(p)}', style: TextStyle(color: muted, fontSize: 9))])), Text(widget.formatearPrecio(p*q), style: TextStyle(color: text, fontSize: 10, fontWeight: FontWeight.w900))])); }),
-      Divider(color: border), const SizedBox(height: 8), Row(children: [Text('Total', style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w800)), const Spacer(), Text('${simbolosMoneda[_moneda] ?? '\$'} ${_totalEnMoneda().toStringAsFixed(2)}', style: TextStyle(color: text, fontSize: 23, fontWeight: FontWeight.w900))]), const SizedBox(height: 8), Container(width: double.infinity, padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: violet.withValues(alpha: .07), borderRadius: BorderRadius.circular(12)), child: Row(children: [const Icon(Icons.lock_outline_rounded, color: violet, size: 16), const SizedBox(width: 7), Expanded(child: Text('Venta local y segura', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w700)))])),
-    ]));
+  Widget _buildSummaryCard(bool dark, Color card, Color soft, Color text,
+      Color muted, Color border) {
+    return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+            color: card,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: border),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: dark ? .12 : .04),
+                  blurRadius: 22,
+                  offset: const Offset(0, 10))
+            ]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                    color: violet.withValues(alpha: .10),
+                    borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.receipt_long_rounded,
+                    color: violet, size: 19)),
+            const SizedBox(width: 10),
+            Expanded(
+                child: Text('Resumen del pedido',
+                    style: TextStyle(
+                        color: text,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900)))
+          ]),
+          const SizedBox(height: 14),
+          ...widget.carrito.map((item) {
+            final q = (item['cantidad'] as num?)?.toInt() ?? 1;
+            final p = (item['precio'] as num?)?.toDouble() ?? 0;
+            return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(children: [
+                  Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                          color: soft, borderRadius: BorderRadius.circular(10)),
+                      clipBehavior: Clip.antiAlias,
+                      child: ImagenProducto(
+                          imagenBase64: item['imagen_base64']?.toString(),
+                          width: 36,
+                          height: 36,
+                          fit: BoxFit.cover)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Text(item['nombre']?.toString() ?? '',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: text,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 2),
+                        Text('$q Ã— ${widget.formatearPrecio(p)}',
+                            style: TextStyle(color: muted, fontSize: 9))
+                      ])),
+                  Text(widget.formatearPrecio(p * q),
+                      style: TextStyle(
+                          color: text,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900))
+                ]));
+          }),
+          Divider(color: border),
+          const SizedBox(height: 8),
+          Row(children: [
+            Text('Total',
+                style: TextStyle(
+                    color: muted, fontSize: 10, fontWeight: FontWeight.w800)),
+            const Spacer(),
+            Text(
+                '${simbolosMoneda[_moneda] ?? '\$'} ${_totalEnMoneda().toStringAsFixed(2)}',
+                style: TextStyle(
+                    color: text, fontSize: 23, fontWeight: FontWeight.w900))
+          ]),
+          const SizedBox(height: 8),
+          Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(11),
+              decoration: BoxDecoration(
+                  color: violet.withValues(alpha: .07),
+                  borderRadius: BorderRadius.circular(12)),
+              child: Row(children: [
+                const Icon(Icons.lock_outline_rounded, color: violet, size: 16),
+                const SizedBox(width: 7),
+                Expanded(
+                    child: Text('Venta local y segura',
+                        style: TextStyle(
+                            color: muted,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700)))
+              ])),
+        ]));
   }
 
   IconData _getIconoMetodo(String nombre) {
-    switch (nombre.toLowerCase()) { case 'efectivo': return Icons.payments_outlined; case 'tarjeta': return Icons.credit_card_outlined; case 'transferencia': return Icons.swap_horiz_rounded; case 'pago movil': return Icons.phone_android_rounded; default: return Icons.payment_rounded; }
+    switch (nombre.toLowerCase()) {
+      case 'efectivo':
+        return Icons.payments_outlined;
+      case 'tarjeta':
+        return Icons.credit_card_outlined;
+      case 'transferencia':
+        return Icons.swap_horiz_rounded;
+      case 'pago movil':
+        return Icons.phone_android_rounded;
+      default:
+        return Icons.payment_rounded;
+    }
   }
 }
 
@@ -6072,12 +8178,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _calcularResumenProfesional() {
     final cantidad = ventasHoy.length;
-    final total = ventasHoy.fold<double>(0, (sum, v) =>
-        sum + ((v['total'] as num?)?.toDouble() ?? 0));
+    final total = ventasHoy.fold<double>(
+        0, (sum, v) => sum + ((v['total'] as num?)?.toDouble() ?? 0));
     _ticketPromedio = cantidad == 0 ? 0 : total / cantidad;
 
-    final utilidad = ventasHoy.fold<double>(0, (sum, v) =>
-        sum + ((v['ganancia_total'] as num?)?.toDouble() ?? 0));
+    final utilidad = ventasHoy.fold<double>(
+        0, (sum, v) => sum + ((v['ganancia_total'] as num?)?.toDouble() ?? 0));
     _margenPorcentaje = total <= 0 ? 0 : (utilidad / total) * 100;
 
     final metodos = <String, double>{};
@@ -6085,8 +8191,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final metodo = (v['metodo_pago']?.toString().trim().isNotEmpty ?? false)
           ? v['metodo_pago'].toString()
           : 'Otros';
-      metodos[metodo] = (metodos[metodo] ?? 0) +
-          ((v['total'] as num?)?.toDouble() ?? 0);
+      metodos[metodo] =
+          (metodos[metodo] ?? 0) + ((v['total'] as num?)?.toDouble() ?? 0);
     }
     _ventasPorMetodo = metodos;
   }
@@ -6386,7 +8492,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       onRefresh: () => cargarDatos(),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.fromLTRB(tablet ? 26 : 14, 10, tablet ? 26 : 14, 34),
+        padding:
+            EdgeInsets.fromLTRB(tablet ? 26 : 14, 10, tablet ? 26 : 14, 34),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1480),
@@ -6427,9 +8534,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 Row(
                                   children: [
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 9, vertical: 5),
                                       decoration: BoxDecoration(
-                                        color: AppColors.primary.withValues(alpha: .10),
+                                        color: AppColors.primary
+                                            .withValues(alpha: .10),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Text(
@@ -6452,11 +8561,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       ),
                                     ),
                                     const SizedBox(width: 6),
-                                    Text('ONLINE · LOCAL', style: TextStyle(
-                                      color: AppColors.subtext(isDark),
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w700,
-                                    )),
+                                    Text('ONLINE Â· LOCAL',
+                                        style: TextStyle(
+                                          color: AppColors.subtext(isDark),
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                        )),
                                   ],
                                 ),
                                 const SizedBox(height: 14),
@@ -6471,7 +8581,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ),
                                 const SizedBox(height: 5),
                                 Text(
-                                  'Todo lo importante de tu operación en una sola vista.',
+                                  'Todo lo importante de tu operaciÃ³n en una sola vista.',
                                   style: TextStyle(
                                     color: AppColors.subtext(isDark),
                                     fontSize: 12,
@@ -6484,12 +8594,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                Text('VENTAS HOY', style: TextStyle(
-                                  color: AppColors.subtext(isDark),
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 1.1,
-                                )),
+                                Text('VENTAS HOY',
+                                    style: TextStyle(
+                                      color: AppColors.subtext(isDark),
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 1.1,
+                                    )),
                                 const SizedBox(height: 4),
                                 Text(
                                   '\$${totalVentasHoy.toStringAsFixed(2)}',
@@ -6501,27 +8612,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 3),
-                                Text('$cantidadVentasHoy operaciones', style: TextStyle(
-                                  color: AppColors.success,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                )),
+                                Text('$cantidadVentasHoy operaciones',
+                                    style: TextStyle(
+                                      color: AppColors.success,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                    )),
                               ],
                             ),
                         ],
                       ),
                       const SizedBox(height: 20),
-                      // Acciones rápidas.
+                      // Acciones rÃ¡pidas.
                       LayoutBuilder(builder: (context, c) {
                         final twoColumns = c.maxWidth >= 680;
                         final items = [
-                          _quickAction('Nueva venta', Icons.point_of_sale_rounded, AppColors.primary, widget.onNavigateToPOS),
-                          _quickAction('Inventario', Icons.inventory_2_rounded, AppColors.info, widget.onNavigateToInventario),
-                          _quickAction('Clientes', Icons.groups_rounded, AppColors.secondary, widget.onNavigateToClientes),
-                          _quickAction('Caja', Icons.account_balance_wallet_rounded, AppColors.success, widget.onNavigateToCaja),
+                          _quickAction(
+                              'Nueva venta',
+                              Icons.point_of_sale_rounded,
+                              AppColors.primary,
+                              widget.onNavigateToPOS),
+                          _quickAction('Inventario', Icons.inventory_2_rounded,
+                              AppColors.info, widget.onNavigateToInventario),
+                          _quickAction('Clientes', Icons.groups_rounded,
+                              AppColors.secondary, widget.onNavigateToClientes),
+                          _quickAction(
+                              'Caja',
+                              Icons.account_balance_wallet_rounded,
+                              AppColors.success,
+                              widget.onNavigateToCaja),
                         ];
                         if (!twoColumns) {
-                          return Column(children: items.map((e) => Padding(padding: const EdgeInsets.only(bottom: 8), child: SizedBox(width: double.infinity, child: e))).toList());
+                          return Column(
+                              children: items
+                                  .map((e) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: SizedBox(
+                                          width: double.infinity, child: e)))
+                                  .toList());
                         }
                         return GridView.count(
                           crossAxisCount: 2,
@@ -6538,30 +8666,75 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // KPIs grandes, con jerarquía más marcada.
+                // KPIs grandes, con jerarquÃ­a mÃ¡s marcada.
                 LayoutBuilder(builder: (context, c) {
                   final count = desktop ? 4 : 2;
                   final gap = 10.0;
                   final w = (c.maxWidth - gap * (count - 1)) / count;
                   final cards = [
-                    _executiveMetric('Ventas', '\$${totalVentasHoy.toStringAsFixed(2)}', '$cantidadVentasHoy transacciones', Icons.trending_up_rounded, AppColors.primary, isDark),
-                    _executiveMetric('Ganancia', '\$${gananciaTotalVentas.toStringAsFixed(2)}', 'Margen ${_margenPorcentaje.toStringAsFixed(1)}%', Icons.savings_rounded, AppColors.success, isDark),
-                    _executiveMetric('Este mes', '\$${totalVentasMes.toStringAsFixed(2)}', 'Acumulado mensual', Icons.calendar_today_rounded, AppColors.secondary, isDark),
-                    _executiveMetric('Ticket medio', '\$${_ticketPromedio.toStringAsFixed(2)}', 'Por operación', Icons.receipt_long_rounded, AppColors.info, isDark),
+                    _executiveMetric(
+                        'Ventas',
+                        '\$${totalVentasHoy.toStringAsFixed(2)}',
+                        '$cantidadVentasHoy transacciones',
+                        Icons.trending_up_rounded,
+                        AppColors.primary,
+                        isDark),
+                    _executiveMetric(
+                        'Ganancia',
+                        '\$${gananciaTotalVentas.toStringAsFixed(2)}',
+                        'Margen ${_margenPorcentaje.toStringAsFixed(1)}%',
+                        Icons.savings_rounded,
+                        AppColors.success,
+                        isDark),
+                    _executiveMetric(
+                        'Este mes',
+                        '\$${totalVentasMes.toStringAsFixed(2)}',
+                        'Acumulado mensual',
+                        Icons.calendar_today_rounded,
+                        AppColors.secondary,
+                        isDark),
+                    _executiveMetric(
+                        'Ticket medio',
+                        '\$${_ticketPromedio.toStringAsFixed(2)}',
+                        'Por operaciÃ³n',
+                        Icons.receipt_long_rounded,
+                        AppColors.info,
+                        isDark),
                   ];
-                  return Wrap(spacing: gap, runSpacing: gap, children: cards.map((x) => SizedBox(width: w, child: x)).toList());
+                  return Wrap(
+                      spacing: gap,
+                      runSpacing: gap,
+                      children: cards
+                          .map((x) => SizedBox(width: w, child: x))
+                          .toList());
                 }),
                 const SizedBox(height: 14),
 
-                // Zona analítica principal.
+                // Zona analÃ­tica principal.
                 if (desktop)
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Expanded(flex: 7, child: _panel(isDark, title: 'Rendimiento de ventas', subtitle: 'Ingresos distribuidos durante el día', icon: Icons.multiline_chart_rounded, child: SizedBox(height: 290, child: _graficoVentasHora(isDark, ventasHora, maxHora)))),
+                    Expanded(
+                        flex: 7,
+                        child: _panel(isDark,
+                            title: 'Rendimiento de ventas',
+                            subtitle: 'Ingresos distribuidos durante el dÃ­a',
+                            icon: Icons.multiline_chart_rounded,
+                            child: SizedBox(
+                                height: 290,
+                                child: _graficoVentasHora(
+                                    isDark, ventasHora, maxHora)))),
                     const SizedBox(width: 12),
                     Expanded(flex: 4, child: _inventarioPanel(isDark)),
                   ])
                 else ...[
-                  _panel(isDark, title: 'Rendimiento de ventas', subtitle: 'Ingresos distribuidos durante el día', icon: Icons.multiline_chart_rounded, child: SizedBox(height: 255, child: _graficoVentasHora(isDark, ventasHora, maxHora))),
+                  _panel(isDark,
+                      title: 'Rendimiento de ventas',
+                      subtitle: 'Ingresos distribuidos durante el dÃ­a',
+                      icon: Icons.multiline_chart_rounded,
+                      child: SizedBox(
+                          height: 255,
+                          child:
+                              _graficoVentasHora(isDark, ventasHora, maxHora))),
                   const SizedBox(height: 12),
                   _inventarioPanel(isDark),
                 ],
@@ -6572,7 +8745,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Expanded(child: _topProductosPanel(isDark)),
                     const SizedBox(width: 12),
-                    Expanded(child: _metodosPagoPanel(isDark, metodosOrdenados)),
+                    Expanded(
+                        child: _metodosPagoPanel(isDark, metodosOrdenados)),
                   ])
                 else ...[
                   _topProductosPanel(isDark),
@@ -6584,18 +8758,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _panel(
                   isDark,
                   title: 'Centro operativo',
-                  subtitle: 'Salud actual de inventario y operación',
+                  subtitle: 'Salud actual de inventario y operaciÃ³n',
                   icon: Icons.radar_rounded,
                   child: Wrap(
                     spacing: 10,
                     runSpacing: 10,
                     children: [
-                      _statusItem('Productos', '${productos.length}', Icons.inventory_2_outlined, AppColors.primary, isDark),
-                      _statusItem('Unidades', '$_totalStock', Icons.layers_outlined, AppColors.info, isDark),
-                      _statusItem('Stock bajo', '$_productosStockBajo', Icons.warning_amber_rounded, AppColors.warning, isDark),
-                      _statusItem('Agotados', '$_productosAgotados', Icons.remove_shopping_cart_outlined, AppColors.danger, isDark),
-                      _statusItem('Costo', '\$${_valorInventarioCosto.toStringAsFixed(2)}', Icons.price_check_outlined, AppColors.secondary, isDark),
-                      _statusItem('Valor venta', '\$${_valorInventarioVenta.toStringAsFixed(2)}', Icons.sell_outlined, AppColors.success, isDark),
+                      _statusItem(
+                          'Productos',
+                          '${productos.length}',
+                          Icons.inventory_2_outlined,
+                          AppColors.primary,
+                          isDark),
+                      _statusItem('Unidades', '$_totalStock',
+                          Icons.layers_outlined, AppColors.info, isDark),
+                      _statusItem(
+                          'Stock bajo',
+                          '$_productosStockBajo',
+                          Icons.warning_amber_rounded,
+                          AppColors.warning,
+                          isDark),
+                      _statusItem(
+                          'Agotados',
+                          '$_productosAgotados',
+                          Icons.remove_shopping_cart_outlined,
+                          AppColors.danger,
+                          isDark),
+                      _statusItem(
+                          'Costo',
+                          '\$${_valorInventarioCosto.toStringAsFixed(2)}',
+                          Icons.price_check_outlined,
+                          AppColors.secondary,
+                          isDark),
+                      _statusItem(
+                          'Valor venta',
+                          '\$${_valorInventarioVenta.toStringAsFixed(2)}',
+                          Icons.sell_outlined,
+                          AppColors.success,
+                          isDark),
                     ],
                   ),
                 ),
@@ -6607,7 +8807,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _quickAction(String label, IconData icon, Color accent, VoidCallback onTap) {
+  Widget _quickAction(
+      String label, IconData icon, Color accent, VoidCallback onTap) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -6622,17 +8823,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
             border: Border.all(color: accent.withValues(alpha: .16)),
           ),
           child: Row(children: [
-            Container(width: 38, height: 38, decoration: BoxDecoration(color: accent.withValues(alpha: .11), borderRadius: BorderRadius.circular(12)), child: Icon(icon, size: 19, color: accent)),
+            Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                    color: accent.withValues(alpha: .11),
+                    borderRadius: BorderRadius.circular(12)),
+                child: Icon(icon, size: 19, color: accent)),
             const SizedBox(width: 10),
-            Expanded(child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: accent))),
-            Icon(Icons.arrow_forward_ios_rounded, size: 12, color: accent.withValues(alpha: .65)),
+            Expanded(
+                child: Text(label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: accent))),
+            Icon(Icons.arrow_forward_ios_rounded,
+                size: 12, color: accent.withValues(alpha: .65)),
           ]),
         ),
       ),
     );
   }
 
-  Widget _executiveMetric(String title, String value, String subtitle, IconData icon, Color accent, bool isDark) {
+  Widget _executiveMetric(String title, String value, String subtitle,
+      IconData icon, Color accent, bool isDark) {
     return Container(
       height: 132,
       padding: const EdgeInsets.all(16),
@@ -6645,16 +8861,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Container(
           width: 40,
           height: 40,
-          decoration: BoxDecoration(color: accent.withValues(alpha: .10), borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+              color: accent.withValues(alpha: .10),
+              borderRadius: BorderRadius.circular(12)),
           child: Icon(icon, color: accent, size: 20),
         ),
         const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title.toUpperCase(), style: TextStyle(color: AppColors.subtext(isDark), fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1)),
+        Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title.toUpperCase(),
+              style: TextStyle(
+                  color: AppColors.subtext(isDark),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1)),
           const Spacer(),
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.text(isDark), fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: -.7)),
+          Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  color: AppColors.text(isDark),
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -.7)),
           const SizedBox(height: 3),
-          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.subtext(isDark), fontSize: 10)),
+          Text(subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: AppColors.subtext(isDark), fontSize: 10)),
         ])),
       ]),
     );
@@ -6729,7 +8964,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _panel(bool isDark, {
+  Widget _panel(
+    bool isDark, {
     required String title,
     required String subtitle,
     required IconData icon,
@@ -6790,9 +9026,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _graficoVentasHora(bool isDark, Map<int, double> ventasHora, double maxHora) {
-    final spots = List.generate(24, (hora) =>
-        FlSpot(hora.toDouble(), ventasHora[hora] ?? 0));
+  Widget _graficoVentasHora(
+      bool isDark, Map<int, double> ventasHora, double maxHora) {
+    final spots = List.generate(
+        24, (hora) => FlSpot(hora.toDouble(), ventasHora[hora] ?? 0));
 
     return LineChart(
       LineChartData(
@@ -6817,8 +9054,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               interval: maxHora <= 4 ? 1 : maxHora / 2,
               getTitlesWidget: (value, meta) => Text(
                 '\$${value.toStringAsFixed(0)}',
-                style: TextStyle(
-                    color: AppColors.subtext(isDark), fontSize: 9),
+                style: TextStyle(color: AppColors.subtext(isDark), fontSize: 9),
               ),
             ),
           ),
@@ -6839,8 +9075,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               },
             ),
           ),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         ),
         borderData: FlBorderData(show: false),
         lineTouchData: LineTouchData(
@@ -6881,43 +9119,62 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _inventarioPanel(bool isDark) {
     final totalProductos = productos.length;
-    final disponibles = productos.where((p) => ((p['stock'] as num?)?.toInt() ?? 0) > 0).length;
+    final disponibles =
+        productos.where((p) => ((p['stock'] as num?)?.toInt() ?? 0) > 0).length;
     final categoriasActivas = _categorias.length;
     final unidades = _totalStock;
-    final maxStock = productos.isEmpty ? 1 : productos.map((p) => ((p['stock'] as num?)?.toInt() ?? 0)).fold<int>(0, (a, b) => a > b ? a : b);
+    final maxStock = productos.isEmpty
+        ? 1
+        : productos
+            .map((p) => ((p['stock'] as num?)?.toInt() ?? 0))
+            .fold<int>(0, (a, b) => a > b ? a : b);
 
     return _panel(
       isDark,
-      title: 'Catálogo e inventario',
+      title: 'CatÃ¡logo e inventario',
       subtitle: 'Cantidad y estado de tus productos',
       icon: Icons.inventory_2_outlined,
       child: Column(
         children: [
           Row(children: [
-            Expanded(child: _dashboardCount('Productos', '$totalProductos', Icons.inventory_2_rounded, AppColors.primary, isDark)),
+            Expanded(
+                child: _dashboardCount('Productos', '$totalProductos',
+                    Icons.inventory_2_rounded, AppColors.primary, isDark)),
             const SizedBox(width: 8),
-            Expanded(child: _dashboardCount('Disponibles', '$disponibles', Icons.check_circle_rounded, AppColors.success, isDark)),
+            Expanded(
+                child: _dashboardCount('Disponibles', '$disponibles',
+                    Icons.check_circle_rounded, AppColors.success, isDark)),
           ]),
           const SizedBox(height: 8),
           Row(children: [
-            Expanded(child: _dashboardCount('Categorías', '$categoriasActivas', Icons.category_rounded, AppColors.info, isDark)),
+            Expanded(
+                child: _dashboardCount('CategorÃ­as', '$categoriasActivas',
+                    Icons.category_rounded, AppColors.info, isDark)),
             const SizedBox(width: 8),
-            Expanded(child: _dashboardCount('Unidades', '$unidades', Icons.all_inbox_rounded, AppColors.secondary, isDark)),
+            Expanded(
+                child: _dashboardCount('Unidades', '$unidades',
+                    Icons.all_inbox_rounded, AppColors.secondary, isDark)),
           ]),
           const SizedBox(height: 14),
-          _inventoryProgress('Nivel de unidades disponibles', unidades, maxStock, AppColors.info, isDark),
+          _inventoryProgress('Nivel de unidades disponibles', unidades,
+              maxStock, AppColors.info, isDark),
           const SizedBox(height: 12),
           Row(children: [
-            Expanded(child: _miniStatus('Stock bajo', '$_productosStockBajo', AppColors.warning, isDark)),
+            Expanded(
+                child: _miniStatus('Stock bajo', '$_productosStockBajo',
+                    AppColors.warning, isDark)),
             const SizedBox(width: 8),
-            Expanded(child: _miniStatus('Agotados', '$_productosAgotados', AppColors.danger, isDark)),
+            Expanded(
+                child: _miniStatus('Agotados', '$_productosAgotados',
+                    AppColors.danger, isDark)),
           ]),
         ],
       ),
     );
   }
 
-  Widget _dashboardCount(String label, String value, IconData icon, Color accent, bool isDark) {
+  Widget _dashboardCount(
+      String label, String value, IconData icon, Color accent, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -6926,11 +9183,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
         border: Border.all(color: accent.withValues(alpha: .14)),
       ),
       child: Row(children: [
-        Container(width: 34, height: 34, decoration: BoxDecoration(color: accent.withValues(alpha: .11), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: accent, size: 18)),
+        Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+                color: accent.withValues(alpha: .11),
+                borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: accent, size: 18)),
         const SizedBox(width: 9),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(value, style: TextStyle(color: AppColors.text(isDark), fontSize: 17, fontWeight: FontWeight.w900)),
-          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.subtext(isDark), fontSize: 9, fontWeight: FontWeight.w600)),
+        Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(value,
+              style: TextStyle(
+                  color: AppColors.text(isDark),
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900)),
+          Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  color: AppColors.subtext(isDark),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600)),
         ])),
       ]),
     );
@@ -6947,21 +9222,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
             decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 9),
-          Expanded(child: Text(label, style: TextStyle(color: AppColors.subtext(isDark), fontSize: 11))),
-          Text('\$${value.toStringAsFixed(2)}', style: TextStyle(color: AppColors.text(isDark), fontSize: 13, fontWeight: FontWeight.w800)),
+          Expanded(
+              child: Text(label,
+                  style: TextStyle(
+                      color: AppColors.subtext(isDark), fontSize: 11))),
+          Text('\$${value.toStringAsFixed(2)}',
+              style: TextStyle(
+                  color: AppColors.text(isDark),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800)),
         ],
       ),
     );
   }
 
-  Widget _inventoryProgress(String label, int value, int max, Color color, bool isDark) {
+  Widget _inventoryProgress(
+      String label, int value, int max, Color color, bool isDark) {
     final progress = max <= 0 ? 0.0 : (value / max).clamp(0.0, 1.0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
-          Expanded(child: Text(label, style: TextStyle(color: AppColors.subtext(isDark), fontSize: 11))),
-          Text('$value', style: TextStyle(color: AppColors.text(isDark), fontSize: 12, fontWeight: FontWeight.w800)),
+          Expanded(
+              child: Text(label,
+                  style: TextStyle(
+                      color: AppColors.subtext(isDark), fontSize: 11))),
+          Text('$value',
+              style: TextStyle(
+                  color: AppColors.text(isDark),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800)),
         ]),
         const SizedBox(height: 7),
         ClipRRect(
@@ -6988,8 +9278,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Row(children: [
         Icon(Icons.circle, color: color, size: 8),
         const SizedBox(width: 7),
-        Expanded(child: Text(label, style: TextStyle(color: AppColors.subtext(isDark), fontSize: 10))),
-        Text(value, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w800)),
+        Expanded(
+            child: Text(label,
+                style:
+                    TextStyle(color: AppColors.subtext(isDark), fontSize: 10))),
+        Text(value,
+            style: TextStyle(
+                color: color, fontSize: 14, fontWeight: FontWeight.w800)),
       ]),
     );
   }
@@ -6997,13 +9292,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _topProductosPanel(bool isDark) {
     return _panel(
       isDark,
-      title: 'Productos más vendidos',
+      title: 'Productos mÃ¡s vendidos',
       subtitle: 'Los productos con mayor movimiento',
       icon: Icons.local_fire_department_outlined,
       child: productosMasVendidos.isEmpty
-          ? _emptyDashboard('Aún no hay ventas registradas', isDark)
+          ? _emptyDashboard('AÃºn no hay ventas registradas', isDark)
           : Column(
-              children: productosMasVendidos.take(7).toList().asMap().entries.map((entry) {
+              children: productosMasVendidos
+                  .take(7)
+                  .toList()
+                  .asMap()
+                  .entries
+                  .map((entry) {
                 final index = entry.key;
                 final p = entry.value;
                 final cantidad = (p['cantidad'] as num?)?.toInt() ?? 0;
@@ -7020,13 +9320,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             : AppColors.background(isDark),
                         borderRadius: BorderRadius.circular(9),
                       ),
-                      child: Text('${index + 1}', style: TextStyle(color: index < 3 ? AppColors.primary : AppColors.subtext(isDark), fontSize: 11, fontWeight: FontWeight.w800)),
+                      child: Text('${index + 1}',
+                          style: TextStyle(
+                              color: index < 3
+                                  ? AppColors.primary
+                                  : AppColors.subtext(isDark),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800)),
                     ),
                     const SizedBox(width: 10),
-                    Expanded(child: Text(p['nombre']?.toString() ?? 'Producto', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.text(isDark), fontSize: 12, fontWeight: FontWeight.w600))),
-                    Text('$cantidad', style: const TextStyle(color: AppColors.success, fontSize: 13, fontWeight: FontWeight.w800)),
+                    Expanded(
+                        child: Text(p['nombre']?.toString() ?? 'Producto',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: AppColors.text(isDark),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600))),
+                    Text('$cantidad',
+                        style: const TextStyle(
+                            color: AppColors.success,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800)),
                     const SizedBox(width: 4),
-                    Text('vendidos', style: TextStyle(color: AppColors.subtext(isDark), fontSize: 9)),
+                    Text('vendidos',
+                        style: TextStyle(
+                            color: AppColors.subtext(isDark), fontSize: 9)),
                   ]),
                 );
               }).toList(),
@@ -7034,15 +9353,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _metodosPagoPanel(bool isDark, List<MapEntry<String, double>> metodos) {
+  Widget _metodosPagoPanel(
+      bool isDark, List<MapEntry<String, double>> metodos) {
     final total = metodos.fold<double>(0, (sum, e) => sum + e.value);
     return _panel(
       isDark,
-      title: 'Métodos de pago',
-      subtitle: 'Distribución de las ventas de hoy',
+      title: 'MÃ©todos de pago',
+      subtitle: 'DistribuciÃ³n de las ventas de hoy',
       icon: Icons.payments_outlined,
       child: metodos.isEmpty
-          ? _emptyDashboard('Todavía no hay pagos registrados', isDark)
+          ? _emptyDashboard('TodavÃ­a no hay pagos registrados', isDark)
           : Column(
               children: [
                 SizedBox(
@@ -7055,11 +9375,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           PieChartData(
                             sectionsSpace: 2,
                             centerSpaceRadius: 38,
-                            sections: metodos.take(5).toList().asMap().entries.map((entry) {
+                            sections: metodos
+                                .take(5)
+                                .toList()
+                                .asMap()
+                                .entries
+                                .map((entry) {
                               final index = entry.key;
                               final item = entry.value;
-                              final porcentaje = total <= 0 ? 0.0 : item.value / total * 100;
-                              final colores = [AppColors.primary, AppColors.success, AppColors.secondary, AppColors.warning, AppColors.info];
+                              final porcentaje =
+                                  total <= 0 ? 0.0 : item.value / total * 100;
+                              final colores = [
+                                AppColors.primary,
+                                AppColors.success,
+                                AppColors.secondary,
+                                AppColors.warning,
+                                AppColors.info
+                              ];
                               return PieChartSectionData(
                                 value: item.value,
                                 color: colores[index % colores.length],
@@ -7075,18 +9407,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: metodos.take(5).toList().asMap().entries.map((entry) {
+                          children: metodos
+                              .take(5)
+                              .toList()
+                              .asMap()
+                              .entries
+                              .map((entry) {
                             final index = entry.key;
                             final item = entry.value;
-                            final porcentaje = total <= 0 ? 0.0 : item.value / total * 100;
-                            final colores = [AppColors.primary, AppColors.success, AppColors.secondary, AppColors.warning, AppColors.info];
+                            final porcentaje =
+                                total <= 0 ? 0.0 : item.value / total * 100;
+                            final colores = [
+                              AppColors.primary,
+                              AppColors.success,
+                              AppColors.secondary,
+                              AppColors.warning,
+                              AppColors.info
+                            ];
                             return Padding(
                               padding: const EdgeInsets.symmetric(vertical: 4),
                               child: Row(children: [
-                                Container(width: 7, height: 7, decoration: BoxDecoration(color: colores[index % colores.length], shape: BoxShape.circle)),
+                                Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: BoxDecoration(
+                                        color: colores[index % colores.length],
+                                        shape: BoxShape.circle)),
                                 const SizedBox(width: 7),
-                                Expanded(child: Text(item.key, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.subtext(isDark), fontSize: 10))),
-                                Text('${porcentaje.toStringAsFixed(0)}%', style: TextStyle(color: AppColors.text(isDark), fontSize: 10, fontWeight: FontWeight.w800)),
+                                Expanded(
+                                    child: Text(item.key,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                            color: AppColors.subtext(isDark),
+                                            fontSize: 10))),
+                                Text('${porcentaje.toStringAsFixed(0)}%',
+                                    style: TextStyle(
+                                        color: AppColors.text(isDark),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w800)),
                               ]),
                             );
                           }).toList(),
@@ -7097,15 +9456,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const Divider(height: 18),
                 Row(children: [
-                  Expanded(child: Text('Total procesado', style: TextStyle(color: AppColors.subtext(isDark), fontSize: 10))),
-                  Text('\$${total.toStringAsFixed(2)}', style: TextStyle(color: AppColors.text(isDark), fontSize: 14, fontWeight: FontWeight.w800)),
+                  Expanded(
+                      child: Text('Total procesado',
+                          style: TextStyle(
+                              color: AppColors.subtext(isDark), fontSize: 10))),
+                  Text('\$${total.toStringAsFixed(2)}',
+                      style: TextStyle(
+                          color: AppColors.text(isDark),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800)),
                 ]),
               ],
             ),
     );
   }
 
-  Widget _statusItem(String label, String value, IconData icon, Color color, bool isDark) {
+  Widget _statusItem(
+      String label, String value, IconData icon, Color color, bool isDark) {
     return Container(
       constraints: const BoxConstraints(minWidth: 145),
       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
@@ -7118,9 +9485,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Icon(icon, color: color, size: 17),
         const SizedBox(width: 8),
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: TextStyle(color: AppColors.subtext(isDark), fontSize: 9)),
+          Text(label,
+              style: TextStyle(color: AppColors.subtext(isDark), fontSize: 9)),
           const SizedBox(height: 2),
-          Text(value, style: TextStyle(color: AppColors.text(isDark), fontSize: 12, fontWeight: FontWeight.w800)),
+          Text(value,
+              style: TextStyle(
+                  color: AppColors.text(isDark),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800)),
         ]),
       ]),
     );
@@ -7130,7 +9502,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 25),
       child: Center(
-        child: Text(message, style: TextStyle(color: AppColors.subtext(isDark), fontSize: 11)),
+        child: Text(message,
+            style: TextStyle(color: AppColors.subtext(isDark), fontSize: 11)),
       ),
     );
   }
@@ -7188,8 +9561,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final bg = AppColors.background(isDark);
     final border = AppColors.divider(isDark);
     final total = productos.length;
-    final disponibles = productos.where((p) => ((p['stock'] as num?)?.toInt() ?? 0) > 0).length;
-    final agotados = productos.where((p) => ((p['stock'] as num?)?.toInt() ?? 0) <= 0).length;
+    final disponibles =
+        productos.where((p) => ((p['stock'] as num?)?.toInt() ?? 0) > 0).length;
+    final agotados = productos
+        .where((p) => ((p['stock'] as num?)?.toInt() ?? 0) <= 0)
+        .length;
     final stockBajo = productos.where((p) {
       final stock = (p['stock'] as num?)?.toInt() ?? 0;
       final min = (p['stock_minimo'] as num?)?.toInt() ?? 5;
@@ -7203,9 +9579,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Icon(icon, color: color, size: 18),
           const SizedBox(width: 8),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 7.5, fontWeight: FontWeight.w900, letterSpacing: .7)),
+            Text(label.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: muted,
+                    fontSize: 7.5,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: .7)),
             const SizedBox(height: 2),
-            Text(value, style: TextStyle(color: ink, fontSize: 17, fontWeight: FontWeight.w900)),
+            Text(value,
+                style: TextStyle(
+                    color: ink, fontSize: 17, fontWeight: FontWeight.w900)),
           ]),
         ]),
       );
@@ -7218,8 +9603,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final cost = (prod['costo'] as num?)?.toDouble() ?? 0;
       final margin = cost > 0 ? ((price - cost) / cost * 100) : 0;
       final category = (prod['categoria'] ?? 'General').toString();
-      final statusColor = stock <= 0 ? AppColors.danger : stock <= min ? AppColors.warning : AppColors.success;
-      final statusText = stock <= 0 ? 'AGOTADO' : stock <= min ? 'STOCK BAJO' : 'DISPONIBLE';
+      final statusColor = stock <= 0
+          ? AppColors.danger
+          : stock <= min
+              ? AppColors.warning
+              : AppColors.success;
+      final statusText = stock <= 0
+          ? 'AGOTADO'
+          : stock <= min
+              ? 'STOCK BAJO'
+              : 'DISPONIBLE';
       return Material(
         color: surface,
         borderRadius: BorderRadius.circular(18),
@@ -7227,75 +9620,176 @@ class _DashboardScreenState extends State<DashboardScreen> {
           borderRadius: BorderRadius.circular(18),
           onTap: () => mostrarDialogoProducto(productoEditar: prod),
           child: Container(
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: border)),
+            decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: border)),
             clipBehavior: Clip.antiAlias,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(
                 flex: 6,
                 child: Stack(children: [
-                  Positioned.fill(child: Container(color: isDark ? const Color(0xFF171D26) : const Color(0xFFF3F5F7), child: ImagenProducto(imagenBase64: prod['imagen_base64']?.toString(), width: double.infinity, height: double.infinity, fit: BoxFit.cover))),
-                  Positioned(top: 9, left: 9, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: isDark ? const Color(0xCC0F131A) : const Color(0xEFFFFFFF), borderRadius: BorderRadius.circular(8)), child: Text(category, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: isDark ? Colors.white : const Color(0xFF4B5563), fontSize: 8, fontWeight: FontWeight.w900)))),
-                  Positioned(top: 9, right: 9, child: Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4), decoration: BoxDecoration(color: statusColor, borderRadius: BorderRadius.circular(8)), child: Text(statusText, style: const TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w900)))),
+                  Positioned.fill(
+                      child: Container(
+                          color: isDark
+                              ? const Color(0xFF171D26)
+                              : const Color(0xFFF3F5F7),
+                          child: ImagenProducto(
+                              imagenBase64: prod['imagen_base64']?.toString(),
+                              width: double.infinity,
+                              height: double.infinity,
+                              fit: BoxFit.cover))),
+                  Positioned(
+                      top: 9,
+                      left: 9,
+                      child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 4),
+                          decoration: BoxDecoration(
+                              color: isDark
+                                  ? const Color(0xCC0F131A)
+                                  : const Color(0xEFFFFFFF),
+                              borderRadius: BorderRadius.circular(8)),
+                          child: Text(category,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  color: isDark
+                                      ? Colors.white
+                                      : const Color(0xFF4B5563),
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w900)))),
+                  Positioned(
+                      top: 9,
+                      right: 9,
+                      child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 4),
+                          decoration: BoxDecoration(
+                              color: statusColor,
+                              borderRadius: BorderRadius.circular(8)),
+                          child: Text(statusText,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 7,
+                                  fontWeight: FontWeight.w900)))),
                 ]),
               ),
               Expanded(
                 flex: 4,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(11, 10, 8, 9),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(prod['nombre']?.toString() ?? 'Sin nombre', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: ink, fontSize: 11, fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 4),
-                    Text('${prod['codigo_barras'] ?? 'Sin código'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 8, fontWeight: FontWeight.w600)),
-                    const Spacer(),
-                    Row(children: [
-                      Expanded(child: Text(_precioDashboard(price), style: TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w900))),
-                      if (cost > 0) Text('Margen ${margin.toStringAsFixed(0)}%', style: TextStyle(color: AppColors.success, fontSize: 7.5, fontWeight: FontWeight.w800)),
-                    ]),
-                    const SizedBox(height: 4),
-                    Row(children: [
-                      Icon(Icons.inventory_2_outlined, size: 12, color: statusColor),
-                      const SizedBox(width: 4),
-                      Text('$stock unidades', style: TextStyle(color: statusColor, fontSize: 8.5, fontWeight: FontWeight.w800)),
-                      const Spacer(),
-                      PopupMenuButton<String>(
-                        tooltip: 'Opciones del producto',
-                        padding: EdgeInsets.zero,
-                        icon: Icon(Icons.more_vert_rounded, color: muted, size: 20),
-                        color: surface,
-                        onSelected: (action) {
-                          if (action == 'edit') {
-                            mostrarDialogoProducto(productoEditar: prod);
-                          } else if (action == 'copy') {
-                            Clipboard.setData(ClipboardData(text: (prod['codigo_barras'] ?? '').toString()));
-                            mostrarSnackBar('Código copiado', AppColors.primary);
-                          } else if (action == 'delete') {
-                            eliminarProducto(prod['id'].toString());
-                          }
-                        },
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(value: 'edit', child: Row(children: [Icon(Icons.edit_outlined, size: 18), SizedBox(width: 10), Text('Editar') ])),
-                          PopupMenuItem(value: 'copy', child: Row(children: [Icon(Icons.content_copy_outlined, size: 18), SizedBox(width: 10), Text('Copiar código') ])),
-                          PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete_outline, size: 18, color: AppColors.danger), SizedBox(width: 10), Text('Eliminar') ])),
-                        ],
-                      ),
-                    ]),
-                    const SizedBox(height: 7),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 34,
-                      child: FilledButton.icon(
-                        onPressed: stock > 0 ? () => _agregar(prod) : null,
-                        icon: const Icon(Icons.shopping_cart_rounded, size: 15),
-                        label: const Text('Agregar al carrito', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900)),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(prod['nombre']?.toString() ?? 'Sin nombre',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: ink,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900)),
+                        const SizedBox(height: 4),
+                        Text('${prod['codigo_barras'] ?? 'Sin cÃ³digo'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: muted,
+                                fontSize: 8,
+                                fontWeight: FontWeight.w600)),
+                        const Spacer(),
+                        Row(children: [
+                          Expanded(
+                              child: Text(_precioDashboard(price),
+                                  style: TextStyle(
+                                      color: AppColors.primary,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w900))),
+                          if (cost > 0)
+                            Text('Margen ${margin.toStringAsFixed(0)}%',
+                                style: TextStyle(
+                                    color: AppColors.success,
+                                    fontSize: 7.5,
+                                    fontWeight: FontWeight.w800)),
+                        ]),
+                        const SizedBox(height: 4),
+                        Row(children: [
+                          Icon(Icons.inventory_2_outlined,
+                              size: 12, color: statusColor),
+                          const SizedBox(width: 4),
+                          Text('$stock unidades',
+                              style: TextStyle(
+                                  color: statusColor,
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w800)),
+                          const Spacer(),
+                          PopupMenuButton<String>(
+                            tooltip: 'Opciones del producto',
+                            padding: EdgeInsets.zero,
+                            icon: Icon(Icons.more_vert_rounded,
+                                color: muted, size: 20),
+                            color: surface,
+                            onSelected: (action) {
+                              if (action == 'edit') {
+                                mostrarDialogoProducto(productoEditar: prod);
+                              } else if (action == 'copy') {
+                                Clipboard.setData(ClipboardData(
+                                    text: (prod['codigo_barras'] ?? '')
+                                        .toString()));
+                                mostrarSnackBar(
+                                    'CÃ³digo copiado', AppColors.primary);
+                              } else if (action == 'delete') {
+                                eliminarProducto(prod['id'].toString());
+                              }
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(children: [
+                                    Icon(Icons.edit_outlined, size: 18),
+                                    SizedBox(width: 10),
+                                    Text('Editar')
+                                  ])),
+                              PopupMenuItem(
+                                  value: 'copy',
+                                  child: Row(children: [
+                                    Icon(Icons.content_copy_outlined, size: 18),
+                                    SizedBox(width: 10),
+                                    Text('Copiar cÃ³digo')
+                                  ])),
+                              PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(children: [
+                                    Icon(Icons.delete_outline,
+                                        size: 18, color: AppColors.danger),
+                                    SizedBox(width: 10),
+                                    Text('Eliminar')
+                                  ])),
+                            ],
+                          ),
+                        ]),
+                        const SizedBox(height: 7),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 34,
+                          child: FilledButton.icon(
+                            onPressed: stock > 0 ? () => _agregar(prod) : null,
+                            icon: const Icon(Icons.shopping_cart_rounded,
+                                size: 15),
+                            label: const Text('Agregar al carrito',
+                                style: TextStyle(
+                                    fontSize: 9, fontWeight: FontWeight.w900)),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ]),
+                      ]),
                 ),
               ),
             ]),
@@ -7307,57 +9801,184 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return LayoutBuilder(builder: (context, constraints) {
       final desktop = constraints.maxWidth >= 1050;
       final wide = constraints.maxWidth >= 760;
-      final cols = desktop ? 4 : wide ? 3 : 2;
+      final cols = desktop
+          ? 4
+          : wide
+              ? 3
+              : 2;
       return ListView(
         padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
         children: [
           Row(children: [
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Productos', style: TextStyle(color: ink, fontSize: desktop ? 24 : 20, fontWeight: FontWeight.w900, letterSpacing: -.6)),
-              const SizedBox(height: 3),
-              Text('Catálogo, existencias y rentabilidad en una sola vista.', style: TextStyle(color: muted, fontSize: 10.5)),
-            ])),
-            Material(color: AppColors.primary, borderRadius: BorderRadius.circular(13), child: InkWell(borderRadius: BorderRadius.circular(13), onTap: () => mostrarDialogoProducto(), child: const Padding(padding: EdgeInsets.symmetric(horizontal: 13, vertical: 11), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.add_rounded, color: Colors.white, size: 18), SizedBox(width: 6), Text('Nuevo producto', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900))])))),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text('Productos',
+                      style: TextStyle(
+                          color: ink,
+                          fontSize: desktop ? 24 : 20,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -.6)),
+                  const SizedBox(height: 3),
+                  Text(
+                      'CatÃ¡logo, existencias y rentabilidad en una sola vista.',
+                      style: TextStyle(color: muted, fontSize: 10.5)),
+                ])),
+            Material(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(13),
+                child: InkWell(
+                    borderRadius: BorderRadius.circular(13),
+                    onTap: () => mostrarDialogoProducto(),
+                    child: const Padding(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Icons.add_rounded,
+                              color: Colors.white, size: 18),
+                          SizedBox(width: 6),
+                          Text('Nuevo producto',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900))
+                        ])))),
           ]),
           const SizedBox(height: 14),
           LayoutBuilder(builder: (context, metricConstraints) {
             final compact = metricConstraints.maxWidth < 700;
             final stats = [
-              stat('Total', '$total', Icons.inventory_2_rounded, AppColors.primary),
-              stat('Disponibles', '$disponibles', Icons.check_circle_outline_rounded, AppColors.success),
-              stat('Stock bajo', '$stockBajo', Icons.warning_amber_rounded, AppColors.warning),
-              stat('Agotados', '$agotados', Icons.remove_shopping_cart_outlined, AppColors.danger),
+              stat('Total', '$total', Icons.inventory_2_rounded,
+                  AppColors.primary),
+              stat('Disponibles', '$disponibles',
+                  Icons.check_circle_outline_rounded, AppColors.success),
+              stat('Stock bajo', '$stockBajo', Icons.warning_amber_rounded,
+                  AppColors.warning),
+              stat('Agotados', '$agotados', Icons.remove_shopping_cart_outlined,
+                  AppColors.danger),
             ];
-            if (!compact) return Row(children: [for (int i = 0; i < stats.length; i++) ...[Expanded(child: stats[i]), if (i < stats.length - 1) const SizedBox(width: 12)]]);
-            return Wrap(spacing: 8, runSpacing: 8, children: stats.map((v) => SizedBox(width: (metricConstraints.maxWidth - 8) / 2, child: v)).toList());
+            if (!compact)
+              return Row(children: [
+                for (int i = 0; i < stats.length; i++) ...[
+                  Expanded(child: stats[i]),
+                  if (i < stats.length - 1) const SizedBox(width: 12)
+                ]
+              ]);
+            return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: stats
+                    .map((v) => SizedBox(
+                        width: (metricConstraints.maxWidth - 8) / 2, child: v))
+                    .toList());
           }),
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(11),
-            decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: border)),
+            decoration: BoxDecoration(
+                color: surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: border)),
             child: Column(children: [
               Row(children: [
-                Expanded(child: Container(height: 44, decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)), child: TextField(onChanged: (v) => setState(() => searchQuery = v), style: TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w600), decoration: InputDecoration(border: InputBorder.none, prefixIcon: Icon(Icons.search_rounded, color: muted, size: 19), hintText: 'Buscar por nombre, código o marca...', hintStyle: TextStyle(color: muted, fontSize: 10), contentPadding: const EdgeInsets.symmetric(vertical: 13))))),
+                Expanded(
+                    child: Container(
+                        height: 44,
+                        decoration: BoxDecoration(
+                            color: bg, borderRadius: BorderRadius.circular(12)),
+                        child: TextField(
+                            onChanged: (v) => setState(() => searchQuery = v),
+                            style: TextStyle(
+                                color: ink,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600),
+                            decoration: InputDecoration(
+                                border: InputBorder.none,
+                                prefixIcon: Icon(Icons.search_rounded,
+                                    color: muted, size: 19),
+                                hintText:
+                                    'Buscar por nombre, cÃ³digo o marca...',
+                                hintStyle:
+                                    TextStyle(color: muted, fontSize: 10),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    vertical: 13))))),
                 const SizedBox(width: 8),
-                SizedBox(width: 155, child: _buildFiltroDropdown(_filtroCategoria, ['Todas', ..._categorias.map((c) => c['nombre'].toString())], (v) => setState(() => _filtroCategoria = v ?? 'Todas'), isDark)),
+                SizedBox(
+                    width: 155,
+                    child: _buildFiltroDropdown(
+                        _filtroCategoria,
+                        [
+                          'Todas',
+                          ..._categorias.map((c) => c['nombre'].toString())
+                        ],
+                        (v) => setState(() => _filtroCategoria = v ?? 'Todas'),
+                        isDark)),
                 const SizedBox(width: 8),
-                SizedBox(width: 145, child: _buildFiltroDropdown(_filtroStock, ['Todos', 'Con Stock', 'Stock Bajo', 'Agotados'], (v) => setState(() => _filtroStock = v ?? 'Todos'), isDark)),
+                SizedBox(
+                    width: 145,
+                    child: _buildFiltroDropdown(
+                        _filtroStock,
+                        ['Todos', 'Con Stock', 'Stock Bajo', 'Agotados'],
+                        (v) => setState(() => _filtroStock = v ?? 'Todos'),
+                        isDark)),
               ]),
               const SizedBox(height: 8),
-              Row(children: [Icon(Icons.tune_rounded, size: 13, color: AppColors.primary), const SizedBox(width: 5), Text('${filtrados.length} resultados', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w800)), const Spacer(), Text('Vista catálogo', style: TextStyle(color: muted, fontSize: 8.5, fontWeight: FontWeight.w700))]),
+              Row(children: [
+                Icon(Icons.tune_rounded, size: 13, color: AppColors.primary),
+                const SizedBox(width: 5),
+                Text('${filtrados.length} resultados',
+                    style: TextStyle(
+                        color: muted,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800)),
+                const Spacer(),
+                Text('Vista catÃ¡logo',
+                    style: TextStyle(
+                        color: muted,
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.w700))
+              ]),
             ]),
           ),
           const SizedBox(height: 12),
           if (filtrados.isEmpty)
-            Container(padding: const EdgeInsets.symmetric(vertical: 65), decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: border)), child: Column(children: [Icon(Icons.inventory_2_outlined, size: 46, color: muted), const SizedBox(height: 12), Text('No hay productos', style: TextStyle(color: ink, fontSize: 15, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text('Prueba otro filtro o crea un producto nuevo.', style: TextStyle(color: muted, fontSize: 10))]))
+            Container(
+                padding: const EdgeInsets.symmetric(vertical: 65),
+                decoration: BoxDecoration(
+                    color: surface,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: border)),
+                child: Column(children: [
+                  Icon(Icons.inventory_2_outlined, size: 46, color: muted),
+                  const SizedBox(height: 12),
+                  Text('No hay productos',
+                      style: TextStyle(
+                          color: ink,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 4),
+                  Text('Prueba otro filtro o crea un producto nuevo.',
+                      style: TextStyle(color: muted, fontSize: 10))
+                ]))
           else
-            GridView.builder(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: filtrados.length, gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: cols, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: desktop ? .83 : .76), itemBuilder: (_, i) => productCard(filtrados[i])),
+            GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: filtrados.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: cols,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                    childAspectRatio: desktop ? .83 : .76),
+                itemBuilder: (_, i) => productCard(filtrados[i])),
         ],
       );
     });
   }
 
-  Widget _buildFiltroDropdown(String value, List<String> items, ValueChanged<String?> onChanged, bool isDark) {
+  Widget _buildFiltroDropdown(String value, List<String> items,
+      ValueChanged<String?> onChanged, bool isDark) {
     final safeItems = <String>[];
     for (final item in items) {
       if (item.isEmpty || safeItems.contains(item)) continue;
@@ -7379,16 +10000,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
           isExpanded: true,
           isDense: true,
           dropdownColor: AppColors.card(isDark),
-          icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.subtext(isDark), size: 18),
+          icon: Icon(Icons.keyboard_arrow_down_rounded,
+              color: AppColors.subtext(isDark), size: 18),
           style: TextStyle(
             color: AppColors.text(isDark),
             fontSize: 10,
             fontWeight: FontWeight.w800,
           ),
-          items: safeItems.map((item) => DropdownMenuItem<String>(
-            value: item,
-            child: Text(item, maxLines: 1, overflow: TextOverflow.ellipsis),
-          )).toList(),
+          items: safeItems
+              .map((item) => DropdownMenuItem<String>(
+                    value: item,
+                    child: Text(item,
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ))
+              .toList(),
           onChanged: onChanged,
         ),
       ),
@@ -7397,18 +10022,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _precioDashboard(double value) => '\$${value.toStringAsFixed(2)}';
 
-  Widget _buildSalesKpi(String label, String value, String sub, IconData icon, Color color, bool isDark) {
+  Widget _buildSalesKpi(String label, String value, String sub, IconData icon,
+      Color color, bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       child: Row(children: [
         Icon(icon, color: color, size: 18),
         const SizedBox(width: 8),
-        Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label.toUpperCase(), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.subtext(isDark), fontSize: 7.5, fontWeight: FontWeight.w900, letterSpacing: .7)),
+        Flexible(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  color: AppColors.subtext(isDark),
+                  fontSize: 7.5,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .7)),
           const SizedBox(height: 2),
-          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.text(isDark), fontSize: 16, fontWeight: FontWeight.w900)),
+          Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  color: AppColors.text(isDark),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900)),
           const SizedBox(height: 1),
-          Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.subtext(isDark), fontSize: 7.5, fontWeight: FontWeight.w600)),
+          Text(sub,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  color: AppColors.subtext(isDark),
+                  fontSize: 7.5,
+                  fontWeight: FontWeight.w600)),
         ])),
       ]),
     );
@@ -7422,36 +10069,260 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final border = AppColors.divider(isDark);
     return LayoutBuilder(builder: (context, constraints) {
       final desktop = constraints.maxWidth >= 1000;
-      return ListView(padding: const EdgeInsets.fromLTRB(14, 4, 14, 24), children: [
-        Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Ventas', style: TextStyle(color: ink, fontSize: desktop ? 24 : 20, fontWeight: FontWeight.w900, letterSpacing: -.6)), const SizedBox(height: 3), Text('Control de operaciones, tickets y clientes.', style: TextStyle(color: muted, fontSize: 10.5))])), Material(color: AppColors.primary, borderRadius: BorderRadius.circular(13), child: InkWell(borderRadius: BorderRadius.circular(13), onTap: widget.onNavigateToPOS, child: const Padding(padding: EdgeInsets.symmetric(horizontal: 13, vertical: 11), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.point_of_sale_rounded, color: Colors.white, size: 17), SizedBox(width: 6), Text('Nueva venta', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900))]))))]),
-        const SizedBox(height: 14),
-        LayoutBuilder(builder: (context, metricConstraints) {
-          final compact = metricConstraints.maxWidth < 700;
-          final values = [
-            _buildSalesKpi('Ventas hoy', '\$${totalVentasHoy.toStringAsFixed(2)}', '$cantidadVentasHoy operaciones', Icons.trending_up_rounded, AppColors.success, isDark),
-            _buildSalesKpi('Este mes', '\$${totalVentasMes.toStringAsFixed(2)}', 'Acumulado mensual', Icons.calendar_month_rounded, AppColors.primary, isDark),
-            _buildSalesKpi('Ticket medio', '\$${_ticketPromedio.toStringAsFixed(2)}', 'Por operación', Icons.receipt_long_rounded, AppColors.info, isDark),
-            _buildSalesKpi('Margen', '${_margenPorcentaje.toStringAsFixed(1)}%', 'Rentabilidad estimada', Icons.savings_rounded, AppColors.secondary, isDark),
-          ];
-          if (!compact) return Row(children: [for (int i = 0; i < values.length; i++) ...[Expanded(child: values[i]), if (i < values.length - 1) const SizedBox(width: 12)]]);
-          return Wrap(spacing: 10, runSpacing: 8, children: values.map((v) => SizedBox(width: (metricConstraints.maxWidth - 10) / 2, child: v)).toList());
-        }),
-        const SizedBox(height: 12),
-        Container(padding: const EdgeInsets.all(11), decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: border)), child: Row(children: [Expanded(child: _buildFiltroDropdown(_filtroFechaVentas, ['Hoy', 'Ayer', 'Esta Semana', 'Este Mes', 'Todo'], (v) { setState(() => _filtroFechaVentas = v ?? 'Hoy'); _aplicarFiltroVentas(); }, isDark)), const SizedBox(width: 8), Material(color: bg, borderRadius: BorderRadius.circular(10), child: InkWell(borderRadius: BorderRadius.circular(10), onTap: () { cargarDatos(); mostrarSnackBar('Ventas actualizadas', AppColors.primary); }, child: const SizedBox(width: 42, height: 38, child: Icon(Icons.refresh_rounded, color: AppColors.primary, size: 19))))])),
-        const SizedBox(height: 12),
-        Container(decoration: BoxDecoration(color: surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: border)), clipBehavior: Clip.antiAlias, child: Column(children: [
-          Container(padding: const EdgeInsets.fromLTRB(15, 13, 15, 12), color: isDark ? Colors.white.withValues(alpha: .025) : const Color(0xFFF7F9FB), child: Row(children: [Expanded(child: Text('Historial de operaciones', style: TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w900))), Text('${ventasFiltradas.length} registros', style: TextStyle(color: muted, fontSize: 8.5, fontWeight: FontWeight.w800))])),
-          if (ventasFiltradas.isEmpty) Padding(padding: const EdgeInsets.symmetric(vertical: 65), child: Column(children: [Icon(Icons.receipt_long_outlined, size: 44, color: muted), const SizedBox(height: 12), Text('No hay ventas', style: TextStyle(color: ink, fontSize: 14, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text('Las operaciones aparecerán aquí.', style: TextStyle(color: muted, fontSize: 10))]))
-          else ...ventasFiltradas.asMap().entries.map((entry) {
-            final i = entry.key; final v = entry.value;
-            final fecha = v['fecha'] != null ? DateTime.tryParse(v['fecha'].toString()) ?? DateTime.now() : DateTime.now();
-            final totalVenta = (v['total'] as num?)?.toDouble() ?? 0;
-            final cliente = (v['cliente_nombre'] ?? 'Público General').toString();
-            final factura = (v['numero_factura'] ?? 'Venta #${v['id']}').toString();
-            return Material(color: Colors.transparent, child: InkWell(onTap: () => _mostrarDetalleVenta(v), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11), child: Column(children: [Row(children: [Container(width: 42, height: 42, decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: .10), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.receipt_long_rounded, color: AppColors.primary, size: 19)), const SizedBox(width: 11), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(factura, style: TextStyle(color: ink, fontSize: 11, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(cliente, style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w700)), const SizedBox(height: 2), Text(DateFormat('dd/MM/yyyy · HH:mm').format(fecha), style: TextStyle(color: muted, fontSize: 8))])), Column(crossAxisAlignment: CrossAxisAlignment.end, children: [Text('\$${totalVenta.toStringAsFixed(2)}', style: const TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Icon(Icons.chevron_right_rounded, color: muted, size: 17)])]), if (i < ventasFiltradas.length - 1) Padding(padding: const EdgeInsets.only(top: 11), child: Divider(height: 1, color: border))]))));
-          }),
-        ])),
-      ]);
+      return ListView(
+          padding: const EdgeInsets.fromLTRB(14, 4, 14, 24),
+          children: [
+            Row(children: [
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Text('Ventas',
+                        style: TextStyle(
+                            color: ink,
+                            fontSize: desktop ? 24 : 20,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -.6)),
+                    const SizedBox(height: 3),
+                    Text('Control de operaciones, tickets y clientes.',
+                        style: TextStyle(color: muted, fontSize: 10.5))
+                  ])),
+              Material(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(13),
+                  child: InkWell(
+                      borderRadius: BorderRadius.circular(13),
+                      onTap: widget.onNavigateToPOS,
+                      child: const Padding(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 13, vertical: 11),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Icons.point_of_sale_rounded,
+                                color: Colors.white, size: 17),
+                            SizedBox(width: 6),
+                            Text('Nueva venta',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w900))
+                          ]))))
+            ]),
+            const SizedBox(height: 14),
+            LayoutBuilder(builder: (context, metricConstraints) {
+              final compact = metricConstraints.maxWidth < 700;
+              final values = [
+                _buildSalesKpi(
+                    'Ventas hoy',
+                    '\$${totalVentasHoy.toStringAsFixed(2)}',
+                    '$cantidadVentasHoy operaciones',
+                    Icons.trending_up_rounded,
+                    AppColors.success,
+                    isDark),
+                _buildSalesKpi(
+                    'Este mes',
+                    '\$${totalVentasMes.toStringAsFixed(2)}',
+                    'Acumulado mensual',
+                    Icons.calendar_month_rounded,
+                    AppColors.primary,
+                    isDark),
+                _buildSalesKpi(
+                    'Ticket medio',
+                    '\$${_ticketPromedio.toStringAsFixed(2)}',
+                    'Por operaciÃ³n',
+                    Icons.receipt_long_rounded,
+                    AppColors.info,
+                    isDark),
+                _buildSalesKpi(
+                    'Margen',
+                    '${_margenPorcentaje.toStringAsFixed(1)}%',
+                    'Rentabilidad estimada',
+                    Icons.savings_rounded,
+                    AppColors.secondary,
+                    isDark),
+              ];
+              if (!compact)
+                return Row(children: [
+                  for (int i = 0; i < values.length; i++) ...[
+                    Expanded(child: values[i]),
+                    if (i < values.length - 1) const SizedBox(width: 12)
+                  ]
+                ]);
+              return Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  children: values
+                      .map((v) => SizedBox(
+                          width: (metricConstraints.maxWidth - 10) / 2,
+                          child: v))
+                      .toList());
+            }),
+            const SizedBox(height: 12),
+            Container(
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(
+                    color: surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: border)),
+                child: Row(children: [
+                  Expanded(
+                      child: _buildFiltroDropdown(_filtroFechaVentas, [
+                    'Hoy',
+                    'Ayer',
+                    'Esta Semana',
+                    'Este Mes',
+                    'Todo'
+                  ], (v) {
+                    setState(() => _filtroFechaVentas = v ?? 'Hoy');
+                    _aplicarFiltroVentas();
+                  }, isDark)),
+                  const SizedBox(width: 8),
+                  Material(
+                      color: bg,
+                      borderRadius: BorderRadius.circular(10),
+                      child: InkWell(
+                          borderRadius: BorderRadius.circular(10),
+                          onTap: () {
+                            cargarDatos();
+                            mostrarSnackBar(
+                                'Ventas actualizadas', AppColors.primary);
+                          },
+                          child: const SizedBox(
+                              width: 42,
+                              height: 38,
+                              child: Icon(Icons.refresh_rounded,
+                                  color: AppColors.primary, size: 19))))
+                ])),
+            const SizedBox(height: 12),
+            Container(
+                decoration: BoxDecoration(
+                    color: surface,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: border)),
+                clipBehavior: Clip.antiAlias,
+                child: Column(children: [
+                  Container(
+                      padding: const EdgeInsets.fromLTRB(15, 13, 15, 12),
+                      color: isDark
+                          ? Colors.white.withValues(alpha: .025)
+                          : const Color(0xFFF7F9FB),
+                      child: Row(children: [
+                        Expanded(
+                            child: Text('Historial de operaciones',
+                                style: TextStyle(
+                                    color: ink,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w900))),
+                        Text('${ventasFiltradas.length} registros',
+                            style: TextStyle(
+                                color: muted,
+                                fontSize: 8.5,
+                                fontWeight: FontWeight.w800))
+                      ])),
+                  if (ventasFiltradas.isEmpty)
+                    Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 65),
+                        child: Column(children: [
+                          Icon(Icons.receipt_long_outlined,
+                              size: 44, color: muted),
+                          const SizedBox(height: 12),
+                          Text('No hay ventas',
+                              style: TextStyle(
+                                  color: ink,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w900)),
+                          const SizedBox(height: 4),
+                          Text('Las operaciones aparecerÃ¡n aquÃ­.',
+                              style: TextStyle(color: muted, fontSize: 10))
+                        ]))
+                  else
+                    ...ventasFiltradas.asMap().entries.map((entry) {
+                      final i = entry.key;
+                      final v = entry.value;
+                      final fecha = v['fecha'] != null
+                          ? DateTime.tryParse(v['fecha'].toString()) ??
+                              DateTime.now()
+                          : DateTime.now();
+                      final totalVenta = (v['total'] as num?)?.toDouble() ?? 0;
+                      final cliente =
+                          (v['cliente_nombre'] ?? 'PÃºblico General')
+                              .toString();
+                      final factura =
+                          (v['numero_factura'] ?? 'Venta #${v['id']}')
+                              .toString();
+                      return Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                              onTap: () => _mostrarDetalleVenta(v),
+                              child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 11),
+                                  child: Column(children: [
+                                    Row(children: [
+                                      Container(
+                                          width: 42,
+                                          height: 42,
+                                          decoration: BoxDecoration(
+                                              color: AppColors.primary
+                                                  .withValues(alpha: .10),
+                                              borderRadius:
+                                                  BorderRadius.circular(12)),
+                                          child: const Icon(
+                                              Icons.receipt_long_rounded,
+                                              color: AppColors.primary,
+                                              size: 19)),
+                                      const SizedBox(width: 11),
+                                      Expanded(
+                                          child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                            Text(factura,
+                                                style: TextStyle(
+                                                    color: ink,
+                                                    fontSize: 11,
+                                                    fontWeight:
+                                                        FontWeight.w900)),
+                                            const SizedBox(height: 3),
+                                            Text(cliente,
+                                                style: TextStyle(
+                                                    color: muted,
+                                                    fontSize: 9,
+                                                    fontWeight:
+                                                        FontWeight.w700)),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                                DateFormat(
+                                                        'dd/MM/yyyy Â· HH:mm')
+                                                    .format(fecha),
+                                                style: TextStyle(
+                                                    color: muted, fontSize: 8))
+                                          ])),
+                                      Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                                '\$${totalVenta.toStringAsFixed(2)}',
+                                                style: const TextStyle(
+                                                    color: AppColors.primary,
+                                                    fontSize: 14,
+                                                    fontWeight:
+                                                        FontWeight.w900)),
+                                            const SizedBox(height: 3),
+                                            Icon(Icons.chevron_right_rounded,
+                                                color: muted, size: 17)
+                                          ])
+                                    ]),
+                                    if (i < ventasFiltradas.length - 1)
+                                      Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 11),
+                                          child:
+                                              Divider(height: 1, color: border))
+                                  ]))));
+                    }),
+                ])),
+          ]);
     });
   }
 
@@ -7459,7 +10330,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final isDark = widget.modoOscuro;
     final detalle = await _db.getDetalleVenta(venta['id'].toString());
     final totalVenta = (venta['total'] as num).toDouble();
-    final nombreCliente = venta['cliente_nombre'] ?? 'Público General';
+    final nombreCliente = venta['cliente_nombre'] ?? 'PÃºblico General';
     final telefonoCliente = venta['cliente_telefono'] ?? '';
     final factura = venta['numero_factura'] ?? 'Venta #${venta['id']}';
 
@@ -7614,20 +10485,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       String nombre, String telefono, String factura, double totalVenta) {
     if (telefono.isEmpty) {
       mostrarSnackBar(
-          'El cliente no tiene número de teléfono', AppColors.warning);
+          'El cliente no tiene nÃºmero de telÃ©fono', AppColors.warning);
       return;
     }
     String phone = telefono.replaceAll(RegExp(r'[^0-9]'), '');
     if (phone.startsWith('0')) {
       phone = '58${phone.substring(1)}';
     }
-    String message = "🛍️ *SINTHETIX - COMPROBANTE DE VENTA*\n\n";
-    message += "📄 Factura: $factura\n";
-    message += "👤 Cliente: $nombre\n";
-    message += "💰 Total: \$${totalVenta.toStringAsFixed(2)}\n";
+    String message = "ðŸ›ï¸ *SINTHETIX - COMPROBANTE DE VENTA*\n\n";
+    message += "ðŸ“„ Factura: $factura\n";
+    message += "ðŸ‘¤ Cliente: $nombre\n";
+    message += "ðŸ’° Total: \$${totalVenta.toStringAsFixed(2)}\n";
     message +=
-        "📅 Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}\n\n";
-    message += "¡Gracias por su compra! 🎉";
+        "ðŸ“… Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}\n\n";
+    message += "Â¡Gracias por su compra! ðŸŽ‰";
 
     final whatsappUrl =
         "https://wa.me/$phone?text=${Uri.encodeComponent(message)}";
@@ -7644,7 +10515,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: Text('Eliminar producto',
             style: TextStyle(
                 color: AppColors.text(isDark), fontWeight: FontWeight.w700)),
-        content: Text('¿Estás seguro de eliminar este producto?',
+        content: Text('Â¿EstÃ¡s seguro de eliminar este producto?',
             style: TextStyle(color: AppColors.subtext(isDark))),
         actions: [
           TextButton(
@@ -7701,8 +10572,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         productoEditar?['destacado'] == true;
     bool tieneDescuento = (productoEditar?['descuento'] ?? 0) > 0;
     bool guardando = false;
-    final List<GrupoOpciones> gruposOpciones =
-        OpcionesProducto.decodificar(productoEditar?['opciones_json']?.toString());
+    final List<GrupoOpciones> gruposOpciones = OpcionesProducto.decodificar(
+        productoEditar?['opciones_json']?.toString());
 
     showDialog(
       context: context,
@@ -7726,14 +10597,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   subiendo = false;
                 });
                 if (cloudUrl == null) {
-                  mostrarSnackBar('Imagen guardada localmente. Se subirá cuando haya conexión.', AppColors.warning);
+                  mostrarSnackBar(
+                      'Imagen guardada localmente. Se subirÃ¡ cuando haya conexiÃ³n.',
+                      AppColors.warning);
                 }
               } catch (e) {
                 setDialogState(() => subiendo = false);
               }
             }
 
-            // FUNCIÓN PARA ESCANEAR CÓDIGO
+            // FUNCIÃ“N PARA ESCANEAR CÃ“DIGO
             Future<void> escanearCodigo() async {
               final codigo = await showDialog<String>(
                 context: dialogContext,
@@ -7784,7 +10657,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // SECCIÓN IMAGEN
+                      // SECCIÃ“N IMAGEN
                       ValueListenableBuilder<String>(
                         valueListenable: imagenNotifier,
                         builder: (context, base64, child) {
@@ -7858,7 +10731,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   },
                             icon: const Icon(Icons.photo_library,
                                 color: AppColors.primary, size: 20),
-                            label: const Text('Galería',
+                            label: const Text('GalerÃ­a',
                                 style: TextStyle(
                                     color: AppColors.primary, fontSize: 13)),
                             style: OutlinedButton.styleFrom(
@@ -7876,7 +10749,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(height: 16),
                       Divider(color: AppColors.divider(isDark)),
                       const SizedBox(height: 8),
-                      // SECCIÓN INFORMACIÓN BÁSICA
+                      // SECCIÃ“N INFORMACIÃ“N BÃSICA
                       TextField(
                         controller: nombreCtrl,
                         style: TextStyle(color: AppColors.text(isDark)),
@@ -7890,7 +10763,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             controller: codigoCtrl,
                             style: TextStyle(color: AppColors.text(isDark)),
                             decoration: _inputDecoration(
-                                'Código de Barras', Icons.qr_code, isDark),
+                                'CÃ³digo de Barras', Icons.qr_code, isDark),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -7905,7 +10778,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             icon: const Icon(Icons.qr_code_scanner_rounded,
                                 color: Colors.white, size: 22),
                             onPressed: escanearCodigo,
-                            tooltip: 'Escanear código',
+                            tooltip: 'Escanear cÃ³digo',
                           ),
                         ),
                         const SizedBox(width: 4),
@@ -7926,7 +10799,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 codigoCtrl.text = codigo;
                               });
                             },
-                            tooltip: 'Generar código',
+                            tooltip: 'Generar cÃ³digo',
                           ),
                         ),
                       ]),
@@ -8018,7 +10891,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ]),
                       const SizedBox(height: 12),
-                      // SECCIÓN PRECIOS
+                      // SECCIÃ“N PRECIOS
                       Row(children: [
                         Expanded(
                           child: TextField(
@@ -8046,7 +10919,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ]),
                       const SizedBox(height: 12),
-                      // SECCIÓN STOCK
+                      // SECCIÃ“N STOCK
                       Row(children: [
                         Expanded(
                           child: TextField(
@@ -8064,7 +10937,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             style: TextStyle(color: AppColors.text(isDark)),
                             keyboardType: TextInputType.number,
                             decoration: _inputDecoration(
-                                'Stock Mínimo', Icons.warning_amber, isDark),
+                                'Stock MÃ­nimo', Icons.warning_amber, isDark),
                           ),
                         ),
                       ]),
@@ -8073,11 +10946,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         controller: descCtrl,
                         style: TextStyle(color: AppColors.text(isDark)),
                         decoration: _inputDecoration(
-                            'Descripción', Icons.description_outlined, isDark),
+                            'DescripciÃ³n', Icons.description_outlined, isDark),
                         maxLines: 2,
                       ),
                       const SizedBox(height: 12),
-                      // SECCIÓN VARIANTES
+                      // SECCIÃ“N VARIANTES
                       if (_tallas.isNotEmpty) ...[
                         Text('TALLA',
                             style: TextStyle(
@@ -8112,47 +10985,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                         const SizedBox(height: 12),
                       ],
-                      // SECCIÓN CONFIGURACIÓN
+                      // SECCIÃ“N CONFIGURACIÃ“N
                       Material(
-  color: Colors.transparent,
-  child: SwitchListTile(
-                        title: Text('Producto Activo',
-                            style: TextStyle(
-                                color: AppColors.text(isDark), fontSize: 14)),
-                        value: activo,
-                        onChanged: (v) => setDialogState(() => activo = v),
-                        activeThumbColor: AppColors.primary,
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
+                        color: Colors.transparent,
+                        child: SwitchListTile(
+                          title: Text('Producto Activo',
+                              style: TextStyle(
+                                  color: AppColors.text(isDark), fontSize: 14)),
+                          value: activo,
+                          onChanged: (v) => setDialogState(() => activo = v),
+                          activeThumbColor: AppColors.primary,
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
                       ),
-),
                       Material(
-  color: Colors.transparent,
-  child: SwitchListTile(
-                        title: Text('Producto Destacado',
-                            style: TextStyle(
-                                color: AppColors.text(isDark), fontSize: 14)),
-                        value: destacado,
-                        onChanged: (v) => setDialogState(() => destacado = v),
-                        activeThumbColor: AppColors.primary,
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
+                        color: Colors.transparent,
+                        child: SwitchListTile(
+                          title: Text('Producto Destacado',
+                              style: TextStyle(
+                                  color: AppColors.text(isDark), fontSize: 14)),
+                          value: destacado,
+                          onChanged: (v) => setDialogState(() => destacado = v),
+                          activeThumbColor: AppColors.primary,
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
                       ),
-),
                       Material(
-  color: Colors.transparent,
-  child: SwitchListTile(
-                        title: Text('Aplicar Descuento',
-                            style: TextStyle(
-                                color: AppColors.text(isDark), fontSize: 14)),
-                        value: tieneDescuento,
-                        onChanged: (v) =>
-                            setDialogState(() => tieneDescuento = v),
-                        activeThumbColor: AppColors.primary,
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
+                        color: Colors.transparent,
+                        child: SwitchListTile(
+                          title: Text('Aplicar Descuento',
+                              style: TextStyle(
+                                  color: AppColors.text(isDark), fontSize: 14)),
+                          value: tieneDescuento,
+                          onChanged: (v) =>
+                              setDialogState(() => tieneDescuento = v),
+                          activeThumbColor: AppColors.primary,
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                        ),
                       ),
-),
                       if (tieneDescuento) ...[
                         const SizedBox(height: 8),
                         TextField(
@@ -8173,8 +11046,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               fontSize: 11,
                               fontWeight: FontWeight.w700)),
                       const SizedBox(height: 4),
-                      Text('Ej: Extras (queso, tocino) o Tamaño (S, M, L) con precio adicional opcional.',
-                          style: TextStyle(color: AppColors.subtext(isDark), fontSize: 10.5)),
+                      Text(
+                          'Ej: Extras (queso, tocino) o TamaÃ±o (S, M, L) con precio adicional opcional.',
+                          style: TextStyle(
+                              color: AppColors.subtext(isDark),
+                              fontSize: 10.5)),
                       const SizedBox(height: 10),
                       ...gruposOpciones.map((g) {
                         return Container(
@@ -8183,7 +11059,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           decoration: BoxDecoration(
                             color: AppColors.background(isDark),
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: AppColors.divider(isDark)),
+                            border:
+                                Border.all(color: AppColors.divider(isDark)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -8197,14 +11074,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                             fontWeight: FontWeight.w800,
                                             fontSize: 13)),
                                   ),
-                                  Text(g.seleccionMultiple ? 'Múltiple' : 'Única',
-                                      style: TextStyle(color: AppColors.subtext(isDark), fontSize: 10)),
+                                  Text(
+                                      g.seleccionMultiple
+                                          ? 'MÃºltiple'
+                                          : 'Ãšnica',
+                                      style: TextStyle(
+                                          color: AppColors.subtext(isDark),
+                                          fontSize: 10)),
                                   const SizedBox(width: 8),
                                   if (g.obligatorio)
-                                    Text('Obligatorio', style: TextStyle(color: AppColors.danger, fontSize: 10, fontWeight: FontWeight.w700)),
+                                    Text('Obligatorio',
+                                        style: TextStyle(
+                                            color: AppColors.danger,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700)),
                                   IconButton(
-                                    icon: Icon(Icons.delete_outline, size: 18, color: AppColors.danger),
-                                    onPressed: () => setDialogState(() => gruposOpciones.remove(g)),
+                                    icon: Icon(Icons.delete_outline,
+                                        size: 18, color: AppColors.danger),
+                                    onPressed: () => setDialogState(
+                                        () => gruposOpciones.remove(g)),
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints(),
                                     visualDensity: VisualDensity.compact,
@@ -8223,51 +11111,80 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                               : v.nombre,
                                           style: const TextStyle(fontSize: 11),
                                         ),
-                                        onDeleted: () =>
-                                            setDialogState(() => g.valores.remove(v)),
+                                        onDeleted: () => setDialogState(
+                                            () => g.valores.remove(v)),
                                         backgroundColor: AppColors.card(isDark),
                                       )),
                                   ActionChip(
                                     avatar: const Icon(Icons.add, size: 16),
-                                    label: const Text('Agregar valor', style: TextStyle(fontSize: 11)),
+                                    label: const Text('Agregar valor',
+                                        style: TextStyle(fontSize: 11)),
                                     onPressed: () async {
-                                      final nombreValorCtrl = TextEditingController();
-                                      final precioValorCtrl = TextEditingController(text: '0');
+                                      final nombreValorCtrl =
+                                          TextEditingController();
+                                      final precioValorCtrl =
+                                          TextEditingController(text: '0');
                                       final ok = await showDialog<bool>(
                                         context: context,
                                         builder: (c) => AlertDialog(
-                                          backgroundColor: AppColors.card(isDark),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                          backgroundColor:
+                                              AppColors.card(isDark),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(18)),
                                           title: const Text('Nuevo valor'),
                                           content: Column(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               TextField(
                                                 controller: nombreValorCtrl,
-                                                decoration: _inputDecoration('Nombre (ej: Queso)', Icons.label_outline, isDark),
+                                                decoration: _inputDecoration(
+                                                    'Nombre (ej: Queso)',
+                                                    Icons.label_outline,
+                                                    isDark),
                                               ),
                                               const SizedBox(height: 10),
                                               TextField(
                                                 controller: precioValorCtrl,
-                                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                                decoration: _inputDecoration('Precio adicional (0 si es gratis)', Icons.attach_money, isDark),
+                                                keyboardType:
+                                                    const TextInputType
+                                                        .numberWithOptions(
+                                                        decimal: true),
+                                                decoration: _inputDecoration(
+                                                    'Precio adicional (0 si es gratis)',
+                                                    Icons.attach_money,
+                                                    isDark),
                                               ),
                                             ],
                                           ),
                                           actions: [
-                                            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancelar')),
-                                            ElevatedButton(onPressed: () => Navigator.pop(c, true), child: const Text('Agregar')),
+                                            TextButton(
+                                                onPressed: () =>
+                                                    Navigator.pop(c, false),
+                                                child: const Text('Cancelar')),
+                                            ElevatedButton(
+                                                onPressed: () =>
+                                                    Navigator.pop(c, true),
+                                                child: const Text('Agregar')),
                                           ],
                                         ),
                                       );
-                                      if (ok == true && nombreValorCtrl.text.trim().isNotEmpty) {
-                                        setDialogState(() => g.valores.add(ValorOpcion(
-                                              nombre: nombreValorCtrl.text.trim(),
-                                              precioExtra: double.tryParse(precioValorCtrl.text) ?? 0,
+                                      if (ok == true &&
+                                          nombreValorCtrl.text
+                                              .trim()
+                                              .isNotEmpty) {
+                                        setDialogState(() =>
+                                            g.valores.add(ValorOpcion(
+                                              nombre:
+                                                  nombreValorCtrl.text.trim(),
+                                              precioExtra: double.tryParse(
+                                                      precioValorCtrl.text) ??
+                                                  0,
                                             )));
                                       }
                                     },
-                                    backgroundColor: AppColors.primary.withValues(alpha: .12),
+                                    backgroundColor: AppColors.primary
+                                        .withValues(alpha: .12),
                                   ),
                                 ],
                               ),
@@ -8285,27 +11202,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             builder: (c) => StatefulBuilder(
                               builder: (c, setGrupoState) => AlertDialog(
                                 backgroundColor: AppColors.card(isDark),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(18)),
                                 title: const Text('Nuevo grupo de opciones'),
                                 content: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     TextField(
                                       controller: nombreGrupoCtrl,
-                                      decoration: _inputDecoration('Nombre (ej: Extras, Tamaño)', Icons.tune, isDark),
+                                      decoration: _inputDecoration(
+                                          'Nombre (ej: Extras, TamaÃ±o)',
+                                          Icons.tune,
+                                          isDark),
                                     ),
                                     SwitchListTile(
-                                      title: const Text('Permitir varias opciones', style: TextStyle(fontSize: 13)),
+                                      title: const Text(
+                                          'Permitir varias opciones',
+                                          style: TextStyle(fontSize: 13)),
                                       value: multiple,
-                                      onChanged: (v) => setGrupoState(() => multiple = v),
+                                      onChanged: (v) =>
+                                          setGrupoState(() => multiple = v),
                                       activeThumbColor: AppColors.primary,
                                       contentPadding: EdgeInsets.zero,
                                       dense: true,
                                     ),
                                     SwitchListTile(
-                                      title: const Text('Obligatorio antes de agregar al carrito', style: TextStyle(fontSize: 13)),
+                                      title: const Text(
+                                          'Obligatorio antes de agregar al carrito',
+                                          style: TextStyle(fontSize: 13)),
                                       value: obligatorio,
-                                      onChanged: (v) => setGrupoState(() => obligatorio = v),
+                                      onChanged: (v) =>
+                                          setGrupoState(() => obligatorio = v),
                                       activeThumbColor: AppColors.primary,
                                       contentPadding: EdgeInsets.zero,
                                       dense: true,
@@ -8313,26 +11240,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   ],
                                 ),
                                 actions: [
-                                  TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancelar')),
-                                  ElevatedButton(onPressed: () => Navigator.pop(c, true), child: const Text('Crear')),
+                                  TextButton(
+                                      onPressed: () => Navigator.pop(c, false),
+                                      child: const Text('Cancelar')),
+                                  ElevatedButton(
+                                      onPressed: () => Navigator.pop(c, true),
+                                      child: const Text('Crear')),
                                 ],
                               ),
                             ),
                           );
-                          if (ok == true && nombreGrupoCtrl.text.trim().isNotEmpty) {
-                            setDialogState(() => gruposOpciones.add(GrupoOpciones(
-                                  nombre: nombreGrupoCtrl.text.trim(),
-                                  seleccionMultiple: multiple,
-                                  obligatorio: obligatorio,
-                                )));
+                          if (ok == true &&
+                              nombreGrupoCtrl.text.trim().isNotEmpty) {
+                            setDialogState(
+                                () => gruposOpciones.add(GrupoOpciones(
+                                      nombre: nombreGrupoCtrl.text.trim(),
+                                      seleccionMultiple: multiple,
+                                      obligatorio: obligatorio,
+                                    )));
                           }
                         },
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text('Agregar grupo de opciones'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.primary,
-                          side: BorderSide(color: AppColors.primary.withValues(alpha: .5)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          side: BorderSide(
+                              color: AppColors.primary.withValues(alpha: .5)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
                         ),
                       ),
                     ],
@@ -8392,7 +11327,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               'talla': tallaSeleccionada,
                               'color': colorSeleccionado,
                               'tiene_variantes': tieneVariantes ? 1 : 0,
-                              'opciones_json': OpcionesProducto.codificar(gruposOpciones),
+                              'opciones_json':
+                                  OpcionesProducto.codificar(gruposOpciones),
                               'descuento': tieneDescuento ? descuento : 0,
                               'margen': costo > 0
                                   ? ((precio - costo) / costo * 100)
@@ -8412,13 +11348,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 throw Exception(
                                     'No se pudo guardar el producto en la base de datos.');
                               }
-                              final synced = creado['sync_estado'] == 'sincronizado';
+                              final synced =
+                                  creado['sync_estado'] == 'sincronizado';
                               Navigator.pop(dialogContext);
                               await cargarDatos();
                               mostrarSnackBar(
                                 synced
                                     ? 'Producto creado y sincronizado en Supabase'
-                                    : 'Producto guardado localmente. Quedó pendiente de sincronización.',
+                                    : 'Producto guardado localmente. QuedÃ³ pendiente de sincronizaciÃ³n.',
                                 synced ? AppColors.success : AppColors.warning,
                               );
                               return;
@@ -8507,40 +11444,97 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Material(
             color: isDark ? const Color(0xFF151B23) : Colors.white,
             borderRadius: BorderRadius.circular(16),
-            child: InkWell(borderRadius: BorderRadius.circular(16), onTap: widget.onAbrirSidebar,
-              child: const Icon(Icons.menu_rounded, color: AppColors.primary, size: 23)),
+            child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: widget.onAbrirSidebar,
+                child: const Icon(Icons.menu_rounded,
+                    color: AppColors.primary, size: 23)),
           ),
         ),
         title: Row(children: [
           Container(
-            width: 44, height: 44, padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(color: isDark ? const Color(0xFF151B23) : Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.divider(isDark))),
+            width: 44,
+            height: 44,
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF151B23) : Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.divider(isDark))),
             child: (_logoDashboard != null && _logoDashboard!.isNotEmpty)
-                ? Image.memory(base64Decode(_logoDashboard!), fit: BoxFit.contain)
-                : const Icon(Icons.dashboard_rounded, color: AppColors.primary, size: 23),
+                ? Image.memory(base64Decode(_logoDashboard!),
+                    fit: BoxFit.contain)
+                : const Icon(Icons.dashboard_rounded,
+                    color: AppColors.primary, size: 23),
           ),
           const SizedBox(width: 11),
-          Flexible(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('DASHBOARD', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: ink, fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: .2)),
-            const SizedBox(height: 2),
-            Text('${productos.length} productos · ${cantidadVentasHoy} ventas hoy', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontSize: 9.5, fontWeight: FontWeight.w600)),
-          ])),
+          Flexible(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text('DASHBOARD',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: ink,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: .2)),
+                const SizedBox(height: 2),
+                Text(
+                    '${productos.length} productos Â· ${cantidadVentasHoy} ventas hoy',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: muted,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w600)),
+              ])),
         ]),
         actions: [
-          Material(color: isDark ? const Color(0xFF151B23) : Colors.white, borderRadius: BorderRadius.circular(14), child: InkWell(borderRadius: BorderRadius.circular(14), onTap: widget.onToggleModoOscuro,
-            child: SizedBox(width: 44, height: 44, child: Icon(isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded, color: AppColors.primary, size: 20)))),
+          Material(
+              color: isDark ? const Color(0xFF151B23) : Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: widget.onToggleModoOscuro,
+                  child: SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: Icon(
+                          isDark
+                              ? Icons.light_mode_rounded
+                              : Icons.dark_mode_rounded,
+                          color: AppColors.primary,
+                          size: 20)))),
           const SizedBox(width: 7),
-          Material(color: isDark ? const Color(0xFF151B23) : Colors.white, borderRadius: BorderRadius.circular(14), child: InkWell(borderRadius: BorderRadius.circular(14), onTap: () => ca ? cerrarCaja() : abrirCaja(),
-            child: SizedBox(width: 44, height: 44, child: Icon(ca ? Icons.lock_open_rounded : Icons.lock_outline_rounded, color: ca ? AppColors.success : AppColors.warning, size: 20)))),
+          Material(
+              color: isDark ? const Color(0xFF151B23) : Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => ca ? cerrarCaja() : abrirCaja(),
+                  child: SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: Icon(
+                          ca
+                              ? Icons.lock_open_rounded
+                              : Icons.lock_outline_rounded,
+                          color: ca ? AppColors.success : AppColors.warning,
+                          size: 20)))),
           const SizedBox(width: 12),
         ],
       ),
-      body: SafeArea(child: Column(children: [
+      body: SafeArea(
+          child: Column(children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 2, 14, 12),
           child: Container(
             height: 54,
-            decoration: BoxDecoration(color: isDark ? const Color(0xFF11161D) : Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.divider(isDark))),
+            decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF11161D) : Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.divider(isDark))),
             child: Row(children: [
               _tab('Resumen', 0, isDark, Icons.dashboard_rounded),
               _tab('Productos', 1, isDark, Icons.inventory_2_outlined),
@@ -8548,17 +11542,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ]),
           ),
         ),
-        Expanded(child: cargando ? const Center(child: CircularProgressIndicator(color: AppColors.primary)) : seccionActual == 0 ? _resumen(isDark) : seccionActual == 1 ? _productosWidget(isDark) : _ventasWidget(isDark)),
+        Expanded(
+            child: cargando
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary))
+                : seccionActual == 0
+                    ? _resumen(isDark)
+                    : seccionActual == 1
+                        ? _productosWidget(isDark)
+                        : _ventasWidget(isDark)),
       ])),
     );
   }
 }
 // ============================================
-// CONTINUACIÓN - ETAPA 5 de 6
+// CONTINUACIÃ“N - ETAPA 5 de 6
 // ============================================
 
 // ============================================
-// FUNCIÓN MAIN
+// FUNCIÃ“N MAIN
 // ============================================
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -8576,11 +11578,12 @@ void main() async {
 
   runApp(const MiApp());
   unawaited(SupabaseSyncService.syncPendingProducts());
-  Timer.periodic(const Duration(minutes: 2), (_) => unawaited(SupabaseSyncService.syncPendingProducts()));
+  Timer.periodic(const Duration(minutes: 2),
+      (_) => unawaited(SupabaseSyncService.syncPendingProducts()));
 }
 
 // ============================================
-// PANTALLA: CONFIGURACIÓN (MI NEGOCIO) - DISEÑO PROFESIONAL
+// PANTALLA: CONFIGURACIÃ“N (MI NEGOCIO) - DISEÃ‘O PROFESIONAL
 // ============================================
 class ConfiguracionScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -8626,7 +11629,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
       _tasaCOPCtrl.text = (prefs.getDouble('tasa_cop') ?? 4500.0).toString();
       _tasaVESCtrl.text = (prefs.getDouble('tasa_ves') ?? 60.0).toString();
     } catch (e) {
-      debugPrint('Error cargando configuración: $e');
+      debugPrint('Error cargando configuraciÃ³n: $e');
     }
     setState(() => _cargando = false);
   }
@@ -8672,7 +11675,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Configuración guardada exitosamente',
+            content: const Text('ConfiguraciÃ³n guardada exitosamente',
                 style: TextStyle(color: Colors.white)),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
@@ -8682,7 +11685,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
         );
       }
     } catch (e) {
-      debugPrint('Error guardando configuración: $e');
+      debugPrint('Error guardando configuraciÃ³n: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -8713,7 +11716,7 @@ class _ConfiguracionScreenState extends State<ConfiguracionScreen> {
           icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
         ),
         title: Row(children: [
-const SizedBox(width: 14),
+          const SizedBox(width: 14),
           Text('MI NEGOCIO',
               style: TextStyle(
                   color: AppColors.text(isDark),
@@ -8799,15 +11802,15 @@ const SizedBox(width: 14),
                     const SizedBox(height: 20),
                     _buildTextField(_nombreCtrl, 'Nombre del Negocio', isDark),
                     const SizedBox(height: 12),
-                    _buildTextField(_rifCtrl, 'RIF / Cédula', isDark),
+                    _buildTextField(_rifCtrl, 'RIF / CÃ©dula', isDark),
                     const SizedBox(height: 12),
-                    _buildTextField(_direccionCtrl, 'Dirección', isDark,
+                    _buildTextField(_direccionCtrl, 'DirecciÃ³n', isDark,
                         maxLines: 2),
                     const SizedBox(height: 12),
-                    _buildTextField(_telefonoCtrl, 'Teléfono', isDark,
+                    _buildTextField(_telefonoCtrl, 'TelÃ©fono', isDark,
                         keyboardType: TextInputType.phone),
                     const SizedBox(height: 12),
-                    _buildTextField(_correoCtrl, 'Correo Electrónico', isDark,
+                    _buildTextField(_correoCtrl, 'Correo ElectrÃ³nico', isDark,
                         keyboardType: TextInputType.emailAddress),
                     const SizedBox(height: 24),
                     Text('TIPO DE CAMBIO',
@@ -8904,7 +11907,7 @@ const SizedBox(width: 14),
 }
 
 // ============================================
-// PANTALLA: CATEGORÍAS - CON GUARDADO AUTOMÁTICO
+// PANTALLA: CATEGORÃAS - CON GUARDADO AUTOMÃTICO
 // ============================================
 class CategoriasScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -8930,9 +11933,9 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
     setState(() => _cargando = true);
     try {
       _categorias = await _db.getCategorias();
-      debugPrint('Categorías cargadas: ${_categorias.length}');
+      debugPrint('CategorÃ­as cargadas: ${_categorias.length}');
     } catch (e) {
-      debugPrint('Error cargando categorías: $e');
+      debugPrint('Error cargando categorÃ­as: $e');
       _categorias = [];
     }
     setState(() => _cargando = false);
@@ -8955,7 +11958,7 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text(
-            categoria != null ? 'Editar Categoría' : 'Nueva Categoría',
+            categoria != null ? 'Editar CategorÃ­a' : 'Nueva CategorÃ­a',
             style: TextStyle(
                 color: AppColors.text(isDark), fontWeight: FontWeight.w700),
           ),
@@ -8985,7 +11988,7 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
                   controller: descCtrl,
                   style: TextStyle(color: AppColors.text(isDark)),
                   decoration: InputDecoration(
-                    labelText: 'Descripción',
+                    labelText: 'DescripciÃ³n',
                     labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                     filled: true,
                     fillColor: AppColors.background(isDark),
@@ -9032,8 +12035,8 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
                         await _cargarCategorias();
                         _mostrarSnackbar(
                             categoria != null
-                                ? 'Categoría actualizada'
-                                : 'Categoría creada exitosamente',
+                                ? 'CategorÃ­a actualizada'
+                                : 'CategorÃ­a creada exitosamente',
                             AppColors.success);
                       } catch (e) {
                         setDialogState(() => guardando = false);
@@ -9092,8 +12095,8 @@ class _CategoriasScreenState extends State<CategoriasScreen> {
           icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
         ),
         title: Row(children: [
-const SizedBox(width: 14),
-          Text('CATEGORÍAS',
+          const SizedBox(width: 14),
+          Text('CATEGORÃAS',
               style: TextStyle(
                   color: AppColors.text(isDark),
                   fontSize: 18,
@@ -9134,12 +12137,12 @@ const SizedBox(width: 14),
                         Icon(Icons.category_outlined,
                             size: 60, color: AppColors.subtext(isDark)),
                         const SizedBox(height: 16),
-                        Text('No hay categorías',
+                        Text('No hay categorÃ­as',
                             style: TextStyle(
                                 color: AppColors.subtext(isDark),
                                 fontSize: 16)),
                         const SizedBox(height: 4),
-                        Text('Agrega tu primera categoría',
+                        Text('Agrega tu primera categorÃ­a',
                             style: TextStyle(
                                 color: AppColors.subtext(isDark),
                                 fontSize: 12)),
@@ -9213,7 +12216,7 @@ const SizedBox(width: 14),
                               await _db.eliminarCategoria(cat['id'].toString());
                               await _cargarCategorias();
                               _mostrarSnackbar(
-                                  'Categoría eliminada', AppColors.danger);
+                                  'CategorÃ­a eliminada', AppColors.danger);
                             },
                           ),
                         ]),
@@ -9238,7 +12241,7 @@ const SizedBox(width: 14),
                   onPressed: () => _mostrarDialogo(),
                   icon: const Icon(Icons.add_rounded,
                       color: Colors.white, size: 24),
-                  label: const Text('AGREGAR CATEGORÍA',
+                  label: const Text('AGREGAR CATEGORÃA',
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 14,
@@ -9261,7 +12264,7 @@ const SizedBox(width: 14),
 }
 
 // ============================================
-// PANTALLA: MÉTODOS DE PAGO - CON GUARDADO AUTOMÁTICO
+// PANTALLA: MÃ‰TODOS DE PAGO - CON GUARDADO AUTOMÃTICO
 // ============================================
 class MetodosPagoScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -9288,7 +12291,7 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
     try {
       _metodos = await _db.getMetodosPago();
     } catch (e) {
-      debugPrint('Error cargando métodos de pago: $e');
+      debugPrint('Error cargando mÃ©todos de pago: $e');
       _metodos = [];
     }
     setState(() => _cargando = false);
@@ -9296,61 +12299,203 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
 
   void _mostrarDialogo({Map<String, dynamic>? metodo}) {
     final dark = widget.modoOscuro;
-    String tipo = (metodo?['tipo'] ?? metodo?['nombre'] ?? 'Efectivo').toString();
+    String tipo =
+        (metodo?['tipo'] ?? metodo?['nombre'] ?? 'Efectivo').toString();
     final nombre = TextEditingController(text: metodo?['nombre'] ?? tipo);
     final banco = TextEditingController(text: metodo?['banco'] ?? '');
     final cuenta = TextEditingController(text: metodo?['numero_cuenta'] ?? '');
-    final telefono = TextEditingController(text: metodo?['telefono_pago_movil'] ?? '');
+    final telefono =
+        TextEditingController(text: metodo?['telefono_pago_movil'] ?? '');
     final titular = TextEditingController(text: metodo?['titular'] ?? '');
-    final datos = TextEditingController(text: metodo?['datos_adicionales'] ?? '');
-    bool guardando=false;
-    final tipos=['Efectivo','Tarjeta','Transferencia','Pago Móvil','Otro'];
+    final datos =
+        TextEditingController(text: metodo?['datos_adicionales'] ?? '');
+    bool guardando = false;
+    final tipos = [
+      'Efectivo',
+      'Tarjeta',
+      'Transferencia',
+      'Pago MÃ³vil',
+      'Otro'
+    ];
 
-    showDialog(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setD)=>AlertDialog(
-      backgroundColor:AppColors.card(dark),
-      shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24)),
-      title:Row(children:[Container(width:42,height:42,decoration:BoxDecoration(color:AppColors.primary.withValues(alpha:.10),borderRadius:BorderRadius.circular(13)),child:const Icon(Icons.account_balance_wallet_outlined,color:AppColors.primary)),const SizedBox(width:12),Expanded(child:Text(metodo==null?'Agregar método de pago':'Editar método de pago',style:TextStyle(color:AppColors.text(dark),fontWeight:FontWeight.w900,fontSize:18)))]),
-      content:SizedBox(width:520,child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Text('TIPO',style:TextStyle(color:AppColors.subtext(dark),fontSize:10,fontWeight:FontWeight.w900,letterSpacing:1)),const SizedBox(height:7),
-        DropdownButtonFormField<String>(value:tipos.contains(tipo)?tipo:'Otro',decoration:_field('Método'),items:tipos.map((x)=>DropdownMenuItem(value:x,child:Text(x))).toList(),onChanged:(v){setD(()=>tipo=v??'Otro');if(metodo==null)nombre.text=tipo;}),
-        const SizedBox(height:16),
-        TextField(controller:nombre,decoration:_field('Nombre visible')),
-        const SizedBox(height:14),
-        if(tipo=='Efectivo') _infoMetodo('No necesita datos bancarios. Solo se registra el pago recibido y el vuelto.',Icons.payments_outlined,dark),
-        if(tipo=='Tarjeta') ...[
-          _infoMetodo('Registra únicamente los datos que tu negocio necesite para identificar la operación.',Icons.credit_card_outlined,dark),
-          const SizedBox(height:10),TextField(controller:datos,decoration:_field('Terminal / referencia (opcional)')),
-        ],
-        if(tipo=='Transferencia') ...[
-          TextField(controller:banco,decoration:_field('Banco')),
-          const SizedBox(height:10),TextField(controller:cuenta,decoration:_field('Número de cuenta / referencia')),
-          const SizedBox(height:10),TextField(controller:titular,decoration:_field('Titular')),
-        ],
-        if(tipo=='Pago Móvil') ...[
-          TextField(controller:telefono,keyboardType:TextInputType.phone,decoration:_field('Teléfono')),
-          const SizedBox(height:10),TextField(controller:banco,decoration:_field('Banco')),
-          const SizedBox(height:10),TextField(controller:titular,decoration:_field('Titular')),
-        ],
-        if(tipo=='Otro') ...[
-          TextField(controller:datos,maxLines:3,decoration:_field('Instrucciones / datos adicionales')),
-        ],
-      ]))),
-      actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:Text('Cancelar',style:TextStyle(color:AppColors.subtext(dark)))),FilledButton(onPressed:guardando?null:()async{if(nombre.text.trim().isEmpty)return;setD(()=>guardando=true);final data={'nombre':nombre.text.trim(),'tipo':tipo,'banco':banco.text.trim(),'numero_cuenta':cuenta.text.trim(),'telefono_pago_movil':telefono.text.trim(),'titular':titular.text.trim(),'datos_adicionales':datos.text.trim()};if(metodo!=null){await _db.actualizarMetodoPago(metodo['id'].toString(),data);}else{await _db.crearMetodoPago({...data,'activo':1});}if(ctx.mounted)Navigator.pop(ctx);await _cargarMetodos();},child:Text(guardando?'Guardando…':'Guardar'))],
-    )));
+    showDialog(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+            builder: (ctx, setD) => AlertDialog(
+                  backgroundColor: AppColors.card(dark),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24)),
+                  title: Row(children: [
+                    Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: .10),
+                            borderRadius: BorderRadius.circular(13)),
+                        child: const Icon(Icons.account_balance_wallet_outlined,
+                            color: AppColors.primary)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                        child: Text(
+                            metodo == null
+                                ? 'Agregar mÃ©todo de pago'
+                                : 'Editar mÃ©todo de pago',
+                            style: TextStyle(
+                                color: AppColors.text(dark),
+                                fontWeight: FontWeight.w900,
+                                fontSize: 18)))
+                  ]),
+                  content: SizedBox(
+                      width: 520,
+                      child: SingleChildScrollView(
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                            Text('TIPO',
+                                style: TextStyle(
+                                    color: AppColors.subtext(dark),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1)),
+                            const SizedBox(height: 7),
+                            DropdownButtonFormField<String>(
+                                value: tipos.contains(tipo) ? tipo : 'Otro',
+                                decoration: _field('MÃ©todo'),
+                                items: tipos
+                                    .map((x) => DropdownMenuItem(
+                                        value: x, child: Text(x)))
+                                    .toList(),
+                                onChanged: (v) {
+                                  setD(() => tipo = v ?? 'Otro');
+                                  if (metodo == null) nombre.text = tipo;
+                                }),
+                            const SizedBox(height: 16),
+                            TextField(
+                                controller: nombre,
+                                decoration: _field('Nombre visible')),
+                            const SizedBox(height: 14),
+                            if (tipo == 'Efectivo')
+                              _infoMetodo(
+                                  'No necesita datos bancarios. Solo se registra el pago recibido y el vuelto.',
+                                  Icons.payments_outlined,
+                                  dark),
+                            if (tipo == 'Tarjeta') ...[
+                              _infoMetodo(
+                                  'Registra Ãºnicamente los datos que tu negocio necesite para identificar la operaciÃ³n.',
+                                  Icons.credit_card_outlined,
+                                  dark),
+                              const SizedBox(height: 10),
+                              TextField(
+                                  controller: datos,
+                                  decoration: _field(
+                                      'Terminal / referencia (opcional)')),
+                            ],
+                            if (tipo == 'Transferencia') ...[
+                              TextField(
+                                  controller: banco,
+                                  decoration: _field('Banco')),
+                              const SizedBox(height: 10),
+                              TextField(
+                                  controller: cuenta,
+                                  decoration:
+                                      _field('NÃºmero de cuenta / referencia')),
+                              const SizedBox(height: 10),
+                              TextField(
+                                  controller: titular,
+                                  decoration: _field('Titular')),
+                            ],
+                            if (tipo == 'Pago MÃ³vil') ...[
+                              TextField(
+                                  controller: telefono,
+                                  keyboardType: TextInputType.phone,
+                                  decoration: _field('TelÃ©fono')),
+                              const SizedBox(height: 10),
+                              TextField(
+                                  controller: banco,
+                                  decoration: _field('Banco')),
+                              const SizedBox(height: 10),
+                              TextField(
+                                  controller: titular,
+                                  decoration: _field('Titular')),
+                            ],
+                            if (tipo == 'Otro') ...[
+                              TextField(
+                                  controller: datos,
+                                  maxLines: 3,
+                                  decoration: _field(
+                                      'Instrucciones / datos adicionales')),
+                            ],
+                          ]))),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text('Cancelar',
+                            style: TextStyle(color: AppColors.subtext(dark)))),
+                    FilledButton(
+                        onPressed: guardando
+                            ? null
+                            : () async {
+                                if (nombre.text.trim().isEmpty) return;
+                                setD(() => guardando = true);
+                                final data = {
+                                  'nombre': nombre.text.trim(),
+                                  'tipo': tipo,
+                                  'banco': banco.text.trim(),
+                                  'numero_cuenta': cuenta.text.trim(),
+                                  'telefono_pago_movil': telefono.text.trim(),
+                                  'titular': titular.text.trim(),
+                                  'datos_adicionales': datos.text.trim()
+                                };
+                                if (metodo != null) {
+                                  await _db.actualizarMetodoPago(
+                                      metodo['id'].toString(), data);
+                                } else {
+                                  await _db
+                                      .crearMetodoPago({...data, 'activo': 1});
+                                }
+                                if (ctx.mounted) Navigator.pop(ctx);
+                                await _cargarMetodos();
+                              },
+                        child: Text(guardando ? 'Guardandoâ€¦' : 'Guardar'))
+                  ],
+                )));
   }
 
   InputDecoration _field(String label) => InputDecoration(
-    labelText: label,
-    filled: true,
-    fillColor: widget.modoOscuro ? const Color(0xFF202438) : const Color(0xFFF8F7FB),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: AppColors.divider(widget.modoOscuro))),
-    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: BorderSide(color: AppColors.divider(widget.modoOscuro))),
-    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(13), borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
-    isDense: true,
-  );
+        labelText: label,
+        filled: true,
+        fillColor: widget.modoOscuro
+            ? const Color(0xFF202438)
+            : const Color(0xFFF8F7FB),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(13),
+            borderSide:
+                BorderSide(color: AppColors.divider(widget.modoOscuro))),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(13),
+            borderSide:
+                BorderSide(color: AppColors.divider(widget.modoOscuro))),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(13),
+            borderSide: const BorderSide(color: AppColors.primary, width: 1.5)),
+        isDense: true,
+      );
 
-  Widget _infoMetodo(String text, IconData icon, bool dark)=>Container(width:double.infinity,padding:const EdgeInsets.all(13),decoration:BoxDecoration(color:AppColors.background(dark),borderRadius:BorderRadius.circular(14),border:Border.all(color:AppColors.divider(dark))),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[Icon(icon,color:AppColors.primary,size:19),const SizedBox(width:10),Expanded(child:Text(text,style:TextStyle(color:AppColors.subtext(dark),fontSize:10,height:1.4)))]));
-
+  Widget _infoMetodo(String text, IconData icon, bool dark) => Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+          color: AppColors.background(dark),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.divider(dark))),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, color: AppColors.primary, size: 19),
+        const SizedBox(width: 10),
+        Expanded(
+            child: Text(text,
+                style: TextStyle(
+                    color: AppColors.subtext(dark), fontSize: 10, height: 1.4)))
+      ]));
 
   @override
   Widget build(BuildContext context) {
@@ -9366,8 +12511,8 @@ class _MetodosPagoScreenState extends State<MetodosPagoScreen> {
           icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
         ),
         title: Row(children: [
-const SizedBox(width: 14),
-          Text('MÉTODOS DE PAGO',
+          const SizedBox(width: 14),
+          Text('MÃ‰TODOS DE PAGO',
               style: TextStyle(
                   color: AppColors.text(isDark),
                   fontSize: 18,
@@ -9408,7 +12553,7 @@ const SizedBox(width: 14),
                         Icon(Icons.payment_outlined,
                             size: 60, color: AppColors.subtext(isDark)),
                         const SizedBox(height: 16),
-                        Text('No hay métodos de pago',
+                        Text('No hay mÃ©todos de pago',
                             style: TextStyle(
                                 color: AppColors.subtext(isDark),
                                 fontSize: 16)),
@@ -9547,7 +12692,7 @@ const SizedBox(width: 14),
                   onPressed: () => _mostrarDialogo(),
                   icon: const Icon(Icons.add_rounded,
                       color: Colors.white, size: 24),
-                  label: const Text('AGREGAR MÉTODO',
+                  label: const Text('AGREGAR MÃ‰TODO',
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 14,
@@ -9570,7 +12715,7 @@ const SizedBox(width: 14),
 }
 
 // ============================================
-// PANTALLA: VENDEDORES - CON GUARDADO AUTOMÁTICO
+// PANTALLA: VENDEDORES - CON GUARDADO AUTOMÃTICO
 // ============================================
 class VendedoresScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -9650,7 +12795,7 @@ class _VendedoresScreenState extends State<VendedoresScreen> {
                 style: TextStyle(color: AppColors.text(isDark)),
                 keyboardType: TextInputType.phone,
                 decoration: InputDecoration(
-                  labelText: 'Teléfono',
+                  labelText: 'TelÃ©fono',
                   labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                   filled: true,
                   fillColor: AppColors.background(isDark),
@@ -9669,7 +12814,7 @@ class _VendedoresScreenState extends State<VendedoresScreen> {
                 style: TextStyle(color: AppColors.text(isDark)),
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: 'Comisión (%)',
+                  labelText: 'ComisiÃ³n (%)',
                   labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                   filled: true,
                   fillColor: AppColors.background(isDark),
@@ -9755,7 +12900,7 @@ class _VendedoresScreenState extends State<VendedoresScreen> {
           icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
         ),
         title: Row(children: [
-const SizedBox(width: 14),
+          const SizedBox(width: 14),
           Text('VENDEDORES',
               style: TextStyle(
                   color: AppColors.text(isDark),
@@ -9841,7 +12986,7 @@ const SizedBox(width: 14),
                                         color: AppColors.text(isDark),
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600)),
-                                Text('Comisión: $comision%',
+                                Text('ComisiÃ³n: $comision%',
                                     style: TextStyle(
                                         color: AppColors.subtext(isDark),
                                         fontSize: 11)),
@@ -9907,7 +13052,7 @@ const SizedBox(width: 14),
 }
 
 // ============================================
-// PANTALLA: CLIENTES - CON GUARDADO AUTOMÁTICO
+// PANTALLA: CLIENTES - CON GUARDADO AUTOMÃTICO
 // ============================================
 class ClientesScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -9993,7 +13138,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
                   style: TextStyle(color: AppColors.text(isDark)),
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
-                    labelText: 'Cédula',
+                    labelText: 'CÃ©dula',
                     labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                     filled: true,
                     fillColor: AppColors.background(isDark),
@@ -10012,7 +13157,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
                   style: TextStyle(color: AppColors.text(isDark)),
                   keyboardType: TextInputType.phone,
                   decoration: InputDecoration(
-                    labelText: 'Teléfono',
+                    labelText: 'TelÃ©fono',
                     labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                     filled: true,
                     fillColor: AppColors.background(isDark),
@@ -10049,7 +13194,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
                   controller: direccionCtrl,
                   style: TextStyle(color: AppColors.text(isDark)),
                   decoration: InputDecoration(
-                    labelText: 'Dirección',
+                    labelText: 'DirecciÃ³n',
                     labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                     filled: true,
                     fillColor: AppColors.background(isDark),
@@ -10149,7 +13294,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
           icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
         ),
         title: Row(children: [
-const SizedBox(width: 14),
+          const SizedBox(width: 14),
           Text('CLIENTES',
               style: TextStyle(
                   color: AppColors.text(isDark),
@@ -10193,7 +13338,7 @@ const SizedBox(width: 14),
                   style: TextStyle(color: AppColors.text(isDark)),
                   onChanged: (v) => setState(() => _busqueda = v),
                   decoration: InputDecoration(
-                    hintText: 'Buscar por nombre, teléfono o cédula...',
+                    hintText: 'Buscar por nombre, telÃ©fono o cÃ©dula...',
                     hintStyle: TextStyle(color: AppColors.subtext(isDark)),
                     prefixIcon: Icon(Icons.search_rounded,
                         color: AppColors.subtext(isDark)),
@@ -10375,11 +13520,11 @@ const SizedBox(width: 14),
   }
 }
 // ============================================
-// CONTINUACIÓN - ETAPA 6 de 6 (FINAL)
+// CONTINUACIÃ“N - ETAPA 6 de 6 (FINAL)
 // ============================================
 
 // ============================================
-// PANTALLA: CONFIGURAR TICKET - DISEÑO PROFESIONAL
+// PANTALLA: CONFIGURAR TICKET - DISEÃ‘O PROFESIONAL
 // ============================================
 class ConfigurarTicketScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -10438,7 +13583,7 @@ class _ConfigurarTicketScreenState extends State<ConfigurarTicketScreen> {
         _telefonoCtrl.text = config['telefono'] ?? '';
         _emailCtrl.text = config['email'] ?? '';
         _mensajePieCtrl.text =
-            config['mensaje_pie'] ?? '¡Gracias por su compra!';
+            config['mensaje_pie'] ?? 'Â¡Gracias por su compra!';
         _mensajeAdicionalCtrl.text = config['mensaje_adicional'] ?? '';
         _logoBase64 = config['logo_base64'];
         _mostrarLogo =
@@ -10460,7 +13605,7 @@ class _ConfigurarTicketScreenState extends State<ConfigurarTicketScreen> {
         _numeroCopias = config['numero_copias'] ?? 1;
       }
     } catch (e) {
-      debugPrint('Error cargando configuración ticket: $e');
+      debugPrint('Error cargando configuraciÃ³n ticket: $e');
     }
     setState(() => _cargando = false);
   }
@@ -10509,7 +13654,7 @@ class _ConfigurarTicketScreenState extends State<ConfigurarTicketScreen> {
       };
       await _db.guardarConfiguracionTicket(config);
       _mostrarSnackbar(
-          'Configuración guardada exitosamente', AppColors.success);
+          'ConfiguraciÃ³n guardada exitosamente', AppColors.success);
     } catch (e) {
       debugPrint('Error guardando ticket: $e');
       _mostrarSnackbar('Error: $e', AppColors.danger);
@@ -10542,7 +13687,7 @@ class _ConfigurarTicketScreenState extends State<ConfigurarTicketScreen> {
           icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
         ),
         title: Row(children: [
-const SizedBox(width: 14),
+          const SizedBox(width: 14),
           Text('CONFIGURAR TICKET',
               style: TextStyle(
                   color: AppColors.text(isDark),
@@ -10571,7 +13716,7 @@ const SizedBox(width: 14),
                       ],
                     ),
                     child: Row(children: [
-                      _tab('Configuración', 0, isDark, Icons.settings_rounded),
+                      _tab('ConfiguraciÃ³n', 0, isDark, Icons.settings_rounded),
                       _tab('Vista Previa', 1, isDark, Icons.preview_rounded),
                     ]),
                   ),
@@ -10629,7 +13774,7 @@ const SizedBox(width: 14),
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('INFORMACIÓN DEL NEGOCIO',
+        Text('INFORMACIÃ“N DEL NEGOCIO',
             style: TextStyle(
                 color: AppColors.subtext(isDark),
                 fontSize: 11,
@@ -10696,9 +13841,9 @@ const SizedBox(width: 14),
         const SizedBox(height: 10),
         _buildTextField(_rifCtrl, 'RIF', isDark),
         const SizedBox(height: 10),
-        _buildTextField(_direccionCtrl, 'Dirección', isDark, maxLines: 2),
+        _buildTextField(_direccionCtrl, 'DirecciÃ³n', isDark, maxLines: 2),
         const SizedBox(height: 10),
-        _buildTextField(_telefonoCtrl, 'Teléfono', isDark,
+        _buildTextField(_telefonoCtrl, 'TelÃ©fono', isDark,
             keyboardType: TextInputType.phone),
         const SizedBox(height: 10),
         _buildTextField(_emailCtrl, 'Email', isDark,
@@ -10725,9 +13870,9 @@ const SizedBox(width: 14),
                   (v) => setState(() => _mostrarEslogan = v), isDark),
               _buildSwitch('Mostrar RIF', _mostrarRif,
                   (v) => setState(() => _mostrarRif = v), isDark),
-              _buildSwitch('Mostrar Dirección', _mostrarDireccion,
+              _buildSwitch('Mostrar DirecciÃ³n', _mostrarDireccion,
                   (v) => setState(() => _mostrarDireccion = v), isDark),
-              _buildSwitch('Mostrar Teléfono', _mostrarTelefono,
+              _buildSwitch('Mostrar TelÃ©fono', _mostrarTelefono,
                   (v) => setState(() => _mostrarTelefono = v), isDark),
               _buildSwitch('Mostrar Email', _mostrarEmail,
                   (v) => setState(() => _mostrarEmail = v), isDark),
@@ -10757,7 +13902,7 @@ const SizedBox(width: 14),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Tamaño de papel',
+                  Text('TamaÃ±o de papel',
                       style: TextStyle(
                           color: AppColors.text(isDark), fontSize: 14)),
                   DropdownButton<String>(
@@ -10778,7 +13923,7 @@ const SizedBox(width: 14),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Número de copias',
+                  Text('NÃºmero de copias',
                       style: TextStyle(
                           color: AppColors.text(isDark), fontSize: 14)),
                   Row(
@@ -10848,7 +13993,7 @@ const SizedBox(width: 14),
                         strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.save_rounded, color: Colors.white),
             label: Text(
-              _guardando ? 'GUARDANDO...' : 'GUARDAR CONFIGURACIÓN',
+              _guardando ? 'GUARDANDO...' : 'GUARDAR CONFIGURACIÃ“N',
               style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
@@ -10900,17 +14045,17 @@ const SizedBox(width: 14),
   Widget _buildSwitch(
       String label, bool value, Function(bool) onChanged, bool isDark) {
     return Material(
-  color: Colors.transparent,
-  child: SwitchListTile(
-      title: Text(label,
-          style: TextStyle(color: AppColors.text(isDark), fontSize: 14)),
-      value: value,
-      onChanged: onChanged,
-      activeThumbColor: AppColors.primary,
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-    ),
-);
+      color: Colors.transparent,
+      child: SwitchListTile(
+        title: Text(label,
+            style: TextStyle(color: AppColors.text(isDark), fontSize: 14)),
+        value: value,
+        onChanged: onChanged,
+        activeThumbColor: AppColors.primary,
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+      ),
+    );
   }
 
   Widget _buildVistaPrevia(bool isDark) {
@@ -11005,7 +14150,7 @@ const SizedBox(width: 14),
                   'Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}',
                   style: const TextStyle(fontSize: 8, color: Colors.black54)),
               if (_mostrarCliente) ...[
-                const Text('Cliente: Público General',
+                const Text('Cliente: PÃºblico General',
                     style: TextStyle(fontSize: 10, color: Colors.black)),
               ],
               const Divider(color: Colors.black26, height: 20),
@@ -11036,7 +14181,7 @@ const SizedBox(width: 14),
               Center(
                 child: Text(
                   _mensajePieCtrl.text.isEmpty
-                      ? '¡Gracias por su compra!'
+                      ? 'Â¡Gracias por su compra!'
                       : _mensajePieCtrl.text,
                   style: const TextStyle(
                       fontSize: 10,
@@ -11067,7 +14212,7 @@ const SizedBox(width: 14),
 }
 
 // ============================================
-// PANTALLA: CONFIGURACIÓN DE VARIANTES (TALLAS Y COLORES)
+// PANTALLA: CONFIGURACIÃ“N DE VARIANTES (TALLAS Y COLORES)
 // ============================================
 class ConfiguracionVariantesScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
@@ -11570,7 +14715,7 @@ class _ConfiguracionVariantesScreenState
           icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
         ),
         title: Row(children: [
-const SizedBox(width: 14),
+          const SizedBox(width: 14),
           Text('TALLAS Y COLORES',
               style: TextStyle(
                   color: AppColors.text(isDark),
@@ -11662,15 +14807,53 @@ class _EAN13Painter extends CustomPainter {
   _EAN13Painter(this.value);
 
   static const _leftA = [
-    '0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'
+    '0001101',
+    '0011001',
+    '0010011',
+    '0111101',
+    '0100011',
+    '0110001',
+    '0101111',
+    '0111011',
+    '0110111',
+    '0001011'
   ];
   static const _leftB = [
-    '0100111','0110011','0011011','0100001','0011101','0111001','0000101','0010001','0001001','0010111'
+    '0100111',
+    '0110011',
+    '0011011',
+    '0100001',
+    '0011101',
+    '0111001',
+    '0000101',
+    '0010001',
+    '0001001',
+    '0010111'
   ];
   static const _right = [
-    '1110010','1100110','1101100','1000010','1011100','1001110','1010000','1000100','1001000','1110100'
+    '1110010',
+    '1100110',
+    '1101100',
+    '1000010',
+    '1011100',
+    '1001110',
+    '1010000',
+    '1000100',
+    '1001000',
+    '1110100'
   ];
-  static const _parity = ['AAAAAA','AABABB','AABBAB','AABBBA','ABAABB','ABBAAB','ABBBAA','ABABAB','ABABBA','ABBABA'];
+  static const _parity = [
+    'AAAAAA',
+    'AABABB',
+    'AABBAB',
+    'AABBBA',
+    'ABAABB',
+    'ABBAAB',
+    'ABBBAA',
+    'ABABAB',
+    'ABABBA',
+    'ABBABA'
+  ];
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -11692,11 +14875,13 @@ class _EAN13Painter extends CustomPainter {
     final barHeight = size.height * 0.78;
     for (var i = 0; i < bits.length; i++) {
       if (bits.toString()[i] == '1') {
-        canvas.drawRect(Rect.fromLTWH(i * module, 0, module + .35, barHeight), barPaint);
+        canvas.drawRect(
+            Rect.fromLTWH(i * module, 0, module + .35, barHeight), barPaint);
       }
     }
     final tp = TextPainter(
-      text: TextSpan(text: code, style: const TextStyle(fontSize: 12, letterSpacing: 1.1)),
+      text: TextSpan(
+          text: code, style: const TextStyle(fontSize: 12, letterSpacing: 1.1)),
       textDirection: ui.TextDirection.ltr,
       textAlign: TextAlign.center,
     )..layout(maxWidth: size.width);
@@ -11704,17 +14889,20 @@ class _EAN13Painter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _EAN13Painter oldDelegate) => oldDelegate.value != value;
+  bool shouldRepaint(covariant _EAN13Painter oldDelegate) =>
+      oldDelegate.value != value;
 }
 
 // ============================================
-// PANTALLA: CÓDIGOS DE BARRAS
+// PANTALLA: CÃ“DIGOS DE BARRAS
 // ============================================
 class CodigosBarrasScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
   final bool modoOscuro;
-  const CodigosBarrasScreen({super.key, required this.onAbrirSidebar, this.modoOscuro = false});
-  @override State<CodigosBarrasScreen> createState() => _CodigosBarrasScreenState();
+  const CodigosBarrasScreen(
+      {super.key, required this.onAbrirSidebar, this.modoOscuro = false});
+  @override
+  State<CodigosBarrasScreen> createState() => _CodigosBarrasScreenState();
 }
 
 class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
@@ -11769,7 +14957,7 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
       _productos = await _db.getProductos();
       _filtrar();
     } catch (e) {
-      debugPrint('Error cargando códigos: $e');
+      debugPrint('Error cargando cÃ³digos: $e');
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -11789,7 +14977,8 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
     final normalized = code.replaceAll(RegExp(r'\s+'), '').trim();
     if (normalized.isEmpty) return null;
     for (final p in _productos) {
-      final c = '${p['codigo_barras'] ?? ''}'.replaceAll(RegExp(r'\s+'), '').trim();
+      final c =
+          '${p['codigo_barras'] ?? ''}'.replaceAll(RegExp(r'\s+'), '').trim();
       if (c == normalized) return p;
     }
     return null;
@@ -11806,7 +14995,8 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
       _camaraActiva = false;
     });
     if (p == null) {
-      _snack('Código $clean no está asociado a un producto.', AppColors.warning);
+      _snack(
+          'CÃ³digo $clean no estÃ¡ asociado a un producto.', AppColors.warning);
     } else {
       _snack('Producto encontrado: ${p['nombre']}', AppColors.success);
     }
@@ -11827,11 +15017,11 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
     final c = await _barcode.generarCodigoEAN13();
     final ok = await _db.actualizarProducto('${p['id']}', {'codigo_barras': c});
     if (!ok) {
-      _snack('No se pudo guardar el código.', AppColors.danger);
+      _snack('No se pudo guardar el cÃ³digo.', AppColors.danger);
       return;
     }
     await _cargar();
-    _snack('Código generado: $c', AppColors.success);
+    _snack('CÃ³digo generado: $c', AppColors.success);
   }
 
   Future<void> _imprimir(List<Map<String, dynamic>> items) async {
@@ -11842,7 +15032,8 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
     final doc = pw.Document();
     pw.MemoryImage? logo;
     try {
-      if ((_logoBase64 ?? '').isNotEmpty) logo = pw.MemoryImage(base64Decode(_logoBase64!));
+      if ((_logoBase64 ?? '').isNotEmpty)
+        logo = pw.MemoryImage(base64Decode(_logoBase64!));
     } catch (_) {}
 
     for (final p in items) {
@@ -11855,33 +15046,58 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
       final color = '${p['color'] ?? ''}'.trim();
       doc.addPage(
         pw.Page(
-          pageFormat: PdfPageFormat(70 * PdfPageFormat.mm, 40 * PdfPageFormat.mm),
+          pageFormat:
+              PdfPageFormat(70 * PdfPageFormat.mm, 40 * PdfPageFormat.mm),
           margin: const pw.EdgeInsets.all(5),
           build: (_) {
-            final details = [if (marca.isNotEmpty) marca, if (color.isNotEmpty) color, if (talla.isNotEmpty) talla].join(' · ');
+            final details = [
+              if (marca.isNotEmpty) marca,
+              if (color.isNotEmpty) color,
+              if (talla.isNotEmpty) talla
+            ].join(' Â· ');
             if (_diseno == 'A') {
               return pw.Column(
                 mainAxisAlignment: pw.MainAxisAlignment.center,
                 children: [
                   if (logo != null) pw.Image(logo!, height: 13),
                   if (logo != null) pw.SizedBox(height: 2),
-                  pw.Text(nombre, maxLines: 1, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-                  if (details.isNotEmpty) pw.Text(details, maxLines: 1, style: const pw.TextStyle(fontSize: 6.5)),
+                  pw.Text(nombre,
+                      maxLines: 1,
+                      style: pw.TextStyle(
+                          fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                  if (details.isNotEmpty)
+                    pw.Text(details,
+                        maxLines: 1, style: const pw.TextStyle(fontSize: 6.5)),
                   pw.SizedBox(height: 3),
-                  pw.BarcodeWidget(barcode: pw.Barcode.code128(), data: codigo, height: 24, drawText: true),
+                  pw.BarcodeWidget(
+                      barcode: pw.Barcode.code128(),
+                      data: codigo,
+                      height: 24,
+                      drawText: true),
                   pw.SizedBox(height: 2),
-                  pw.Text(precio, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  pw.Text(precio,
+                      style: pw.TextStyle(
+                          fontSize: 11, fontWeight: pw.FontWeight.bold)),
                 ],
               );
             }
             return pw.Column(
               mainAxisAlignment: pw.MainAxisAlignment.center,
               children: [
-                pw.Text(nombre, maxLines: 1, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                pw.Text(nombre,
+                    maxLines: 1,
+                    style: pw.TextStyle(
+                        fontSize: 9, fontWeight: pw.FontWeight.bold)),
                 pw.SizedBox(height: 3),
-                pw.BarcodeWidget(barcode: pw.Barcode.code128(), data: codigo, height: 26, drawText: true),
+                pw.BarcodeWidget(
+                    barcode: pw.Barcode.code128(),
+                    data: codigo,
+                    height: 26,
+                    drawText: true),
                 pw.SizedBox(height: 3),
-                pw.Text(precio, style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                pw.Text(precio,
+                    style: pw.TextStyle(
+                        fontSize: 11, fontWeight: pw.FontWeight.bold)),
               ],
             );
           },
@@ -11891,16 +15107,22 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
     await Printing.layoutPdf(onLayout: (_) => doc.save());
   }
 
-  String _money(Map<String, dynamic> p) => '\$${((p['precio_venta'] ?? p['precio'] ?? 0) as num).toDouble().toStringAsFixed(2)}';
+  String _money(Map<String, dynamic> p) =>
+      '\$${((p['precio_venta'] ?? p['precio'] ?? 0) as num).toDouble().toStringAsFixed(2)}';
 
   void _snack(String m, Color c) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), backgroundColor: c, behavior: SnackBarBehavior.floating));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(m),
+        backgroundColor: c,
+        behavior: SnackBarBehavior.floating));
   }
 
   Widget _header(bool dark) => Container(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-        decoration: BoxDecoration(color: AppColors.card(dark), border: Border(bottom: BorderSide(color: AppColors.divider(dark)))),
+        decoration: BoxDecoration(
+            color: AppColors.card(dark),
+            border: Border(bottom: BorderSide(color: AppColors.divider(dark)))),
         child: Row(children: [
           Material(
             color: dark ? const Color(0xFF20252D) : const Color(0xFFF1F3F6),
@@ -11908,16 +15130,33 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
             child: InkWell(
               onTap: widget.onAbrirSidebar,
               borderRadius: BorderRadius.circular(13),
-              child: const SizedBox(width: 44, height: 44, child: Icon(Icons.apps_rounded, size: 20, color: AppColors.primary)),
+              child: const SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Icon(Icons.apps_rounded,
+                      size: 20, color: AppColors.primary)),
             ),
           ),
           const SizedBox(width: 14),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Códigos de barras', style: TextStyle(color: AppColors.text(dark), fontSize: 21, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 3),
-            Text('Escanea, genera y prepara etiquetas profesionales', style: TextStyle(color: AppColors.subtext(dark), fontSize: 11)),
-          ])),
-          IconButton(tooltip: 'Actualizar productos', onPressed: _cargar, icon: Icon(Icons.refresh_rounded, color: AppColors.subtext(dark))),
+          Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text('CÃ³digos de barras',
+                    style: TextStyle(
+                        color: AppColors.text(dark),
+                        fontSize: 21,
+                        fontWeight: FontWeight.w900)),
+                const SizedBox(height: 3),
+                Text('Escanea, genera y prepara etiquetas profesionales',
+                    style: TextStyle(
+                        color: AppColors.subtext(dark), fontSize: 11)),
+              ])),
+          IconButton(
+              tooltip: 'Actualizar productos',
+              onPressed: _cargar,
+              icon:
+                  Icon(Icons.refresh_rounded, color: AppColors.subtext(dark))),
         ]),
       );
 
@@ -11932,29 +15171,69 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
       decoration: BoxDecoration(
         color: AppColors.card(dark),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: sel ? AppColors.primary : AppColors.divider(dark)),
+        border: Border.all(
+            color: sel ? AppColors.primary : AppColors.divider(dark)),
       ),
       child: Row(children: [
-        Checkbox(value: sel, onChanged: (v) => setState(() => v == true ? _seleccionados.add(id) : _seleccionados.remove(id)), activeColor: AppColors.primary),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${p['nombre'] ?? 'Producto'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.text(dark), fontSize: 13, fontWeight: FontWeight.w900)),
+        Checkbox(
+            value: sel,
+            onChanged: (v) => setState(() =>
+                v == true ? _seleccionados.add(id) : _seleccionados.remove(id)),
+            activeColor: AppColors.primary),
+        Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('${p['nombre'] ?? 'Producto'}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  color: AppColors.text(dark),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900)),
           const SizedBox(height: 3),
-          Text(codigo.isEmpty ? 'Sin código · Stock $stock' : 'Código $codigo · Stock $stock', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10)),
+          Text(
+              codigo.isEmpty
+                  ? 'Sin cÃ³digo Â· Stock $stock'
+                  : 'CÃ³digo $codigo Â· Stock $stock',
+              style: TextStyle(color: AppColors.subtext(dark), fontSize: 10)),
         ])),
-        if (codigo.isEmpty) IconButton(tooltip: 'Generar código', onPressed: () => _generar(p), icon: const Icon(Icons.auto_awesome_rounded, color: AppColors.primary, size: 19)),
+        if (codigo.isEmpty)
+          IconButton(
+              tooltip: 'Generar cÃ³digo',
+              onPressed: () => _generar(p),
+              icon: const Icon(Icons.auto_awesome_rounded,
+                  color: AppColors.primary, size: 19)),
         PopupMenuButton<String>(
           tooltip: 'Opciones',
-          onSelected: (v) { if (v == 'print') _imprimir([p]); if (v == 'generate') _generar(p); },
+          onSelected: (v) {
+            if (v == 'print') _imprimir([p]);
+            if (v == 'generate') _generar(p);
+          },
           itemBuilder: (_) => [
-            if (codigo.isNotEmpty) const PopupMenuItem(value: 'print', child: Row(children: [Icon(Icons.print_outlined), SizedBox(width: 10), Text('Imprimir etiqueta')])),
-            if (codigo.isEmpty) const PopupMenuItem(value: 'generate', child: Row(children: [Icon(Icons.auto_awesome_outlined), SizedBox(width: 10), Text('Generar código')])),
+            if (codigo.isNotEmpty)
+              const PopupMenuItem(
+                  value: 'print',
+                  child: Row(children: [
+                    Icon(Icons.print_outlined),
+                    SizedBox(width: 10),
+                    Text('Imprimir etiqueta')
+                  ])),
+            if (codigo.isEmpty)
+              const PopupMenuItem(
+                  value: 'generate',
+                  child: Row(children: [
+                    Icon(Icons.auto_awesome_outlined),
+                    SizedBox(width: 10),
+                    Text('Generar cÃ³digo')
+                  ])),
           ],
         ),
       ]),
     );
   }
 
-  Widget _designCard(String id, String title, String desc, IconData icon, bool dark) {
+  Widget _designCard(
+      String id, String title, String desc, IconData icon, bool dark) {
     final on = _diseno == id;
     return InkWell(
       onTap: () => setState(() => _diseno = id),
@@ -11962,13 +15241,33 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: on ? AppColors.primary.withValues(alpha: .08) : AppColors.card(dark), borderRadius: BorderRadius.circular(18), border: Border.all(color: on ? AppColors.primary : AppColors.divider(dark))),
+        decoration: BoxDecoration(
+            color: on
+                ? AppColors.primary.withValues(alpha: .08)
+                : AppColors.card(dark),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+                color: on ? AppColors.primary : AppColors.divider(dark))),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [Icon(icon, color: on ? AppColors.primary : AppColors.subtext(dark), size: 20), const Spacer(), if (on) const Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 18)]),
+          Row(children: [
+            Icon(icon,
+                color: on ? AppColors.primary : AppColors.subtext(dark),
+                size: 20),
+            const Spacer(),
+            if (on)
+              const Icon(Icons.check_circle_rounded,
+                  color: AppColors.primary, size: 18)
+          ]),
           const SizedBox(height: 10),
-          Text(title, style: TextStyle(color: AppColors.text(dark), fontSize: 14, fontWeight: FontWeight.w900)),
+          Text(title,
+              style: TextStyle(
+                  color: AppColors.text(dark),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900)),
           const SizedBox(height: 3),
-          Text(desc, style: TextStyle(color: AppColors.subtext(dark), fontSize: 9.5, height: 1.3)),
+          Text(desc,
+              style: TextStyle(
+                  color: AppColors.subtext(dark), fontSize: 9.5, height: 1.3)),
         ]),
       ),
     );
@@ -11979,11 +15278,17 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 100),
       children: [
         Row(children: [
-          Expanded(child: Text('Escanear producto', style: TextStyle(color: AppColors.text(dark), fontSize: 17, fontWeight: FontWeight.w900))),
+          Expanded(
+              child: Text('Escanear producto',
+                  style: TextStyle(
+                      color: AppColors.text(dark),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900))),
           FilledButton.icon(
             onPressed: () => setState(() => _camaraActiva = !_camaraActiva),
-            icon: Icon(_camaraActiva ? Icons.close_rounded : Icons.camera_alt_rounded),
-            label: Text(_camaraActiva ? 'Cerrar cámara' : 'Abrir cámara'),
+            icon: Icon(
+                _camaraActiva ? Icons.close_rounded : Icons.camera_alt_rounded),
+            label: Text(_camaraActiva ? 'Cerrar cÃ¡mara' : 'Abrir cÃ¡mara'),
           ),
         ]),
         const SizedBox(height: 12),
@@ -11991,15 +15296,41 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
           Container(
             height: 300,
             clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(22), border: Border.all(color: AppColors.primary, width: 2)),
+            decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: AppColors.primary, width: 2)),
             child: Stack(fit: StackFit.expand, children: [
               MobileScanner(controller: _scanner, onDetect: _onDetect),
-              IgnorePointer(child: Center(child: Container(width: 250, height: 150, decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: Colors.white, width: 2))))),
-              Positioned(left: 16, right: 16, bottom: 14, child: Row(children: [
-                Expanded(child: Text('Centra el código dentro del marco', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700))),
-                IconButton(onPressed: () => _scanner.toggleTorch(), icon: const Icon(Icons.flashlight_on_rounded, color: Colors.white)),
-                IconButton(onPressed: () => _scanner.switchCamera(), icon: const Icon(Icons.cameraswitch_rounded, color: Colors.white)),
-              ])),
+              IgnorePointer(
+                  child: Center(
+                      child: Container(
+                          width: 250,
+                          height: 150,
+                          decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(18),
+                              border:
+                                  Border.all(color: Colors.white, width: 2))))),
+              Positioned(
+                  left: 16,
+                  right: 16,
+                  bottom: 14,
+                  child: Row(children: [
+                    Expanded(
+                        child: Text('Centra el cÃ³digo dentro del marco',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700))),
+                    IconButton(
+                        onPressed: () => _scanner.toggleTorch(),
+                        icon: const Icon(Icons.flashlight_on_rounded,
+                            color: Colors.white)),
+                    IconButton(
+                        onPressed: () => _scanner.switchCamera(),
+                        icon: const Icon(Icons.cameraswitch_rounded,
+                            color: Colors.white)),
+                  ])),
             ]),
           ),
         const SizedBox(height: 14),
@@ -12007,67 +15338,179 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
           controller: _manual,
           onSubmitted: _procesarCodigo,
           decoration: InputDecoration(
-            labelText: 'Código manual',
-            hintText: 'Escribe o pega el código de barras',
+            labelText: 'CÃ³digo manual',
+            hintText: 'Escribe o pega el cÃ³digo de barras',
             prefixIcon: const Icon(Icons.keyboard_alt_outlined),
-            suffixIcon: IconButton(onPressed: () => _procesarCodigo(_manual.text), icon: const Icon(Icons.search_rounded)),
-            filled: true, fillColor: AppColors.card(dark),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: AppColors.divider(dark))),
+            suffixIcon: IconButton(
+                onPressed: () => _procesarCodigo(_manual.text),
+                icon: const Icon(Icons.search_rounded)),
+            filled: true,
+            fillColor: AppColors.card(dark),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: BorderSide(color: AppColors.divider(dark))),
           ),
         ),
         const SizedBox(height: 16),
         if (_productoEscaneado != null)
           Container(
             padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(20), border: Border.all(color: AppColors.primary.withValues(alpha: .35))),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 21), const SizedBox(width: 9), Text('Producto encontrado', style: TextStyle(color: AppColors.text(dark), fontSize: 14, fontWeight: FontWeight.w900))]),
+            decoration: BoxDecoration(
+                color: AppColors.card(dark),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                    color: AppColors.primary.withValues(alpha: .35))),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                const Icon(Icons.check_circle_rounded,
+                    color: AppColors.success, size: 21),
+                const SizedBox(width: 9),
+                Text('Producto encontrado',
+                    style: TextStyle(
+                        color: AppColors.text(dark),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900))
+              ]),
               const SizedBox(height: 14),
-              Text('${_productoEscaneado!['nombre'] ?? 'Producto'}', style: TextStyle(color: AppColors.text(dark), fontSize: 18, fontWeight: FontWeight.w900)),
+              Text('${_productoEscaneado!['nombre'] ?? 'Producto'}',
+                  style: TextStyle(
+                      color: AppColors.text(dark),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900)),
               const SizedBox(height: 10),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 _dataChip('Precio', _money(_productoEscaneado!), dark),
-                _dataChip('Stock', '${_productoEscaneado!['stock'] ?? 0}', dark),
-                _dataChip('Categoría', '${_productoEscaneado!['categoria'] ?? 'General'}', dark),
-                _dataChip('Código', _codigoEncontrado, dark),
+                _dataChip(
+                    'Stock', '${_productoEscaneado!['stock'] ?? 0}', dark),
+                _dataChip('CategorÃ­a',
+                    '${_productoEscaneado!['categoria'] ?? 'General'}', dark),
+                _dataChip('CÃ³digo', _codigoEncontrado, dark),
               ]),
             ]),
           )
         else
           Container(
             padding: const EdgeInsets.all(28),
-            decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(20), border: Border.all(color: AppColors.divider(dark))),
-            child: Column(children: [Icon(Icons.qr_code_scanner_rounded, size: 42, color: AppColors.subtext(dark)), const SizedBox(height: 10), Text('Escanea o escribe un código para localizar el producto.', textAlign: TextAlign.center, style: TextStyle(color: AppColors.subtext(dark), fontSize: 11))]),
+            decoration: BoxDecoration(
+                color: AppColors.card(dark),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.divider(dark))),
+            child: Column(children: [
+              Icon(Icons.qr_code_scanner_rounded,
+                  size: 42, color: AppColors.subtext(dark)),
+              const SizedBox(height: 10),
+              Text('Escanea o escribe un cÃ³digo para localizar el producto.',
+                  textAlign: TextAlign.center,
+                  style:
+                      TextStyle(color: AppColors.subtext(dark), fontSize: 11))
+            ]),
           ),
       ],
     );
   }
 
   Widget _dataChip(String label, String value, bool dark) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
-    decoration: BoxDecoration(color: AppColors.background(dark), borderRadius: BorderRadius.circular(12), border: Border.all(color: AppColors.divider(dark))),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: TextStyle(color: AppColors.subtext(dark), fontSize: 8, fontWeight: FontWeight.w700)), const SizedBox(height: 2), Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.text(dark), fontSize: 10, fontWeight: FontWeight.w900))]),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+        decoration: BoxDecoration(
+            color: AppColors.background(dark),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.divider(dark))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label,
+              style: TextStyle(
+                  color: AppColors.subtext(dark),
+                  fontSize: 8,
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(height: 2),
+          Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  color: AppColors.text(dark),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900))
+        ]),
+      );
 
   Widget _labelsTab(bool dark) {
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 100),
       children: [
         Row(children: [
-          Expanded(child: TextField(onChanged: (v) { _q = v; _filtrar(); setState(() {}); }, decoration: InputDecoration(hintText: 'Buscar producto o código', prefixIcon: const Icon(Icons.search_rounded), filled: true, fillColor: AppColors.card(dark), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.divider(dark)))))),
+          Expanded(
+              child: TextField(
+                  onChanged: (v) {
+                    _q = v;
+                    _filtrar();
+                    setState(() {});
+                  },
+                  decoration: InputDecoration(
+                      hintText: 'Buscar producto o cÃ³digo',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      filled: true,
+                      fillColor: AppColors.card(dark),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide:
+                              BorderSide(color: AppColors.divider(dark)))))),
           const SizedBox(width: 10),
-          FilledButton.icon(onPressed: _seleccionados.isEmpty ? null : () => _imprimir(_productos.where((p) => _seleccionados.contains('${p['id']}')).toList()), icon: const Icon(Icons.print_rounded), label: const Text('Imprimir')),
+          FilledButton.icon(
+              onPressed: _seleccionados.isEmpty
+                  ? null
+                  : () => _imprimir(_productos
+                      .where((p) => _seleccionados.contains('${p['id']}'))
+                      .toList()),
+              icon: const Icon(Icons.print_rounded),
+              label: const Text('Imprimir')),
         ]),
         const SizedBox(height: 20),
-        Text('DISEÑO DE ETIQUETA', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+        Text('DISEÃ‘O DE ETIQUETA',
+            style: TextStyle(
+                color: AppColors.subtext(dark),
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1)),
         const SizedBox(height: 8),
-        Row(children: [Expanded(child: _designCard('A', 'Clásica', 'Logo · nombre · marca · talla/color · precio · código', Icons.label_outline_rounded, dark)), const SizedBox(width: 10), Expanded(child: _designCard('B', 'Minimal', 'Nombre · precio · código', Icons.view_compact_outlined, dark))]),
+        Row(children: [
+          Expanded(
+              child: _designCard(
+                  'A',
+                  'ClÃ¡sica',
+                  'Logo Â· nombre Â· marca Â· talla/color Â· precio Â· cÃ³digo',
+                  Icons.label_outline_rounded,
+                  dark)),
+          const SizedBox(width: 10),
+          Expanded(
+              child: _designCard('B', 'Minimal', 'Nombre Â· precio Â· cÃ³digo',
+                  Icons.view_compact_outlined, dark))
+        ]),
         const SizedBox(height: 20),
-        Row(children: [Expanded(child: Text('${_filtrados.length} productos', style: TextStyle(color: AppColors.text(dark), fontSize: 15, fontWeight: FontWeight.w900))), Text('${_seleccionados.length} seleccionados', style: TextStyle(color: AppColors.subtext(dark), fontSize: 10, fontWeight: FontWeight.w700))]),
+        Row(children: [
+          Expanded(
+              child: Text('${_filtrados.length} productos',
+                  style: TextStyle(
+                      color: AppColors.text(dark),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900))),
+          Text('${_seleccionados.length} seleccionados',
+              style: TextStyle(
+                  color: AppColors.subtext(dark),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700))
+        ]),
         const SizedBox(height: 8),
-        if (_cargando) const Center(child: CircularProgressIndicator(color: AppColors.primary))
-        else if (_filtrados.isEmpty) Padding(padding: const EdgeInsets.all(40), child: Center(child: Text('No hay productos para mostrar.', style: TextStyle(color: AppColors.subtext(dark)))))
-        else ..._filtrados.map((p) => _producto(p, dark)),
+        if (_cargando)
+          const Center(
+              child: CircularProgressIndicator(color: AppColors.primary))
+        else if (_filtrados.isEmpty)
+          Padding(
+              padding: const EdgeInsets.all(40),
+              child: Center(
+                  child: Text('No hay productos para mostrar.',
+                      style: TextStyle(color: AppColors.subtext(dark)))))
+        else
+          ..._filtrados.map((p) => _producto(p, dark)),
       ],
     );
   }
@@ -12079,10 +15522,27 @@ class _CodigosBarrasScreenState extends State<CodigosBarrasScreen>
       _header(dark),
       Container(
         margin: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-        decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.divider(dark))),
-        child: TabBar(controller: _tabs, labelColor: AppColors.primary, unselectedLabelColor: AppColors.subtext(dark), indicatorColor: AppColors.primary, tabs: const [Tab(icon: Icon(Icons.qr_code_scanner_rounded), text: 'Escanear producto'), Tab(icon: Icon(Icons.local_offer_outlined), text: 'Generar códigos')]),
+        decoration: BoxDecoration(
+            color: AppColors.card(dark),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.divider(dark))),
+        child: TabBar(
+            controller: _tabs,
+            labelColor: AppColors.primary,
+            unselectedLabelColor: AppColors.subtext(dark),
+            indicatorColor: AppColors.primary,
+            tabs: const [
+              Tab(
+                  icon: Icon(Icons.qr_code_scanner_rounded),
+                  text: 'Escanear producto'),
+              Tab(
+                  icon: Icon(Icons.local_offer_outlined),
+                  text: 'Generar cÃ³digos')
+            ]),
       ),
-      Expanded(child: TabBarView(controller: _tabs, children: [_scanTab(dark), _labelsTab(dark)])),
+      Expanded(
+          child: TabBarView(
+              controller: _tabs, children: [_scanTab(dark), _labelsTab(dark)])),
     ]);
   }
 }
@@ -12153,7 +15613,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
           icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
         ),
         title: Row(children: [
-const SizedBox(width: 14),
+          const SizedBox(width: 14),
           Text('REPORTES',
               style: TextStyle(
                   color: AppColors.text(isDark),
@@ -12382,7 +15842,7 @@ const SizedBox(width: 14),
                           ),
                         ]),
                         const SizedBox(height: 12),
-                        Text('Ventas del período',
+                        Text('Ventas del perÃ­odo',
                             style: TextStyle(
                                 color: AppColors.text(isDark),
                                 fontSize: 14,
@@ -12515,7 +15975,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
         _mostrarQR = prefs.getBool('impresora_qr') ?? false;
       });
     } catch (e) {
-      debugPrint('Error cargando configuración impresora: $e');
+      debugPrint('Error cargando configuraciÃ³n impresora: $e');
     }
   }
 
@@ -12525,9 +15985,9 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
       final prefs = await SharedPreferences.getInstance();
 
       // En Web el navegador no permite a Flutter enumerar las impresoras
-      // instaladas de forma fiable. La impresión se hace mediante el diálogo
+      // instaladas de forma fiable. La impresiÃ³n se hace mediante el diÃ¡logo
       // nativo del navegador/sistema. No llamamos a pickPrinter/listPrinters
-      // en esta plataforma para evitar el UnimplementedError que se veía en
+      // en esta plataforma para evitar el UnimplementedError que se veÃ­a en
       // Chrome/Android.
       if (kIsWeb) {
         final savedName = prefs.getString('impresora_nombre');
@@ -12603,7 +16063,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
   }
 
   Future<void> _abrirSelectorNativo() async {
-    // Web: abre directamente el diálogo real de impresión del navegador.
+    // Web: abre directamente el diÃ¡logo real de impresiÃ³n del navegador.
     if (kIsWeb) {
       await _probarImpresion();
       return;
@@ -12626,26 +16086,49 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
   Future<Uint8List> _pdfPrueba(PdfPageFormat format) async {
     final doc = pw.Document();
     Map<String, dynamic>? cfg;
-    try { cfg = await DatabaseService().getConfiguracionTicket(); } catch (_) {}
+    try {
+      cfg = await DatabaseService().getConfiguracionTicket();
+    } catch (_) {}
     final nombre = (cfg?['nombre_negocio'] ?? 'SINTHETIX PRO').toString();
     final eslogan = (cfg?['eslogan'] ?? '').toString();
     final rif = (cfg?['rif'] ?? '').toString();
     final direccion = (cfg?['direccion'] ?? '').toString();
     final telefono = (cfg?['telefono'] ?? '').toString();
     final email = (cfg?['email'] ?? '').toString();
-    final mensajePie = (cfg?['mensaje_pie'] ?? '¡Gracias por su compra!').toString();
+    final mensajePie =
+        (cfg?['mensaje_pie'] ?? 'Â¡Gracias por su compra!').toString();
     final mensajeAdicional = (cfg?['mensaje_adicional'] ?? '').toString();
-    final mostrarLogo = cfg == null ? _mostrarLogo : (cfg?['mostrar_logo'] == 1 || cfg?['mostrar_logo'] == true);
-    final mostrarEslogan = cfg == null ? true : (cfg?['mostrar_eslogan'] == 1 || cfg?['mostrar_eslogan'] == true);
-    final mostrarRif = cfg == null ? true : (cfg?['mostrar_rif'] == 1 || cfg?['mostrar_rif'] == true);
-    final mostrarDireccion = cfg == null ? true : (cfg?['mostrar_direccion'] == 1 || cfg?['mostrar_direccion'] == true);
-    final mostrarTelefono = cfg == null ? true : (cfg?['mostrar_telefono'] == 1 || cfg?['mostrar_telefono'] == true);
-    final mostrarEmail = cfg == null ? false : (cfg?['mostrar_email'] == 1 || cfg?['mostrar_email'] == true);
-    final mostrarCliente = cfg == null ? true : (cfg?['mostrar_cliente'] == 1 || cfg?['mostrar_cliente'] == true);
-    final mostrarQR = cfg == null ? _mostrarQR : (cfg?['mostrar_qr'] == 1 || cfg?['mostrar_qr'] == true);
+    final mostrarLogo = cfg == null
+        ? _mostrarLogo
+        : (cfg?['mostrar_logo'] == 1 || cfg?['mostrar_logo'] == true);
+    final mostrarEslogan = cfg == null
+        ? true
+        : (cfg?['mostrar_eslogan'] == 1 || cfg?['mostrar_eslogan'] == true);
+    final mostrarRif = cfg == null
+        ? true
+        : (cfg?['mostrar_rif'] == 1 || cfg?['mostrar_rif'] == true);
+    final mostrarDireccion = cfg == null
+        ? true
+        : (cfg?['mostrar_direccion'] == 1 || cfg?['mostrar_direccion'] == true);
+    final mostrarTelefono = cfg == null
+        ? true
+        : (cfg?['mostrar_telefono'] == 1 || cfg?['mostrar_telefono'] == true);
+    final mostrarEmail = cfg == null
+        ? false
+        : (cfg?['mostrar_email'] == 1 || cfg?['mostrar_email'] == true);
+    final mostrarCliente = cfg == null
+        ? true
+        : (cfg?['mostrar_cliente'] == 1 || cfg?['mostrar_cliente'] == true);
+    final mostrarQR = cfg == null
+        ? _mostrarQR
+        : (cfg?['mostrar_qr'] == 1 || cfg?['mostrar_qr'] == true);
     pw.MemoryImage? logo;
     final logoRaw = cfg?['logo_base64']?.toString();
-    if (logoRaw != null && logoRaw.isNotEmpty) { try { logo = pw.MemoryImage(base64Decode(logoRaw)); } catch (_) {} }
+    if (logoRaw != null && logoRaw.isNotEmpty) {
+      try {
+        logo = pw.MemoryImage(base64Decode(logoRaw));
+      } catch (_) {}
+    }
     final ahora = DateTime.now();
     doc.addPage(pw.Page(
       pageFormat: format,
@@ -12653,30 +16136,95 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
       build: (_) => pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
-          if (mostrarLogo && logo != null) pw.Center(child: pw.Container(height: 48, width: 90, child: pw.Image(logo!, fit: pw.BoxFit.contain))),
-          pw.Center(child: pw.Text(nombre, style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold))),
-          if (mostrarEslogan && eslogan.isNotEmpty) pw.Center(child: pw.Text(eslogan, style: const pw.TextStyle(fontSize: 9))),
-          if (mostrarRif && rif.isNotEmpty) pw.Center(child: pw.Text(rif, style: const pw.TextStyle(fontSize: 8))),
-          if (mostrarDireccion && direccion.isNotEmpty) pw.Center(child: pw.Text(direccion, textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 8))),
-          if (mostrarTelefono && telefono.isNotEmpty) pw.Center(child: pw.Text(telefono, style: const pw.TextStyle(fontSize: 8))),
-          if (mostrarEmail && email.isNotEmpty) pw.Center(child: pw.Text(email, style: const pw.TextStyle(fontSize: 8))),
-          pw.SizedBox(height: 8), pw.Divider(),
-          pw.Text('PRUEBA DE IMPRESION', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-          pw.SizedBox(height: 6),
-          if (mostrarCliente) pw.Text('Cliente: Cliente de prueba', style: const pw.TextStyle(fontSize: 9)),
-          pw.Text('Fecha: ${DateFormat('dd/MM/yyyy').format(ahora)}', style: const pw.TextStyle(fontSize: 9)),
-          pw.Text('Hora: ${DateFormat('HH:mm:ss').format(ahora)}', style: const pw.TextStyle(fontSize: 9)),
-          pw.SizedBox(height: 6), pw.Divider(),
-          pw.Row(children: [pw.Expanded(child: pw.Text('Producto de prueba', style: const pw.TextStyle(fontSize: 9))), pw.Text('\$10.00', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold))]),
-          pw.Text('1 x producto configurado', style: const pw.TextStyle(fontSize: 8)),
-          pw.SizedBox(height: 5),
-          pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [pw.Text('TOTAL', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)), pw.Text('\$10.00', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold))]),
-          if (mostrarQR) pw.Center(child: pw.BarcodeWidget(barcode: pw.Barcode.qrCode(), data: 'SINTHETIX-PRUEBA', width: 45, height: 45)),
+          if (mostrarLogo && logo != null)
+            pw.Center(
+                child: pw.Container(
+                    height: 48,
+                    width: 90,
+                    child: pw.Image(logo!, fit: pw.BoxFit.contain))),
+          pw.Center(
+              child: pw.Text(nombre,
+                  style: pw.TextStyle(
+                      fontSize: 18, fontWeight: pw.FontWeight.bold))),
+          if (mostrarEslogan && eslogan.isNotEmpty)
+            pw.Center(
+                child:
+                    pw.Text(eslogan, style: const pw.TextStyle(fontSize: 9))),
+          if (mostrarRif && rif.isNotEmpty)
+            pw.Center(
+                child: pw.Text(rif, style: const pw.TextStyle(fontSize: 8))),
+          if (mostrarDireccion && direccion.isNotEmpty)
+            pw.Center(
+                child: pw.Text(direccion,
+                    textAlign: pw.TextAlign.center,
+                    style: const pw.TextStyle(fontSize: 8))),
+          if (mostrarTelefono && telefono.isNotEmpty)
+            pw.Center(
+                child:
+                    pw.Text(telefono, style: const pw.TextStyle(fontSize: 8))),
+          if (mostrarEmail && email.isNotEmpty)
+            pw.Center(
+                child: pw.Text(email, style: const pw.TextStyle(fontSize: 8))),
           pw.SizedBox(height: 8),
-          if (mensajeAdicional.isNotEmpty) pw.Center(child: pw.Text(mensajeAdicional, textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 8))),
-          pw.Center(child: pw.Text(mensajePie, textAlign: pw.TextAlign.center, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold))),
+          pw.Divider(),
+          pw.Text('PRUEBA DE IMPRESION',
+              textAlign: pw.TextAlign.center,
+              style:
+                  pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
-          pw.Center(child: pw.Text('FUNCIONANDO OK', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold))),
+          if (mostrarCliente)
+            pw.Text('Cliente: Cliente de prueba',
+                style: const pw.TextStyle(fontSize: 9)),
+          pw.Text('Fecha: ${DateFormat('dd/MM/yyyy').format(ahora)}',
+              style: const pw.TextStyle(fontSize: 9)),
+          pw.Text('Hora: ${DateFormat('HH:mm:ss').format(ahora)}',
+              style: const pw.TextStyle(fontSize: 9)),
+          pw.SizedBox(height: 6),
+          pw.Divider(),
+          pw.Row(children: [
+            pw.Expanded(
+                child: pw.Text('Producto de prueba',
+                    style: const pw.TextStyle(fontSize: 9))),
+            pw.Text('\$10.00',
+                style:
+                    pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold))
+          ]),
+          pw.Text('1 x producto configurado',
+              style: const pw.TextStyle(fontSize: 8)),
+          pw.SizedBox(height: 5),
+          pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text('TOTAL',
+                    style: pw.TextStyle(
+                        fontSize: 12, fontWeight: pw.FontWeight.bold)),
+                pw.Text('\$10.00',
+                    style: pw.TextStyle(
+                        fontSize: 12, fontWeight: pw.FontWeight.bold))
+              ]),
+          if (mostrarQR)
+            pw.Center(
+                child: pw.BarcodeWidget(
+                    barcode: pw.Barcode.qrCode(),
+                    data: 'SINTHETIX-PRUEBA',
+                    width: 45,
+                    height: 45)),
+          pw.SizedBox(height: 8),
+          if (mensajeAdicional.isNotEmpty)
+            pw.Center(
+                child: pw.Text(mensajeAdicional,
+                    textAlign: pw.TextAlign.center,
+                    style: const pw.TextStyle(fontSize: 8))),
+          pw.Center(
+              child: pw.Text(mensajePie,
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(
+                      fontSize: 9, fontWeight: pw.FontWeight.bold))),
+          pw.SizedBox(height: 6),
+          pw.Center(
+              child: pw.Text('FUNCIONANDO OK',
+                  style: pw.TextStyle(
+                      fontSize: 10, fontWeight: pw.FontWeight.bold))),
         ],
       ),
     ));
@@ -12726,7 +16274,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
       await prefs.setString('impresora_tamano', _tamanoPapel);
       await prefs.setBool('impresora_logo', _mostrarLogo);
       await prefs.setBool('impresora_qr', _mostrarQR);
-      _mostrarMensaje('Configuración guardada', true);
+      _mostrarMensaje('ConfiguraciÃ³n guardada', true);
     } catch (e) {
       _mostrarMensaje('No se pudo guardar: $e', false);
     }
@@ -12758,7 +16306,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          tooltip: 'Abrir menú',
+          tooltip: 'Abrir menÃº',
           onPressed: widget.onAbrirSidebar,
           icon: Icon(Icons.menu_rounded, color: text, size: 24),
         ),
@@ -12822,7 +16370,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Centro de impresión',
+                              'Centro de impresiÃ³n',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 20,
@@ -12902,10 +16450,10 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
               children: [
                 Text(
                   kIsWeb
-                      ? 'Impresión del navegador'
+                      ? 'ImpresiÃ³n del navegador'
                       : _seleccionada == null
-                      ? 'Sin impresora seleccionada'
-                      : _seleccionada!.name,
+                          ? 'Sin impresora seleccionada'
+                          : _seleccionada!.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -12918,8 +16466,8 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                   kIsWeb
                       ? 'Selector del navegador / sistema'
                       : canList
-                      ? 'Lista de impresoras disponible'
-                      : 'El sistema usa el selector de impresión',
+                          ? 'Lista de impresoras disponible'
+                          : 'El sistema usa el selector de impresiÃ³n',
                   style: TextStyle(color: sub, fontSize: 11),
                 ),
               ],
@@ -12998,7 +16546,8 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                 child: OutlinedButton.icon(
                   onPressed: _abrirSelectorNativo,
                   icon: const Icon(Icons.manage_search_rounded, size: 18),
-                  label: Text(kIsWeb ? 'Seleccionar impresora' : 'Elegir impresora'),
+                  label: Text(
+                      kIsWeb ? 'Seleccionar impresora' : 'Elegir impresora'),
                 ),
               ),
               const SizedBox(width: 8),
@@ -13067,7 +16616,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                   Expanded(
                     child: Text(
                       kIsWeb
-                          ? 'En Web Chrome no permite enumerar las impresoras. Pulsa "Seleccionar impresora" para abrir el diálogo del sistema y elegirla.'
+                          ? 'En Web Chrome no permite enumerar las impresoras. Pulsa "Seleccionar impresora" para abrir el diÃ¡logo del sistema y elegirla.'
                           : 'No hay impresoras enumerables en esta plataforma. Usa "Elegir impresora" para abrir el selector del sistema.',
                       style: TextStyle(color: sub, fontSize: 11),
                     ),
@@ -13125,7 +16674,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                                       printer.model!,
                                     if ((printer.location ?? '').isNotEmpty)
                                       printer.location!,
-                                  ].join(' · '),
+                                  ].join(' Â· '),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -13169,7 +16718,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Opciones de impresión',
+            'Opciones de impresiÃ³n',
             style: TextStyle(
               color: text,
               fontSize: 15,
@@ -13192,11 +16741,11 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                   items: const [
                     DropdownMenuItem(
                       value: '58mm',
-                      child: Text('58 mm térmico'),
+                      child: Text('58 mm tÃ©rmico'),
                     ),
                     DropdownMenuItem(
                       value: '80mm',
-                      child: Text('80 mm térmico'),
+                      child: Text('80 mm tÃ©rmico'),
                     ),
                   ],
                   onChanged: (v) {
@@ -13210,9 +16759,8 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                   children: [
                     Text('Copias', style: TextStyle(color: sub)),
                     IconButton(
-                      onPressed: _copias > 1
-                          ? () => setState(() => _copias--)
-                          : null,
+                      onPressed:
+                          _copias > 1 ? () => setState(() => _copias--) : null,
                       icon: const Icon(Icons.remove_circle_outline),
                     ),
                     Text(
@@ -13223,9 +16771,8 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
                       ),
                     ),
                     IconButton(
-                      onPressed: _copias < 10
-                          ? () => setState(() => _copias++)
-                          : null,
+                      onPressed:
+                          _copias < 10 ? () => setState(() => _copias++) : null,
                       icon: const Icon(Icons.add_circle_outline),
                     ),
                   ],
@@ -13251,7 +16798,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
             child: SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(
-                'Mostrar código QR',
+                'Mostrar cÃ³digo QR',
                 style: TextStyle(color: text),
               ),
               value: _mostrarQR,
@@ -13264,7 +16811,7 @@ class _ImpresoraScreenState extends State<ImpresoraScreen> {
             child: ElevatedButton.icon(
               onPressed: _guardarConfiguracion,
               icon: const Icon(Icons.save_rounded),
-              label: const Text('Guardar configuración'),
+              label: const Text('Guardar configuraciÃ³n'),
             ),
           ),
         ],
@@ -13339,7 +16886,7 @@ class _BackupScreenState extends State<BackupScreen> {
           icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
         ),
         title: Row(children: [
-const SizedBox(width: 14),
+          const SizedBox(width: 14),
           Text('RESPALDO DE DATOS',
               style: TextStyle(
                   color: AppColors.text(isDark),
@@ -13679,7 +17226,7 @@ class _CajaScreenState extends State<CajaScreen> {
               controller: descCtrl,
               style: TextStyle(color: AppColors.text(isDark)),
               decoration: InputDecoration(
-                labelText: 'Descripción',
+                labelText: 'DescripciÃ³n',
                 labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                 filled: true,
                 fillColor: AppColors.background(isDark),
@@ -13786,7 +17333,7 @@ class _CajaScreenState extends State<CajaScreen> {
             Icon(Icons.point_of_sale,
                 size: 64, color: AppColors.subtext(isDark)),
             const SizedBox(height: 16),
-            Text('La caja está cerrada',
+            Text('La caja estÃ¡ cerrada',
                 style:
                     TextStyle(color: AppColors.subtext(isDark), fontSize: 16)),
             const SizedBox(height: 24),
@@ -14084,7 +17631,7 @@ class _CajaScreenState extends State<CajaScreen> {
           icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
         ),
         title: Row(children: [
-const SizedBox(width: 14),
+          const SizedBox(width: 14),
           Text('CAJA',
               style: TextStyle(
                   color: AppColors.text(isDark),
@@ -14274,7 +17821,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.card(isDark),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Cambiar Contraseña',
+        title: Text('Cambiar ContraseÃ±a',
             style: TextStyle(
                 color: AppColors.text(isDark), fontWeight: FontWeight.w700)),
         content: Column(
@@ -14285,7 +17832,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
               obscureText: true,
               style: TextStyle(color: AppColors.text(isDark)),
               decoration: InputDecoration(
-                labelText: 'Nueva Contraseña',
+                labelText: 'Nueva ContraseÃ±a',
                 labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                 filled: true,
                 fillColor: AppColors.background(isDark),
@@ -14304,7 +17851,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
               obscureText: true,
               style: TextStyle(color: AppColors.text(isDark)),
               decoration: InputDecoration(
-                labelText: 'Confirmar Contraseña',
+                labelText: 'Confirmar ContraseÃ±a',
                 labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                 filled: true,
                 fillColor: AppColors.background(isDark),
@@ -14329,7 +17876,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
               if (ctrl1.text != ctrl2.text) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                      content: Text('Las contraseñas no coinciden'),
+                      content: Text('Las contraseÃ±as no coinciden'),
                       backgroundColor: AppColors.danger),
                 );
                 return;
@@ -14337,7 +17884,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
               if (ctrl1.text.length < 6) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                      content: Text('Mínimo 6 caracteres'),
+                      content: Text('MÃ­nimo 6 caracteres'),
                       backgroundColor: AppColors.danger),
                 );
                 return;
@@ -14346,7 +17893,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                 await _db.actualizarPerfil({'password_hash': ctrl1.text});
                 Navigator.pop(ctx);
               } catch (e) {
-                debugPrint('Error cambiando contraseña: $e');
+                debugPrint('Error cambiando contraseÃ±a: $e');
               }
             },
             style: ElevatedButton.styleFrom(
@@ -14375,7 +17922,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
           icon: Icon(Icons.menu_rounded, color: AppColors.primary, size: 24),
         ),
         title: Row(children: [
-const SizedBox(width: 14),
+          const SizedBox(width: 14),
           Text('MI PERFIL',
               style: TextStyle(
                   color: AppColors.text(isDark),
@@ -14473,7 +18020,7 @@ const SizedBox(width: 14),
                         ListTile(
                           leading: Icon(Icons.lock,
                               color: AppColors.subtext(isDark), size: 22),
-                          title: Text('Cambiar Contraseña',
+                          title: Text('Cambiar ContraseÃ±a',
                               style: TextStyle(
                                   color: AppColors.text(isDark), fontSize: 14)),
                           trailing: Icon(Icons.chevron_right,
@@ -14795,7 +18342,7 @@ class _InventarioScreenState extends State<InventarioScreen> {
                           color: AppColors.text(isDark),
                           fontSize: 14,
                           fontWeight: FontWeight.w600)),
-                  Text('Código: ${prod['codigo_barras']}',
+                  Text('CÃ³digo: ${prod['codigo_barras']}',
                       style: TextStyle(
                           color: AppColors.subtext(isDark), fontSize: 11)),
                 ],
@@ -14825,41 +18372,142 @@ class _InventarioScreenState extends State<InventarioScreen> {
     return Scaffold(
       backgroundColor: AppColors.background(isDark),
       appBar: AppBar(
-        backgroundColor: AppColors.background(isDark), elevation: 0, scrolledUnderElevation: 0,
-        toolbarHeight: 76, titleSpacing: 0, leadingWidth: 64,
-        leading: Padding(padding: const EdgeInsets.only(left: 12, top: 14, bottom: 14), child: Material(color: isDark ? const Color(0xFF151B23) : Colors.white, borderRadius: BorderRadius.circular(16), child: InkWell(borderRadius: BorderRadius.circular(16), onTap: widget.onAbrirSidebar, child: const Icon(Icons.menu_rounded, color: AppColors.primary, size: 23)))),
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Inventario', style: TextStyle(color: ink, fontSize: 18, fontWeight: FontWeight.w900)), Text('Existencias y movimientos', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w600))]),
-        actions: [IconButton(onPressed: _cargarDatos, tooltip: 'Actualizar', icon: const Icon(Icons.refresh_rounded, color: AppColors.primary)), const SizedBox(width: 6)],
-      ),
-      body: SafeArea(child: Padding(padding: const EdgeInsets.fromLTRB(14, 0, 14, 14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(child: GestureDetector(onTap: () => setState(() => _tabActual = 0), child: _inventoryMode('Movimientos', Icons.swap_vert_rounded, _tabActual == 0, isDark))),
-          const SizedBox(width: 10),
-          Expanded(child: GestureDetector(onTap: () => setState(() => _tabActual = 1), child: _inventoryMode('Stock', Icons.inventory_2_outlined, _tabActual == 1, isDark))),
+        backgroundColor: AppColors.background(isDark),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        toolbarHeight: 76,
+        titleSpacing: 0,
+        leadingWidth: 64,
+        leading: Padding(
+            padding: const EdgeInsets.only(left: 12, top: 14, bottom: 14),
+            child: Material(
+                color: isDark ? const Color(0xFF151B23) : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: widget.onAbrirSidebar,
+                    child: const Icon(Icons.menu_rounded,
+                        color: AppColors.primary, size: 23)))),
+        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Inventario',
+              style: TextStyle(
+                  color: ink, fontSize: 18, fontWeight: FontWeight.w900)),
+          Text('Existencias y movimientos',
+              style: TextStyle(
+                  color: muted, fontSize: 9, fontWeight: FontWeight.w600))
         ]),
-        const SizedBox(height: 16),
-        if (_tabActual == 1 && _productos.isNotEmpty) Padding(padding: const EdgeInsets.only(bottom: 10), child: Row(children: [Text('${_productos.length}', style: TextStyle(color: ink, fontSize: 20, fontWeight: FontWeight.w900)), const SizedBox(width: 7), Text('productos en inventario', style: TextStyle(color: muted, fontSize: 10, fontWeight: FontWeight.w600))])),
-        Expanded(child: _cargando ? const Center(child: CircularProgressIndicator(color: AppColors.primary)) : _tabActual == 0 ? _buildMovimientos(isDark) : _buildStock(isDark)),
-        if (_tabActual == 0) Padding(padding: const EdgeInsets.only(top: 12), child: Row(children: [
-          Expanded(child: FilledButton.icon(onPressed: () => _registrarMovimiento('Entrada'), icon: const Icon(Icons.add_rounded), label: const Text('Entrada'))),
-          const SizedBox(width: 10),
-          Expanded(child: OutlinedButton.icon(onPressed: () => _registrarMovimiento('Salida'), icon: const Icon(Icons.remove_rounded), label: const Text('Salida'))),
-        ])),
-      ]))),
+        actions: [
+          IconButton(
+              onPressed: _cargarDatos,
+              tooltip: 'Actualizar',
+              icon:
+                  const Icon(Icons.refresh_rounded, color: AppColors.primary)),
+          const SizedBox(width: 6)
+        ],
+      ),
+      body: SafeArea(
+          child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Expanded(
+                          child: GestureDetector(
+                              onTap: () => setState(() => _tabActual = 0),
+                              child: _inventoryMode(
+                                  'Movimientos',
+                                  Icons.swap_vert_rounded,
+                                  _tabActual == 0,
+                                  isDark))),
+                      const SizedBox(width: 10),
+                      Expanded(
+                          child: GestureDetector(
+                              onTap: () => setState(() => _tabActual = 1),
+                              child: _inventoryMode(
+                                  'Stock',
+                                  Icons.inventory_2_outlined,
+                                  _tabActual == 1,
+                                  isDark))),
+                    ]),
+                    const SizedBox(height: 16),
+                    if (_tabActual == 1 && _productos.isNotEmpty)
+                      Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Row(children: [
+                            Text('${_productos.length}',
+                                style: TextStyle(
+                                    color: ink,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900)),
+                            const SizedBox(width: 7),
+                            Text('productos en inventario',
+                                style: TextStyle(
+                                    color: muted,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600))
+                          ])),
+                    Expanded(
+                        child: _cargando
+                            ? const Center(
+                                child: CircularProgressIndicator(
+                                    color: AppColors.primary))
+                            : _tabActual == 0
+                                ? _buildMovimientos(isDark)
+                                : _buildStock(isDark)),
+                    if (_tabActual == 0)
+                      Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Row(children: [
+                            Expanded(
+                                child: FilledButton.icon(
+                                    onPressed: () =>
+                                        _registrarMovimiento('Entrada'),
+                                    icon: const Icon(Icons.add_rounded),
+                                    label: const Text('Entrada'))),
+                            const SizedBox(width: 10),
+                            Expanded(
+                                child: OutlinedButton.icon(
+                                    onPressed: () =>
+                                        _registrarMovimiento('Salida'),
+                                    icon: const Icon(Icons.remove_rounded),
+                                    label: const Text('Salida'))),
+                          ])),
+                  ]))),
     );
   }
 
   Widget _inventoryMode(String label, IconData icon, bool active, bool isDark) {
     final ink = AppColors.text(isDark);
     final muted = AppColors.subtext(isDark);
-    return AnimatedContainer(duration: const Duration(milliseconds: 180), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14), decoration: BoxDecoration(color: active ? AppColors.primary.withValues(alpha: .12) : Colors.transparent, border: Border(bottom: BorderSide(color: active ? AppColors.primary : AppColors.divider(isDark), width: active ? 2 : 1))), child: Row(children: [Icon(icon, color: active ? AppColors.primary : muted, size: 19), const SizedBox(width: 8), Text(label, style: TextStyle(color: active ? AppColors.primary : ink, fontSize: 12, fontWeight: FontWeight.w800))]));
+    return AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+            color: active
+                ? AppColors.primary.withValues(alpha: .12)
+                : Colors.transparent,
+            border: Border(
+                bottom: BorderSide(
+                    color:
+                        active ? AppColors.primary : AppColors.divider(isDark),
+                    width: active ? 2 : 1))),
+        child: Row(children: [
+          Icon(icon, color: active ? AppColors.primary : muted, size: 19),
+          const SizedBox(width: 8),
+          Text(label,
+              style: TextStyle(
+                  color: active ? AppColors.primary : ink,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800))
+        ]));
   }
 }
 
 // ============================================
 // ============================================
 // TIENDA VIRTUAL SINTHETIX PRO - V27
-// Catálogo universal + carrito + WhatsApp + favoritos + banners
+// CatÃ¡logo universal + carrito + WhatsApp + favoritos + banners
 // ============================================
 
 class WhatsAppMark extends StatelessWidget {
@@ -14877,7 +18525,9 @@ class WhatsAppMark extends StatelessWidget {
 class _WhatsAppMarkPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final p = Paint()..color = Colors.white..style = PaintingStyle.fill;
+    final p = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
     final c = Offset(size.width / 2, size.height / 2);
     final r = size.shortestSide * .39;
     canvas.drawCircle(c, r, p);
@@ -14888,8 +18538,10 @@ class _WhatsAppMarkPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
     final path = Path()
       ..moveTo(c.dx - r * .30, c.dy - r * .10)
-      ..quadraticBezierTo(c.dx - r * .10, c.dy + r * .30, c.dx + r * .28, c.dy + r * .18)
-      ..quadraticBezierTo(c.dx + r * .40, c.dy + r * .14, c.dx + r * .30, c.dy - r * .02);
+      ..quadraticBezierTo(
+          c.dx - r * .10, c.dy + r * .30, c.dx + r * .28, c.dy + r * .18)
+      ..quadraticBezierTo(
+          c.dx + r * .40, c.dy + r * .14, c.dx + r * .30, c.dy - r * .02);
     canvas.drawPath(path, phone);
     final bubble = Path()
       ..moveTo(c.dx - r * .54, c.dy + r * .56)
@@ -14898,6 +18550,7 @@ class _WhatsAppMarkPainter extends CustomPainter {
       ..close();
     canvas.drawPath(bubble, p);
   }
+
   @override
   bool shouldRepaint(covariant _WhatsAppMarkPainter oldDelegate) => false;
 }
@@ -14964,7 +18617,8 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
       final rawFav = prefs.getStringList('sinthetix_store_favorites') ?? [];
       _favoritos = rawFav.toSet();
       _whatsapp = (prefs.getString('sinthetix_store_whatsapp') ??
-              cfg?['telefono'] ?? '')
+              cfg?['telefono'] ??
+              '')
           .toString();
       _publicUrl = (prefs.getString('sinthetix_store_public_url') ??
               'https://synthetixapp17.github.io/mi_tienda/tienda/')
@@ -15079,7 +18733,9 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
     final phone = _whatsapp.replaceAll(RegExp(r'[^0-9]'), '');
     if (phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Configura el WhatsApp de la tienda en Administrar tienda.')),
+        const SnackBar(
+            content: Text(
+                'Configura el WhatsApp de la tienda en Administrar tienda.')),
       );
       return;
     }
@@ -15088,7 +18744,7 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
       (sum, item) => sum + _precio(item) * ((item['_qty'] as int?) ?? 0),
     );
     final buffer = StringBuffer()
-      ..writeln('🛍️🛍️ PEDIDO - $_nombreTienda')
+      ..writeln('ðŸ›ï¸ðŸ›ï¸ PEDIDO - $_nombreTienda')
       ..writeln()
       ..writeln('Hola, quiero realizar este pedido:')
       ..writeln();
@@ -15100,12 +18756,15 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
         ..writeln();
     }
     buffer.writeln('TOTAL: ${_money(total)}');
-    final url = 'https://wa.me/$phone?text=${Uri.encodeComponent(buffer.toString())}';
+    final url =
+        'https://wa.me/$phone?text=${Uri.encodeComponent(buffer.toString())}';
     await launchURL(url);
     if (!mounted) return;
     setState(() => _carrito.clear());
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Pedido preparado en WhatsApp. El carrito fue reiniciado.')),
+      const SnackBar(
+          content:
+              Text('Pedido preparado en WhatsApp. El carrito fue reiniciado.')),
     );
   }
 
@@ -15113,7 +18772,9 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
     final phone = _whatsapp.replaceAll(RegExp(r'[^0-9]'), '');
     if (phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Configura el WhatsApp de la tienda en Administrar tienda.')),
+        const SnackBar(
+            content: Text(
+                'Configura el WhatsApp de la tienda en Administrar tienda.')),
       );
       return;
     }
@@ -15125,7 +18786,7 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
 
   Future<void> _compartirTienda() async {
     await Share.share(
-      '🛍️ Visita $_nombreTienda\n$_publicUrl',
+      'ðŸ›ï¸ Visita $_nombreTienda\n$_publicUrl',
       subject: 'Tienda online - $_nombreTienda',
     );
   }
@@ -15144,7 +18805,13 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final cols = width >= 1100 ? 5 : width >= 800 ? 4 : width >= 520 ? 3 : 2;
+    final cols = width >= 1100
+        ? 5
+        : width >= 800
+            ? 4
+            : width >= 520
+                ? 3
+                : 2;
     final cartCount = _carrito.fold<int>(
       0,
       (n, p) => n + ((p['_qty'] as int?) ?? 0),
@@ -15163,24 +18830,31 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
             if (_logo != null && _logo!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: _StoreImage(base64: _logo!, width: 34, height: 34, radius: 9),
+                child: _StoreImage(
+                    base64: _logo!, width: 34, height: 34, radius: 9),
               ),
             Expanded(
               child: Text(
                 _nombreTienda,
-                style: const TextStyle(color: AppColors.dark, fontSize: 18, fontWeight: FontWeight.w900),
+                style: const TextStyle(
+                    color: AppColors.dark,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900),
               ),
             ),
           ],
         ),
         actions: [
-          IconButton(onPressed: _compartirTienda, icon: const Icon(Icons.share_outlined, color: AppColors.dark)),
+          IconButton(
+              onPressed: _compartirTienda,
+              icon: const Icon(Icons.share_outlined, color: AppColors.dark)),
           IconButton(
             onPressed: _abrirCarrito,
             icon: Badge(
               isLabelVisible: cartCount > 0,
               label: Text('$cartCount'),
-              child: const Icon(Icons.shopping_bag_outlined, color: AppColors.dark),
+              child: const Icon(Icons.shopping_bag_outlined,
+                  color: AppColors.dark),
             ),
           ),
           const SizedBox(width: 6),
@@ -15194,7 +18868,8 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
               child: const WhatsAppMark(size: 28),
             ),
       body: _cargando
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary))
           : RefreshIndicator(
               onRefresh: _cargar,
               child: ListView(
@@ -15204,7 +18879,7 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
                     controller: _search,
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
-                      hintText: 'Buscar productos, marcas o códigos...',
+                      hintText: 'Buscar productos, marcas o cÃ³digos...',
                       prefixIcon: const Icon(Icons.search_rounded),
                       suffixIcon: _search.text.isEmpty
                           ? null
@@ -15249,7 +18924,9 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
                           width: i == _bannerIndex ? 18 : 6,
                           height: 6,
                           decoration: BoxDecoration(
-                            color: i == _bannerIndex ? AppColors.primary : const Color(0xFFD1D5DB),
+                            color: i == _bannerIndex
+                                ? AppColors.primary
+                                : const Color(0xFFD1D5DB),
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
@@ -15259,8 +18936,15 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
                   const SizedBox(height: 14),
                   Row(
                     children: [
-                      const Expanded(child: Text('Categorías', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.dark))),
-                      Text('${_filtrados.length} productos', style: const TextStyle(fontSize: 11, color: AppColors.subtextLight)),
+                      const Expanded(
+                          child: Text('CategorÃ­as',
+                              style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppColors.dark))),
+                      Text('${_filtrados.length} productos',
+                          style: const TextStyle(
+                              fontSize: 11, color: AppColors.subtextLight)),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -15268,21 +18952,34 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
                     height: 40,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
-                      children: [_chip('Todas'), ..._categorias.map((c) => _chip((c['nombre'] ?? '').toString()))],
+                      children: [
+                        _chip('Todas'),
+                        ..._categorias
+                            .map((c) => _chip((c['nombre'] ?? '').toString()))
+                      ],
                     ),
                   ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      const Expanded(child: Text('Productos', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.dark))),
-                      TextButton(onPressed: () => setState(() => _categoria = 'Todas'), child: const Text('Ver todos')),
+                      const Expanded(
+                          child: Text('Productos',
+                              style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppColors.dark))),
+                      TextButton(
+                          onPressed: () => setState(() => _categoria = 'Todas'),
+                          child: const Text('Ver todos')),
                     ],
                   ),
                   const SizedBox(height: 6),
                   if (_filtrados.isEmpty)
                     const Padding(
                       padding: EdgeInsets.all(35),
-                      child: Center(child: Text('No encontramos productos con esos criterios.')),
+                      child: Center(
+                          child: Text(
+                              'No encontramos productos con esos criterios.')),
                     ),
                   GridView.builder(
                     shrinkWrap: true,
@@ -15336,11 +19033,14 @@ class _UniversalFlyCartStoreState extends State<UniversalFlyCartStore> {
         selected: selected,
         onSelected: (_) => setState(() => _categoria = n),
         selectedColor: AppColors.primary,
-        labelStyle: TextStyle(color: selected ? Colors.white : AppColors.dark, fontWeight: FontWeight.w700),
+        labelStyle: TextStyle(
+            color: selected ? Colors.white : AppColors.dark,
+            fontWeight: FontWeight.w700),
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: selected ? AppColors.primary : const Color(0xFFE5E7EB)),
+          side: BorderSide(
+              color: selected ? AppColors.primary : const Color(0xFFE5E7EB)),
         ),
       ),
     );
@@ -15362,11 +19062,21 @@ class _StoreHero extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('DESCUBRE NUEVOS PRODUCTOS', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1)),
+            const Text('DESCUBRE NUEVOS PRODUCTOS',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1)),
             const SizedBox(height: 7),
-            Text(nombre, style: const TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.w900)),
+            Text(nombre,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 25,
+                    fontWeight: FontWeight.w900)),
             const SizedBox(height: 5),
-            const Text('Compra fácil, rápido y desde cualquier dispositivo.', style: TextStyle(color: Colors.white70, fontSize: 11)),
+            const Text('Compra fÃ¡cil, rÃ¡pido y desde cualquier dispositivo.',
+                style: TextStyle(color: Colors.white70, fontSize: 11)),
           ],
         ),
       );
@@ -15381,20 +19091,36 @@ class _StoreBanner extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(right: 8),
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(24)),
+      decoration: BoxDecoration(
+          color: AppColors.primary, borderRadius: BorderRadius.circular(24)),
       child: Stack(
         fit: StackFit.expand,
         children: [
           if (b.isNotEmpty) Image.memory(base64Decode(b), fit: BoxFit.cover),
-          Container(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.bottomLeft, end: Alignment.topRight, colors: [Colors.black.withValues(alpha: .66), Colors.transparent]))),
+          Container(
+              decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                      begin: Alignment.bottomLeft,
+                      end: Alignment.topRight,
+                      colors: [
+                Colors.black.withValues(alpha: .66),
+                Colors.transparent
+              ]))),
           Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(data['title']?.toString() ?? 'Oferta especial', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
-                if ((data['subtitle'] ?? '').toString().isNotEmpty) Text(data['subtitle'].toString(), style: const TextStyle(color: Colors.white, fontSize: 11)),
+                Text(data['title']?.toString() ?? 'Oferta especial',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900)),
+                if ((data['subtitle'] ?? '').toString().isNotEmpty)
+                  Text(data['subtitle'].toString(),
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 11)),
               ],
             ),
           ),
@@ -15425,7 +19151,8 @@ class _StoreProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final discount = double.tryParse((product['descuento'] ?? 0).toString()) ?? 0;
+    final discount =
+        double.tryParse((product['descuento'] ?? 0).toString()) ?? 0;
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(24),
@@ -15464,9 +19191,16 @@ class _StoreProductCard extends StatelessWidget {
                         left: 17,
                         top: 17,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                          decoration: BoxDecoration(color: const Color(0xFFE94F79), borderRadius: BorderRadius.circular(10)),
-                          child: Text('-${discount.toStringAsFixed(0)}%', style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 5),
+                          decoration: BoxDecoration(
+                              color: const Color(0xFFE94F79),
+                              borderRadius: BorderRadius.circular(10)),
+                          child: Text('-${discount.toStringAsFixed(0)}%',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w900)),
                         ),
                       ),
                     Positioned(
@@ -15477,9 +19211,16 @@ class _StoreProductCard extends StatelessWidget {
                         shape: const CircleBorder(),
                         child: IconButton(
                           onPressed: onFavorite,
-                          icon: Icon(favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                              color: favorite ? const Color(0xFFE94F79) : const Color(0xFF263042), size: 17),
-                          constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+                          icon: Icon(
+                              favorite
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
+                              color: favorite
+                                  ? const Color(0xFFE94F79)
+                                  : const Color(0xFF263042),
+                              size: 17),
+                          constraints: const BoxConstraints.tightFor(
+                              width: 34, height: 34),
                           padding: EdgeInsets.zero,
                         ),
                       ),
@@ -15492,20 +19233,36 @@ class _StoreProductCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(product['nombre']?.toString() ?? '', maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Color(0xFF171A27), fontSize: 12, fontWeight: FontWeight.w900)),
+                    Text(product['nombre']?.toString() ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Color(0xFF171A27),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900)),
                     const SizedBox(height: 5),
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(color: const Color(0xFFF1F3F5), borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                              color: const Color(0xFFF1F3F5),
+                              borderRadius: BorderRadius.circular(8)),
                           child: Text(stock > 0 ? 'Disponible' : 'Agotado',
-                              style: TextStyle(color: stock > 0 ? const Color(0xFF189A6B) : const Color(0xFFD6475F), fontSize: 7.5, fontWeight: FontWeight.w900)),
+                              style: TextStyle(
+                                  color: stock > 0
+                                      ? const Color(0xFF189A6B)
+                                      : const Color(0xFFD6475F),
+                                  fontSize: 7.5,
+                                  fontWeight: FontWeight.w900)),
                         ),
                         const Spacer(),
                         Text('\$${price.toStringAsFixed(2)}',
-                            style: const TextStyle(color: Color(0xFF202332), fontSize: 16, fontWeight: FontWeight.w900)),
+                            style: const TextStyle(
+                                color: Color(0xFF202332),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900)),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -15520,9 +19277,12 @@ class _StoreProductCard extends StatelessWidget {
                           disabledBackgroundColor: const Color(0xFFE4E6EA),
                           disabledForegroundColor: const Color(0xFF9CA3AF),
                           padding: EdgeInsets.zero,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(17)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(17)),
                         ),
-                        child: const Text('Agregar al carrito', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w900)),
+                        child: const Text('Agregar al carrito',
+                            style: TextStyle(
+                                fontSize: 9.5, fontWeight: FontWeight.w900)),
                       ),
                     ),
                   ],
@@ -15542,7 +19302,12 @@ class _StoreImage extends StatelessWidget {
   final double width;
   final double height;
   final double radius;
-  const _StoreImage({required this.base64, this.url, this.width = double.infinity, this.height = double.infinity, this.radius = 12});
+  const _StoreImage(
+      {required this.base64,
+      this.url,
+      this.width = double.infinity,
+      this.height = double.infinity,
+      this.radius = 12});
   @override
   Widget build(BuildContext context) {
     Uint8List? bytes;
@@ -15553,12 +19318,26 @@ class _StoreImage extends StatelessWidget {
     return Container(
       width: width,
       height: height,
-      decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(radius)),
+      decoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(radius)),
       child: remote != null
-          ? ClipRRect(borderRadius: BorderRadius.circular(radius), child: Image.network(remote, fit: BoxFit.cover, errorBuilder: (_, __, ___) => bytes == null ? const Center(child: Icon(Icons.image_outlined, color: AppColors.subtextLight, size: 34)) : Image.memory(bytes, fit: BoxFit.cover)))
+          ? ClipRRect(
+              borderRadius: BorderRadius.circular(radius),
+              child: Image.network(remote,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => bytes == null
+                      ? const Center(
+                          child: Icon(Icons.image_outlined,
+                              color: AppColors.subtextLight, size: 34))
+                      : Image.memory(bytes, fit: BoxFit.cover)))
           : bytes == null
-              ? const Center(child: Icon(Icons.image_outlined, color: AppColors.subtextLight, size: 34))
-              : ClipRRect(borderRadius: BorderRadius.circular(radius), child: Image.memory(bytes, fit: BoxFit.cover)),
+              ? const Center(
+                  child: Icon(Icons.image_outlined,
+                      color: AppColors.subtextLight, size: 34))
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(radius),
+                  child: Image.memory(bytes, fit: BoxFit.cover)),
     );
   }
 }
@@ -15599,57 +19378,111 @@ class _StoreProductDetailState extends State<_StoreProductDetail> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_back_rounded)),
-        title: const Text('Detalles', style: TextStyle(fontWeight: FontWeight.w900)),
-        actions: [IconButton(onPressed: widget.onOpenCart, icon: const Icon(Icons.shopping_bag_outlined)), const SizedBox(width: 5)],
+        leading: IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.arrow_back_rounded)),
+        title: const Text('Detalles',
+            style: TextStyle(fontWeight: FontWeight.w900)),
+        actions: [
+          IconButton(
+              onPressed: widget.onOpenCart,
+              icon: const Icon(Icons.shopping_bag_outlined)),
+          const SizedBox(width: 5)
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(14),
         children: [
-          _StoreImage(base64: p['imagen_base64']?.toString() ?? '', url: p['imagen_url']?.toString(), height: MediaQuery.sizeOf(context).width * .78, radius: 24),
+          _StoreImage(
+              base64: p['imagen_base64']?.toString() ?? '',
+              url: p['imagen_url']?.toString(),
+              height: MediaQuery.sizeOf(context).width * .78,
+              radius: 24),
           const SizedBox(height: 14),
           Row(
             children: [
-              Expanded(child: Text(p['nombre']?.toString() ?? '', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.dark))),
+              Expanded(
+                  child: Text(p['nombre']?.toString() ?? '',
+                      style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.dark))),
               IconButton(
                 onPressed: () async {
                   await widget.onFavorite(p);
                   if (mounted) setState(() => favorite = !favorite);
                 },
-                icon: Icon(favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: favorite ? AppColors.danger : AppColors.dark),
+                icon: Icon(
+                    favorite
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    color: favorite ? AppColors.danger : AppColors.dark),
               ),
             ],
           ),
-          Text((p['categoria'] ?? '').toString(), style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700, fontSize: 11)),
+          Text((p['categoria'] ?? '').toString(),
+              style: const TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11)),
           const SizedBox(height: 7),
-          Text('\$${price.toStringAsFixed(2)}', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: AppColors.dark)),
-          if ((p['descuento'] ?? 0).toString() != '0') Text('Descuento ${p['descuento']}%', style: const TextStyle(color: AppColors.success, fontWeight: FontWeight.w800)),
+          Text('\$${price.toStringAsFixed(2)}',
+              style: const TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.dark)),
+          if ((p['descuento'] ?? 0).toString() != '0')
+            Text('Descuento ${p['descuento']}%',
+                style: const TextStyle(
+                    color: AppColors.success, fontWeight: FontWeight.w800)),
           const SizedBox(height: 18),
-          const Text('Descripción', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.dark)),
+          const Text('DescripciÃ³n',
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.dark)),
           const SizedBox(height: 6),
-          Text((p['descripcion'] ?? 'Producto disponible en nuestra tienda.').toString(), style: const TextStyle(color: AppColors.subtextLight, height: 1.5)),
+          Text(
+              (p['descripcion'] ?? 'Producto disponible en nuestra tienda.')
+                  .toString(),
+              style:
+                  const TextStyle(color: AppColors.subtextLight, height: 1.5)),
           const SizedBox(height: 14),
           Wrap(
             spacing: 7,
             runSpacing: 7,
             children: [
-              if ((p['marca'] ?? '').toString().isNotEmpty) Chip(label: Text('Marca ${p['marca']}')),
-              if ((p['color'] ?? '').toString().isNotEmpty) Chip(label: Text('Color ${p['color']}')),
-              if ((p['talla'] ?? '').toString().isNotEmpty) Chip(label: Text('Talla ${p['talla']}')),
+              if ((p['marca'] ?? '').toString().isNotEmpty)
+                Chip(label: Text('Marca ${p['marca']}')),
+              if ((p['color'] ?? '').toString().isNotEmpty)
+                Chip(label: Text('Color ${p['color']}')),
+              if ((p['talla'] ?? '').toString().isNotEmpty)
+                Chip(label: Text('Talla ${p['talla']}')),
             ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              Text(stock > 0 ? 'Stock disponible: $stock' : 'Agotado', style: TextStyle(color: stock > 0 ? AppColors.success : AppColors.danger, fontWeight: FontWeight.w800)),
+              Text(stock > 0 ? 'Stock disponible: $stock' : 'Agotado',
+                  style: TextStyle(
+                      color: stock > 0 ? AppColors.success : AppColors.danger,
+                      fontWeight: FontWeight.w800)),
               const Spacer(),
               Container(
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12)),
                 child: Row(
                   children: [
-                    IconButton(onPressed: qty > 1 ? () => setState(() => qty--) : null, icon: const Icon(Icons.remove_rounded)),
-                    Text('$qty', style: const TextStyle(fontWeight: FontWeight.w900)),
-                    IconButton(onPressed: qty < stock ? () => setState(() => qty++) : null, icon: const Icon(Icons.add_rounded)),
+                    IconButton(
+                        onPressed: qty > 1 ? () => setState(() => qty--) : null,
+                        icon: const Icon(Icons.remove_rounded)),
+                    Text('$qty',
+                        style: const TextStyle(fontWeight: FontWeight.w900)),
+                    IconButton(
+                        onPressed:
+                            qty < stock ? () => setState(() => qty++) : null,
+                        icon: const Icon(Icons.add_rounded)),
                   ],
                 ),
               ),
@@ -15660,19 +19493,30 @@ class _StoreProductDetailState extends State<_StoreProductDetail> {
             height: 52,
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: stock > 0 ? () {
-                widget.onAdd(p, cantidad: qty);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Producto agregado al carrito')));
-              } : null,
+              onPressed: stock > 0
+                  ? () {
+                      widget.onAdd(p, cantidad: qty);
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                          content: Text('Producto agregado al carrito')));
+                    }
+                  : null,
               icon: const Icon(Icons.shopping_cart_rounded),
-              label: const Text('AGREGAR AL CARRITO', style: TextStyle(fontWeight: FontWeight.w900)),
+              label: const Text('AGREGAR AL CARRITO',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
             ),
           ),
           const SizedBox(height: 9),
-          OutlinedButton.icon(onPressed: widget.onOpenCart, icon: const Icon(Icons.shopping_bag_outlined), label: const Text('VER CARRITO')),
+          OutlinedButton.icon(
+              onPressed: widget.onOpenCart,
+              icon: const Icon(Icons.shopping_bag_outlined),
+              label: const Text('VER CARRITO')),
           if (widget.related.isNotEmpty) ...[
             const SizedBox(height: 22),
-            const Text('Productos relacionados', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: AppColors.dark)),
+            const Text('Productos relacionados',
+                style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.dark)),
             const SizedBox(height: 9),
             SizedBox(
               height: 205,
@@ -15690,7 +19534,23 @@ class _StoreProductDetailState extends State<_StoreProductDetail> {
                       stock: int.tryParse((r['stock'] ?? 0).toString()) ?? 0,
                       favorite: false,
                       onFavorite: () {},
-                      onOpen: () => Navigator.push(context, MaterialPageRoute(builder: (_) => _StoreProductDetail(product: r, related: widget.related.where((x) => x['id'].toString() != r['id'].toString()).take(6).toList(), price: widget.price, onAdd: widget.onAdd, onFavorite: widget.onFavorite, favorite: false, onOpenCart: widget.onOpenCart, logo: widget.logo))),
+                      onOpen: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => _StoreProductDetail(
+                                  product: r,
+                                  related: widget.related
+                                      .where((x) =>
+                                          x['id'].toString() !=
+                                          r['id'].toString())
+                                      .take(6)
+                                      .toList(),
+                                  price: widget.price,
+                                  onAdd: widget.onAdd,
+                                  onFavorite: widget.onFavorite,
+                                  favorite: false,
+                                  onOpenCart: widget.onOpenCart,
+                                  logo: widget.logo))),
                       onAdd: () => widget.onAdd(r, cantidad: 1),
                     ),
                   );
@@ -15712,22 +19572,42 @@ class _StoreCartSheet extends StatelessWidget {
   final void Function(int, int) onChange;
   final void Function(int) onRemove;
   final VoidCallback onCheckout;
-  const _StoreCartSheet({required this.items, required this.money, required this.price, required this.stock, required this.onChange, required this.onRemove, required this.onCheckout});
+  const _StoreCartSheet(
+      {required this.items,
+      required this.money,
+      required this.price,
+      required this.stock,
+      required this.onChange,
+      required this.onRemove,
+      required this.onCheckout});
   @override
   Widget build(BuildContext context) {
-    final total = items.fold<double>(0, (sum, item) => sum + price(item) * ((item['_qty'] as int?) ?? 0));
+    final total = items.fold<double>(
+        0, (sum, item) => sum + price(item) * ((item['_qty'] as int?) ?? 0));
     return DraggableScrollableSheet(
       initialChildSize: .78,
       minChildSize: .45,
       maxChildSize: .94,
       builder: (_, scrollController) => Container(
-        decoration: const BoxDecoration(color: Color(0xFFF8F7FC), borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+        decoration: const BoxDecoration(
+            color: Color(0xFFF8F7FC),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
         child: Column(
           children: [
-            Padding(padding: const EdgeInsets.fromLTRB(18, 16, 10, 10), child: Row(children: [const Expanded(child: Text('Mi carrito', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900))), IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded))])),
+            Padding(
+                padding: const EdgeInsets.fromLTRB(18, 16, 10, 10),
+                child: Row(children: [
+                  const Expanded(
+                      child: Text('Mi carrito',
+                          style: TextStyle(
+                              fontSize: 22, fontWeight: FontWeight.w900))),
+                  IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close_rounded))
+                ])),
             Expanded(
               child: items.isEmpty
-                  ? const Center(child: Text('Tu carrito está vacío.'))
+                  ? const Center(child: Text('Tu carrito estÃ¡ vacÃ­o.'))
                   : ListView.separated(
                       controller: scrollController,
                       padding: const EdgeInsets.fromLTRB(14, 4, 14, 20),
@@ -15738,11 +19618,60 @@ class _StoreCartSheet extends StatelessWidget {
                         final quantity = (product['_qty'] as int?) ?? 1;
                         return Container(
                           padding: const EdgeInsets.all(9),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
+                          decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(18)),
                           child: Row(children: [
-                            _StoreImage(base64: product['imagen_base64']?.toString() ?? '', url: product['imagen_url']?.toString(), width: 74, height: 74, radius: 13),
+                            _StoreImage(
+                                base64:
+                                    product['imagen_base64']?.toString() ?? '',
+                                url: product['imagen_url']?.toString(),
+                                width: 74,
+                                height: 74,
+                                radius: 13),
                             const SizedBox(width: 10),
-                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(product['nombre']?.toString() ?? '', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 4), Text(money(price(product)), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)), const SizedBox(height: 6), Row(children: [IconButton(onPressed: quantity > 1 ? () => onChange(index, quantity - 1) : () => onRemove(index), icon: const Icon(Icons.remove_rounded), visualDensity: VisualDensity.compact), Text('$quantity', style: const TextStyle(fontWeight: FontWeight.w900)), IconButton(onPressed: quantity < stock(product) ? () => onChange(index, quantity + 1) : null, icon: const Icon(Icons.add_rounded), visualDensity: VisualDensity.compact), const Spacer(), IconButton(onPressed: () => onRemove(index), icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger))])])) ,
+                            Expanded(
+                                child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                  Text(product['nombre']?.toString() ?? '',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w800)),
+                                  const SizedBox(height: 4),
+                                  Text(money(price(product)),
+                                      style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w900)),
+                                  const SizedBox(height: 6),
+                                  Row(children: [
+                                    IconButton(
+                                        onPressed: quantity > 1
+                                            ? () =>
+                                                onChange(index, quantity - 1)
+                                            : () => onRemove(index),
+                                        icon: const Icon(Icons.remove_rounded),
+                                        visualDensity: VisualDensity.compact),
+                                    Text('$quantity',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w900)),
+                                    IconButton(
+                                        onPressed: quantity < stock(product)
+                                            ? () =>
+                                                onChange(index, quantity + 1)
+                                            : null,
+                                        icon: const Icon(Icons.add_rounded),
+                                        visualDensity: VisualDensity.compact),
+                                    const Spacer(),
+                                    IconButton(
+                                        onPressed: () => onRemove(index),
+                                        icon: const Icon(
+                                            Icons.delete_outline_rounded,
+                                            color: AppColors.danger))
+                                  ])
+                                ])),
                           ]),
                         );
                       },
@@ -15750,8 +19679,35 @@ class _StoreCartSheet extends StatelessWidget {
             ),
             Container(
               padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
-              decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
-              child: Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('TOTAL', style: TextStyle(fontSize: 10, color: AppColors.subtextLight, fontWeight: FontWeight.w800)), Text(money(total), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900))])), FilledButton.icon(onPressed: items.isEmpty ? null : onCheckout, icon: const Icon(Icons.chat_rounded), label: const Text('WhatsApp', style: TextStyle(fontWeight: FontWeight.w900)), style: FilledButton.styleFrom(backgroundColor: AppColors.whatsapp, minimumSize: const Size(150, 50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))))]),
+              decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius:
+                      BorderRadius.vertical(top: Radius.circular(22))),
+              child: Row(children: [
+                Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      const Text('TOTAL',
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.subtextLight,
+                              fontWeight: FontWeight.w800)),
+                      Text(money(total),
+                          style: const TextStyle(
+                              fontSize: 22, fontWeight: FontWeight.w900))
+                    ])),
+                FilledButton.icon(
+                    onPressed: items.isEmpty ? null : onCheckout,
+                    icon: const Icon(Icons.chat_rounded),
+                    label: const Text('WhatsApp',
+                        style: TextStyle(fontWeight: FontWeight.w900)),
+                    style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.whatsapp,
+                        minimumSize: const Size(150, 50),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15))))
+              ]),
             ),
           ],
         ),
@@ -15773,7 +19729,8 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
   final _subtitle = TextEditingController();
   final _button = TextEditingController(text: 'Ver productos');
   final _whatsapp = TextEditingController();
-  final _publicUrl = TextEditingController(text: 'https://synthetixapp17.github.io/mi_tienda/tienda/');
+  final _publicUrl = TextEditingController(
+      text: 'https://synthetixapp17.github.io/mi_tienda/tienda/');
   List<Map<String, dynamic>> _banners = [];
   List<Map<String, dynamic>> _productos = [];
   List<Map<String, dynamic>> _categorias = [];
@@ -15781,9 +19738,20 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
   bool _loading = true;
 
   @override
-  void initState() { super.initState(); _load(); }
+  void initState() {
+    super.initState();
+    _load();
+  }
+
   @override
-  void dispose() { _title.dispose(); _subtitle.dispose(); _button.dispose(); _whatsapp.dispose(); _publicUrl.dispose(); super.dispose(); }
+  void dispose() {
+    _title.dispose();
+    _subtitle.dispose();
+    _button.dispose();
+    _whatsapp.dispose();
+    _publicUrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _load() async {
     if (mounted) setState(() => _loading = true);
@@ -15792,14 +19760,23 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
       final raw = prefs.getString('sinthetix_store_banners');
       if (raw != null && raw.isNotEmpty) {
         final decoded = jsonDecode(raw);
-        if (decoded is List) _banners = decoded.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
-      } else { _banners = []; }
+        if (decoded is List)
+          _banners = decoded
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+      } else {
+        _banners = [];
+      }
       final db = DatabaseService();
       _productos = await db.getProductos();
       _categorias = await db.getCategorias();
       _whatsapp.text = prefs.getString('sinthetix_store_whatsapp') ?? '';
-      _publicUrl.text = prefs.getString('sinthetix_store_public_url') ?? 'https://synthetixapp17.github.io/mi_tienda/tienda/';
-    } catch (e) { debugPrint('Error administrador tienda: $e'); }
+      _publicUrl.text = prefs.getString('sinthetix_store_public_url') ??
+          'https://synthetixapp17.github.io/mi_tienda/tienda/';
+    } catch (e) {
+      debugPrint('Error administrador tienda: $e');
+    }
     if (mounted) setState(() => _loading = false);
   }
 
@@ -15812,39 +19789,70 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
 
   Future<void> _pickBanner() async {
     try {
-      final x = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 82, maxWidth: 1800);
+      final x = await _picker.pickImage(
+          source: ImageSource.gallery, imageQuality: 82, maxWidth: 1800);
       if (x == null) return;
       final bytes = await x.readAsBytes();
       if (mounted) setState(() => _bannerImage = base64Encode(bytes));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo cargar la imagen: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('No se pudo cargar la imagen: $e')));
     }
   }
 
   Future<void> _addBanner() async {
     final image = _bannerImage;
     if (image == null || image.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selecciona una imagen para el banner.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Selecciona una imagen para el banner.')));
       return;
     }
-    final banner = <String, dynamic>{'id': DateTime.now().millisecondsSinceEpoch.toString(), 'image': image, 'title': _title.text.trim().isEmpty ? 'Nueva promoción' : _title.text.trim(), 'subtitle': _subtitle.text.trim(), 'button': _button.text.trim(), 'active': true};
+    final banner = <String, dynamic>{
+      'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      'image': image,
+      'title':
+          _title.text.trim().isEmpty ? 'Nueva promociÃ³n' : _title.text.trim(),
+      'subtitle': _subtitle.text.trim(),
+      'button': _button.text.trim(),
+      'active': true
+    };
     setState(() => _banners.add(banner));
     await _save();
-    _title.clear(); _subtitle.clear();
-    if (mounted) { setState(() => _bannerImage = null); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Banner agregado a la tienda.'))); }
+    _title.clear();
+    _subtitle.clear();
+    if (mounted) {
+      setState(() => _bannerImage = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Banner agregado a la tienda.')));
+    }
   }
 
-  Future<void> _toggle(int index) async { if (index < 0 || index >= _banners.length) return; setState(() => _banners[index]['active'] = !(_banners[index]['active'] ?? true)); await _save(); }
-  Future<void> _delete(int index) async { if (index < 0 || index >= _banners.length) return; setState(() => _banners.removeAt(index)); await _save(); }
+  Future<void> _toggle(int index) async {
+    if (index < 0 || index >= _banners.length) return;
+    setState(
+        () => _banners[index]['active'] = !(_banners[index]['active'] ?? true));
+    await _save();
+  }
+
+  Future<void> _delete(int index) async {
+    if (index < 0 || index >= _banners.length) return;
+    setState(() => _banners.removeAt(index));
+    await _save();
+  }
 
   Future<void> _saveSettings() async {
     await _save();
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Configuración de la tienda guardada.')));
+    if (mounted)
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('ConfiguraciÃ³n de la tienda guardada.')));
   }
 
   Future<void> _shareStore() async {
     await _save();
-    await Share.share('🛍️ Visita nuestra tienda online\n${_publicUrl.text.trim()}', subject: 'Tienda online');
+    await Share.share(
+        'ðŸ›ï¸ Visita nuestra tienda online\n${_publicUrl.text.trim()}',
+        subject: 'Tienda online');
   }
 
   Future<void> _openStore() async {
@@ -15864,35 +19872,71 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
         },
         'banners': _banners.where((b) => b['active'] != false).toList(),
         'categories': _categorias,
-        'products': _productos.map((p) => {
-          'id': p['id'],
-          'nombre': p['nombre'],
-          'descripcion': p['descripcion'],
-          'precio': p['precio'],
-          'stock': p['stock'],
-          'categoria': p['categoria'],
-          'codigo_barras': p['codigo_barras'],
-          'imagen_base64': p['imagen_base64'],
-          'imagen_url': p['imagen_url'],
-          'marca': p['marca'],
-          'color': p['color'],
-          'talla': p['talla'],
-          'descuento': p['descuento'],
-          'activo': p['activo'],
-        }).where((p) => (int.tryParse((p['activo'] ?? 1).toString()) ?? 1) != 0).toList(),
+        'products': _productos
+            .map((p) => {
+                  'id': p['id'],
+                  'nombre': p['nombre'],
+                  'descripcion': p['descripcion'],
+                  'precio': p['precio'],
+                  'stock': p['stock'],
+                  'categoria': p['categoria'],
+                  'codigo_barras': p['codigo_barras'],
+                  'imagen_base64': p['imagen_base64'],
+                  'imagen_url': p['imagen_url'],
+                  'marca': p['marca'],
+                  'color': p['color'],
+                  'talla': p['talla'],
+                  'descuento': p['descuento'],
+                  'activo': p['activo'],
+                })
+            .where(
+                (p) => (int.tryParse((p['activo'] ?? 1).toString()) ?? 1) != 0)
+            .toList(),
       };
       final bytes = Uint8List.fromList(utf8.encode(jsonEncode(payload)));
       await Share.shareXFiles(
-        [XFile.fromData(bytes, name: 'catalogo_tienda.json', mimeType: 'application/json')],
-        text: 'Catalogo publico de ${payload['store']['name']}. Reemplaza catalogo_tienda.json en la carpeta publica de la tienda.',
+        [
+          XFile.fromData(bytes,
+              name: 'catalogo_tienda.json', mimeType: 'application/json')
+        ],
+        text:
+            'Catalogo publico de ${payload['store']['name']}. Reemplaza catalogo_tienda.json en la carpeta publica de la tienda.',
       );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo exportar el catálogo: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('No se pudo exportar el catÃ¡logo: $e')));
     }
   }
 
-  Widget _adminCard(String title, String subtitle, Widget child) => Container(padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFE5E7EB))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.dark)), const SizedBox(height: 3), Text(subtitle, style: const TextStyle(fontSize: 10, color: AppColors.subtextLight)), const SizedBox(height: 10), child]));
-  Widget _miniStat(String value, String label) => Column(children: [Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.primary)), Text(label, style: const TextStyle(fontSize: 9, color: AppColors.subtextLight))]);
+  Widget _adminCard(String title, String subtitle, Widget child) => Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFFE5E7EB))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title,
+            style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: AppColors.dark)),
+        const SizedBox(height: 3),
+        Text(subtitle,
+            style:
+                const TextStyle(fontSize: 10, color: AppColors.subtextLight)),
+        const SizedBox(height: 10),
+        child
+      ]));
+  Widget _miniStat(String value, String label) => Column(children: [
+        Text(value,
+            style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: AppColors.primary)),
+        Text(label,
+            style: const TextStyle(fontSize: 9, color: AppColors.subtextLight))
+      ]);
 
   @override
   Widget build(BuildContext context) {
@@ -15902,45 +19946,285 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
-        backgroundColor: bg, elevation: 0, scrolledUnderElevation: 0, toolbarHeight: 76, titleSpacing: 0, leadingWidth: 64,
-        leading: Padding(padding: const EdgeInsets.only(left: 12, top: 14, bottom: 14), child: Material(color: Colors.white, borderRadius: BorderRadius.circular(16), child: InkWell(borderRadius: BorderRadius.circular(16), onTap: widget.onAbrirSidebar, child: const Icon(Icons.menu_rounded, color: AppColors.primary, size: 23)))),
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Tienda online', style: TextStyle(color: ink, fontSize: 18, fontWeight: FontWeight.w900)), Text('Escaparate, contacto y publicación', style: TextStyle(color: muted, fontSize: 9, fontWeight: FontWeight.w600))]),
-        actions: [IconButton(onPressed: _load, tooltip: 'Actualizar', icon: const Icon(Icons.refresh_rounded, color: AppColors.primary)), const SizedBox(width: 6)],
-      ),
-      body: _loading ? const Center(child: CircularProgressIndicator(color: AppColors.primary)) : ListView(padding: const EdgeInsets.fromLTRB(14, 0, 14, 28), children: [
-        Container(padding: const EdgeInsets.fromLTRB(18, 18, 18, 20), decoration: BoxDecoration(gradient: AppColors.gradientPrimary, borderRadius: BorderRadius.circular(24)), child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('STORE CONTROL', style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.5)), SizedBox(height: 7), Text('Tu tienda, lista para vender', style: TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w900)), SizedBox(height: 5), Text('El POS sigue trabajando localmente. La tienda pública consulta el catálogo publicado.', style: TextStyle(color: Colors.white70, fontSize: 10.5, height: 1.35))])),
-        const SizedBox(height: 18),
-        _adminCard('Publicación', 'Enlace que compartirás con tus clientes.', Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          TextField(controller: _publicUrl, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Enlace público', prefixIcon: Icon(Icons.link_rounded))),
-          const SizedBox(height: 10),
-          Row(children: [Expanded(child: OutlinedButton.icon(onPressed: _openStore, icon: const Icon(Icons.open_in_new_rounded), label: const Text('Abrir tienda'))), const SizedBox(width: 9), Expanded(child: FilledButton.icon(onPressed: _saveSettings, icon: const Icon(Icons.save_rounded), label: const Text('Guardar')))]),
-          const SizedBox(height: 9),
-          SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _shareStore, icon: const Icon(Icons.share_rounded), label: const Text('Compartir enlace'))),
-        ])),
-        const SizedBox(height: 12),
-        _adminCard('WhatsApp', 'Número que recibirá las consultas y pedidos de la tienda.', Column(children: [TextField(controller: _whatsapp, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'WhatsApp de la tienda', hintText: 'Ej. 17865551234', prefixIcon: Icon(Icons.chat_rounded))), const SizedBox(height: 6), Align(alignment: Alignment.centerLeft, child: Text('Usa el número con código de país, sin espacios ni símbolos.', style: TextStyle(color: muted, fontSize: 9)))])),
-        const SizedBox(height: 12),
-        _adminCard('Portada', 'Banners de promoción. La tienda los rota automáticamente.', Column(children: [
-          Row(children: [Expanded(child: TextField(controller: _title, decoration: const InputDecoration(labelText: 'Título'))), const SizedBox(width: 9), Expanded(child: TextField(controller: _button, decoration: const InputDecoration(labelText: 'Botón')))]),
-          TextField(controller: _subtitle, decoration: const InputDecoration(labelText: 'Subtítulo')),
-          const SizedBox(height: 10),
-          Row(children: [Expanded(child: OutlinedButton.icon(onPressed: _pickBanner, icon: const Icon(Icons.image_outlined), label: Text(_bannerImage == null ? 'Seleccionar imagen' : 'Imagen seleccionada'))), const SizedBox(width: 9), FilledButton.icon(onPressed: _addBanner, icon: const Icon(Icons.add_rounded), label: const Text('Añadir'))]),
-          if (_bannerImage != null) Padding(padding: const EdgeInsets.only(top: 12), child: ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.memory(base64Decode(_bannerImage!), height: 145, width: double.infinity, fit: BoxFit.cover))),
-        ])),
-        const SizedBox(height: 12),
-        _adminCard('Catálogo conectado', 'La tienda utiliza los mismos productos y categorías del POS.', Row(children: [Expanded(child: _miniStat('${_productos.length}', 'Productos')), Expanded(child: _miniStat('${_categorias.length}', 'Categorías')), Expanded(child: _miniStat('${_productos.where((p) => (int.tryParse((p['destacado'] ?? 0).toString()) ?? 0) > 0).length}', 'Destacados'))])),
-        const SizedBox(height: 12),
-        if (_banners.isNotEmpty) ...[
-          Padding(padding: const EdgeInsets.only(bottom: 8, left: 2), child: Text('Banners activos', style: TextStyle(color: ink, fontSize: 14, fontWeight: FontWeight.w900))),
-          ..._banners.asMap().entries.map((entry) { final index = entry.key; final banner = entry.value; final image = banner['image']?.toString() ?? ''; final active = banner['active'] ?? true; return Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(9), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFE4E7EC))), child: Row(children: [ClipRRect(borderRadius: BorderRadius.circular(12), child: image.isEmpty ? const SizedBox(width: 92, height: 62, child: Icon(Icons.image_outlined)) : Image.memory(base64Decode(image), width: 92, height: 62, fit: BoxFit.cover)), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(banner['title']?.toString() ?? 'Banner', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11)), const SizedBox(height: 2), Text(active ? 'Visible en la tienda' : 'Oculto', style: TextStyle(fontSize: 8.5, color: active ? AppColors.success : AppColors.danger, fontWeight: FontWeight.w800))])), Switch(value: active, onChanged: (_) => _toggle(index)), IconButton(onPressed: () => _delete(index), tooltip: 'Eliminar', icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger))])); }),
+        backgroundColor: bg,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        toolbarHeight: 76,
+        titleSpacing: 0,
+        leadingWidth: 64,
+        leading: Padding(
+            padding: const EdgeInsets.only(left: 12, top: 14, bottom: 14),
+            child: Material(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: widget.onAbrirSidebar,
+                    child: const Icon(Icons.menu_rounded,
+                        color: AppColors.primary, size: 23)))),
+        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Tienda online',
+              style: TextStyle(
+                  color: ink, fontSize: 18, fontWeight: FontWeight.w900)),
+          Text('Escaparate, contacto y publicaciÃ³n',
+              style: TextStyle(
+                  color: muted, fontSize: 9, fontWeight: FontWeight.w600))
+        ]),
+        actions: [
+          IconButton(
+              onPressed: _load,
+              tooltip: 'Actualizar',
+              icon:
+                  const Icon(Icons.refresh_rounded, color: AppColors.primary)),
+          const SizedBox(width: 6)
         ],
-        const SizedBox(height: 4),
-        _adminCard('Catálogo público', 'Genera una copia para respaldo. La publicación web usa tienda.html y el catálogo remoto.', Column(children: [
-          Row(children: [const Icon(Icons.cloud_done_rounded, color: AppColors.success, size: 19), const SizedBox(width: 9), Expanded(child: Text('Productos del POS → sincronización → tienda pública', style: TextStyle(color: ink, fontSize: 10, fontWeight: FontWeight.w700)))]),
-          const SizedBox(height: 11),
-          SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _exportarCatalogoPublico, icon: const Icon(Icons.file_download_outlined), label: const Text('Exportar catálogo'))),
-        ])),
-      ]),
+      ),
+      body: _loading
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary))
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 28),
+              children: [
+                  Container(
+                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+                      decoration: BoxDecoration(
+                          gradient: AppColors.gradientPrimary,
+                          borderRadius: BorderRadius.circular(24)),
+                      child: const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('STORE CONTROL',
+                                style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.5)),
+                            SizedBox(height: 7),
+                            Text('Tu tienda, lista para vender',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 23,
+                                    fontWeight: FontWeight.w900)),
+                            SizedBox(height: 5),
+                            Text(
+                                'El POS sigue trabajando localmente. La tienda pÃºblica consulta el catÃ¡logo publicado.',
+                                style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 10.5,
+                                    height: 1.35))
+                          ])),
+                  const SizedBox(height: 18),
+                  _adminCard(
+                      'PublicaciÃ³n',
+                      'Enlace que compartirÃ¡s con tus clientes.',
+                      Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            TextField(
+                                controller: _publicUrl,
+                                keyboardType: TextInputType.url,
+                                decoration: const InputDecoration(
+                                    labelText: 'Enlace pÃºblico',
+                                    prefixIcon: Icon(Icons.link_rounded))),
+                            const SizedBox(height: 10),
+                            Row(children: [
+                              Expanded(
+                                  child: OutlinedButton.icon(
+                                      onPressed: _openStore,
+                                      icon:
+                                          const Icon(Icons.open_in_new_rounded),
+                                      label: const Text('Abrir tienda'))),
+                              const SizedBox(width: 9),
+                              Expanded(
+                                  child: FilledButton.icon(
+                                      onPressed: _saveSettings,
+                                      icon: const Icon(Icons.save_rounded),
+                                      label: const Text('Guardar')))
+                            ]),
+                            const SizedBox(height: 9),
+                            SizedBox(
+                                width: double.infinity,
+                                child: FilledButton.icon(
+                                    onPressed: _shareStore,
+                                    icon: const Icon(Icons.share_rounded),
+                                    label: const Text('Compartir enlace'))),
+                          ])),
+                  const SizedBox(height: 12),
+                  _adminCard(
+                      'WhatsApp',
+                      'NÃºmero que recibirÃ¡ las consultas y pedidos de la tienda.',
+                      Column(children: [
+                        TextField(
+                            controller: _whatsapp,
+                            keyboardType: TextInputType.phone,
+                            decoration: const InputDecoration(
+                                labelText: 'WhatsApp de la tienda',
+                                hintText: 'Ej. 17865551234',
+                                prefixIcon: Icon(Icons.chat_rounded))),
+                        const SizedBox(height: 6),
+                        Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                                'Usa el nÃºmero con cÃ³digo de paÃ­s, sin espacios ni sÃ­mbolos.',
+                                style: TextStyle(color: muted, fontSize: 9)))
+                      ])),
+                  const SizedBox(height: 12),
+                  _adminCard(
+                      'Portada',
+                      'Banners de promociÃ³n. La tienda los rota automÃ¡ticamente.',
+                      Column(children: [
+                        Row(children: [
+                          Expanded(
+                              child: TextField(
+                                  controller: _title,
+                                  decoration: const InputDecoration(
+                                      labelText: 'TÃ­tulo'))),
+                          const SizedBox(width: 9),
+                          Expanded(
+                              child: TextField(
+                                  controller: _button,
+                                  decoration: const InputDecoration(
+                                      labelText: 'BotÃ³n')))
+                        ]),
+                        TextField(
+                            controller: _subtitle,
+                            decoration:
+                                const InputDecoration(labelText: 'SubtÃ­tulo')),
+                        const SizedBox(height: 10),
+                        Row(children: [
+                          Expanded(
+                              child: OutlinedButton.icon(
+                                  onPressed: _pickBanner,
+                                  icon: const Icon(Icons.image_outlined),
+                                  label: Text(_bannerImage == null
+                                      ? 'Seleccionar imagen'
+                                      : 'Imagen seleccionada'))),
+                          const SizedBox(width: 9),
+                          FilledButton.icon(
+                              onPressed: _addBanner,
+                              icon: const Icon(Icons.add_rounded),
+                              label: const Text('AÃ±adir'))
+                        ]),
+                        if (_bannerImage != null)
+                          Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Image.memory(
+                                      base64Decode(_bannerImage!),
+                                      height: 145,
+                                      width: double.infinity,
+                                      fit: BoxFit.cover))),
+                      ])),
+                  const SizedBox(height: 12),
+                  _adminCard(
+                      'CatÃ¡logo conectado',
+                      'La tienda utiliza los mismos productos y categorÃ­as del POS.',
+                      Row(children: [
+                        Expanded(
+                            child:
+                                _miniStat('${_productos.length}', 'Productos')),
+                        Expanded(
+                            child: _miniStat(
+                                '${_categorias.length}', 'CategorÃ­as')),
+                        Expanded(
+                            child: _miniStat(
+                                '${_productos.where((p) => (int.tryParse((p['destacado'] ?? 0).toString()) ?? 0) > 0).length}',
+                                'Destacados'))
+                      ])),
+                  const SizedBox(height: 12),
+                  if (_banners.isNotEmpty) ...[
+                    Padding(
+                        padding: const EdgeInsets.only(bottom: 8, left: 2),
+                        child: Text('Banners activos',
+                            style: TextStyle(
+                                color: ink,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900))),
+                    ..._banners.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final banner = entry.value;
+                      final image = banner['image']?.toString() ?? '';
+                      final active = banner['active'] ?? true;
+                      return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(9),
+                          decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(18),
+                              border:
+                                  Border.all(color: const Color(0xFFE4E7EC))),
+                          child: Row(children: [
+                            ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: image.isEmpty
+                                    ? const SizedBox(
+                                        width: 92,
+                                        height: 62,
+                                        child: Icon(Icons.image_outlined))
+                                    : Image.memory(base64Decode(image),
+                                        width: 92,
+                                        height: 62,
+                                        fit: BoxFit.cover)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                                child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                  Text(banner['title']?.toString() ?? 'Banner',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 11)),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                      active
+                                          ? 'Visible en la tienda'
+                                          : 'Oculto',
+                                      style: TextStyle(
+                                          fontSize: 8.5,
+                                          color: active
+                                              ? AppColors.success
+                                              : AppColors.danger,
+                                          fontWeight: FontWeight.w800))
+                                ])),
+                            Switch(
+                                value: active,
+                                onChanged: (_) => _toggle(index)),
+                            IconButton(
+                                onPressed: () => _delete(index),
+                                tooltip: 'Eliminar',
+                                icon: const Icon(Icons.delete_outline_rounded,
+                                    color: AppColors.danger))
+                          ]));
+                    }),
+                  ],
+                  const SizedBox(height: 4),
+                  _adminCard(
+                      'CatÃ¡logo pÃºblico',
+                      'Genera una copia para respaldo. La publicaciÃ³n web usa tienda.html y el catÃ¡logo remoto.',
+                      Column(children: [
+                        Row(children: [
+                          const Icon(Icons.cloud_done_rounded,
+                              color: AppColors.success, size: 19),
+                          const SizedBox(width: 9),
+                          Expanded(
+                              child: Text(
+                                  'Productos del POS â†’ sincronizaciÃ³n â†’ tienda pÃºblica',
+                                  style: TextStyle(
+                                      color: ink,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700)))
+                        ]),
+                        const SizedBox(height: 11),
+                        SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                                onPressed: _exportarCatalogoPublico,
+                                icon: const Icon(Icons.file_download_outlined),
+                                label: const Text('Exportar catÃ¡logo'))),
+                      ])),
+                ]),
     );
   }
 }
@@ -16046,7 +20330,7 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
                   style: TextStyle(color: AppColors.text(isDark)),
                   keyboardType: TextInputType.phone,
                   decoration: InputDecoration(
-                    labelText: 'Teléfono',
+                    labelText: 'TelÃ©fono',
                     labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                     filled: true,
                     fillColor: AppColors.background(isDark),
@@ -16148,7 +20432,7 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Row(children: [
-const SizedBox(width: 14),
+          const SizedBox(width: 14),
           Text('PROVEEDORES',
               style: TextStyle(
                   color: AppColors.text(isDark),
@@ -16345,7 +20629,7 @@ class _PromocionesScreenState extends State<PromocionesScreen> {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text(
-            promocion != null ? 'Editar Promoción' : 'Nueva Promoción',
+            promocion != null ? 'Editar PromociÃ³n' : 'Nueva PromociÃ³n',
             style: TextStyle(
                 color: AppColors.text(isDark), fontWeight: FontWeight.w700),
           ),
@@ -16449,7 +20733,7 @@ class _PromocionesScreenState extends State<PromocionesScreen> {
                         _cargarPromociones();
                       } catch (e) {
                         setDialogState(() => guardando = false);
-                        debugPrint('Error guardando promoción: $e');
+                        debugPrint('Error guardando promociÃ³n: $e');
                       }
                     },
               icon: guardando
@@ -16488,7 +20772,7 @@ class _PromocionesScreenState extends State<PromocionesScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Row(children: [
-const SizedBox(width: 14),
+          const SizedBox(width: 14),
           Text('PROMOCIONES',
               style: TextStyle(
                   color: AppColors.text(isDark),
@@ -16624,7 +20908,7 @@ const SizedBox(width: 14),
                   onPressed: () => _mostrarDialogo(),
                   icon: const Icon(Icons.add_rounded,
                       color: Colors.white, size: 24),
-                  label: const Text('AGREGAR PROMOCIÓN',
+                  label: const Text('AGREGAR PROMOCIÃ“N',
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 14,
@@ -16692,7 +20976,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Row(children: [
-const SizedBox(width: 14),
+          const SizedBox(width: 14),
           Text('COMPRAS',
               style: TextStyle(
                   color: AppColors.text(isDark),
@@ -16908,7 +21192,7 @@ class _RolesScreenState extends State<RolesScreen> {
                 obscureText: true,
                 decoration: InputDecoration(
                   labelText:
-                      usuario != null ? 'Nueva Contraseña' : 'Contraseña *',
+                      usuario != null ? 'Nueva ContraseÃ±a' : 'ContraseÃ±a *',
                   labelStyle: TextStyle(color: AppColors.subtext(isDark)),
                   filled: true,
                   fillColor: AppColors.background(isDark),
@@ -17026,7 +21310,7 @@ class _RolesScreenState extends State<RolesScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Row(children: [
-const SizedBox(width: 14),
+          const SizedBox(width: 14),
           Text('USUARIOS Y ROLES',
               style: TextStyle(
                   color: AppColors.text(isDark),
@@ -17212,11 +21496,11 @@ const SizedBox(width: 14),
   }
 }
 
-
 class EstadisticasScreen extends StatefulWidget {
   final VoidCallback onAbrirSidebar;
   final bool modoOscuro;
-  const EstadisticasScreen({super.key, required this.onAbrirSidebar, this.modoOscuro = false});
+  const EstadisticasScreen(
+      {super.key, required this.onAbrirSidebar, this.modoOscuro = false});
   @override
   State<EstadisticasScreen> createState() => _EstadisticasScreenState();
 }
@@ -17236,7 +21520,8 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
     _cargarDatos();
   }
 
-  double _num(dynamic v) => v is num ? v.toDouble() : double.tryParse('$v') ?? 0;
+  double _num(dynamic v) =>
+      v is num ? v.toDouble() : double.tryParse('$v') ?? 0;
 
   Future<void> _cargarDatos() async {
     if (mounted) setState(() => _cargando = true);
@@ -17245,107 +21530,480 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
       late DateTime inicio;
       if (_periodo == 'Hoy') {
         inicio = DateTime(ahora.year, ahora.month, ahora.day);
-      } else if (_periodo == '7 días') {
-        inicio = DateTime(ahora.year, ahora.month, ahora.day).subtract(const Duration(days: 6));
-      } else if (_periodo == '30 días') {
-        inicio = DateTime(ahora.year, ahora.month, ahora.day).subtract(const Duration(days: 29));
+      } else if (_periodo == '7 dÃ­as') {
+        inicio = DateTime(ahora.year, ahora.month, ahora.day)
+            .subtract(const Duration(days: 6));
+      } else if (_periodo == '30 dÃ­as') {
+        inicio = DateTime(ahora.year, ahora.month, ahora.day)
+            .subtract(const Duration(days: 29));
       } else {
         inicio = DateTime(ahora.year, ahora.month, 1);
       }
       _ventas = await _db.getVentasPorFecha(inicio, ahora);
       _masVendidos = await _db.getProductosMasVendidos();
-      final gastos = await _db.query('SELECT * FROM gastos WHERE fecha >= ? AND fecha <= ? ORDER BY fecha DESC', [inicio.toIso8601String(), ahora.toIso8601String()]);
+      final gastos = await _db.query(
+          'SELECT * FROM gastos WHERE fecha >= ? AND fecha <= ? ORDER BY fecha DESC',
+          [inicio.toIso8601String(), ahora.toIso8601String()]);
       _gastos = gastos.fold<double>(0, (sum, g) => sum + _num(g['monto']));
       final mapa = <String, double>{};
       for (final v in _ventas) {
-        final metodo = (v['metodo_pago']?.toString().trim().isNotEmpty ?? false) ? v['metodo_pago'].toString() : 'Otros';
+        final metodo = (v['metodo_pago']?.toString().trim().isNotEmpty ?? false)
+            ? v['metodo_pago'].toString()
+            : 'Otros';
         mapa[metodo] = (mapa[metodo] ?? 0) + _num(v['total']);
       }
       _porMetodo = mapa;
     } catch (e) {
-      debugPrint('Error cargando estadísticas profesionales: $e');
-      _ventas = []; _masVendidos = []; _porMetodo = {}; _gastos = 0;
+      debugPrint('Error cargando estadÃ­sticas profesionales: $e');
+      _ventas = [];
+      _masVendidos = [];
+      _porMetodo = {};
+      _gastos = 0;
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
   }
 
   double get _ventasTotal => _ventas.fold(0, (s, v) => s + _num(v['total']));
-  double get _ganancia => _ventas.fold(0, (s, v) => s + _num(v['ganancia_total']));
-  double get _ticketPromedio => _ventas.isEmpty ? 0 : _ventasTotal / _ventas.length;
-  double get _efectivo => _porMetodo.entries.where((e) => e.key.toLowerCase().contains('efect')).fold(0, (s,e)=>s+e.value);
+  double get _ganancia =>
+      _ventas.fold(0, (s, v) => s + _num(v['ganancia_total']));
+  double get _ticketPromedio =>
+      _ventas.isEmpty ? 0 : _ventasTotal / _ventas.length;
+  double get _efectivo => _porMetodo.entries
+      .where((e) => e.key.toLowerCase().contains('efect'))
+      .fold(0, (s, e) => s + e.value);
   double get _digital => _ventasTotal - _efectivo;
 
   String _money(double v) => '\$${v.toStringAsFixed(2)}';
 
-  Widget _card({required String title, required String value, required IconData icon, String? detail, bool dark=false}) {
+  Widget _card(
+      {required String title,
+      required String value,
+      required IconData icon,
+      String? detail,
+      bool dark = false}) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.divider(dark))),
+      decoration: BoxDecoration(
+          color: AppColors.card(dark),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.divider(dark))),
       child: Row(children: [
-        Container(width: 40, height: 40, decoration: BoxDecoration(color: AppColors.primary.withValues(alpha:.10), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: AppColors.primary, size: 21)),
-        const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: TextStyle(color: AppColors.subtext(dark), fontSize: 10, fontWeight: FontWeight.w700)), const SizedBox(height: 3), Text(value, style: TextStyle(color: AppColors.text(dark), fontSize: 19, fontWeight: FontWeight.w900)), if (detail != null) Text(detail, style: TextStyle(color: AppColors.success, fontSize: 9, fontWeight: FontWeight.w700))]))
+        Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: .10),
+                borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, color: AppColors.primary, size: 21)),
+        const SizedBox(width: 10),
+        Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title,
+              style: TextStyle(
+                  color: AppColors.subtext(dark),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(height: 3),
+          Text(value,
+              style: TextStyle(
+                  color: AppColors.text(dark),
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900)),
+          if (detail != null)
+            Text(detail,
+                style: TextStyle(
+                    color: AppColors.success,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700))
+        ]))
       ]),
     );
   }
 
   Widget _section(String title, Widget child, bool dark, {String? subtitle}) {
-    return Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: AppColors.card(dark), borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.divider(dark))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: TextStyle(color: AppColors.text(dark), fontSize: 14, fontWeight: FontWeight.w900)), if (subtitle != null) Padding(padding: const EdgeInsets.only(top:3,bottom:10), child: Text(subtitle, style: TextStyle(color: AppColors.subtext(dark), fontSize: 10))), if (subtitle == null) const SizedBox(height:10), child]));
+    return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+            color: AppColors.card(dark),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.divider(dark))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title,
+              style: TextStyle(
+                  color: AppColors.text(dark),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900)),
+          if (subtitle != null)
+            Padding(
+                padding: const EdgeInsets.only(top: 3, bottom: 10),
+                child: Text(subtitle,
+                    style: TextStyle(
+                        color: AppColors.subtext(dark), fontSize: 10))),
+          if (subtitle == null) const SizedBox(height: 10),
+          child
+        ]));
   }
 
   Widget _paymentChart(bool dark) {
-    if (_porMetodo.isEmpty) return Center(child: Padding(padding: const EdgeInsets.all(18), child: Text('Aún no hay pagos registrados en este periodo.', style: TextStyle(color: AppColors.subtext(dark), fontSize: 11))));
-    final entries = _porMetodo.entries.toList()..sort((a,b)=>b.value.compareTo(a.value));
+    if (_porMetodo.isEmpty)
+      return Center(
+          child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Text('AÃºn no hay pagos registrados en este periodo.',
+                  style: TextStyle(
+                      color: AppColors.subtext(dark), fontSize: 11))));
+    final entries = _porMetodo.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
     final total = _ventasTotal <= 0 ? 1 : _ventasTotal;
-    final colors = [AppColors.primary, AppColors.info, AppColors.success, AppColors.warning, AppColors.secondary, AppColors.danger];
+    final colors = [
+      AppColors.primary,
+      AppColors.info,
+      AppColors.success,
+      AppColors.warning,
+      AppColors.secondary,
+      AppColors.danger
+    ];
     return Row(children: [
-      SizedBox(width: 145, height: 145, child: PieChart(PieChartData(centerSpaceRadius: 34, sectionsSpace: 2, sections: [for (var i=0;i<entries.length;i++) PieChartSectionData(value: entries[i].value, title: '${(entries[i].value/total*100).round()}%', radius: 48, color: colors[i%colors.length], titleStyle: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold))]))),
-      const SizedBox(width: 12), Expanded(child: Column(children: [for (var i=0;i<entries.length;i++) Padding(padding: const EdgeInsets.symmetric(vertical:4), child: Row(children: [Container(width:9,height:9,decoration:BoxDecoration(color:colors[i%colors.length],shape:BoxShape.circle)),const SizedBox(width:6),Expanded(child:Text(entries[i].key,overflow:TextOverflow.ellipsis,style:TextStyle(color:AppColors.text(dark),fontSize:10,fontWeight:FontWeight.w700))),Text(_money(entries[i].value),style:TextStyle(color:AppColors.text(dark),fontSize:10,fontWeight:FontWeight.w800))]))]))
+      SizedBox(
+          width: 145,
+          height: 145,
+          child: PieChart(
+              PieChartData(centerSpaceRadius: 34, sectionsSpace: 2, sections: [
+            for (var i = 0; i < entries.length; i++)
+              PieChartSectionData(
+                  value: entries[i].value,
+                  title: '${(entries[i].value / total * 100).round()}%',
+                  radius: 48,
+                  color: colors[i % colors.length],
+                  titleStyle: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold))
+          ]))),
+      const SizedBox(width: 12),
+      Expanded(
+          child: Column(children: [
+        for (var i = 0; i < entries.length; i++)
+          Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(children: [
+                Container(
+                    width: 9,
+                    height: 9,
+                    decoration: BoxDecoration(
+                        color: colors[i % colors.length],
+                        shape: BoxShape.circle)),
+                const SizedBox(width: 6),
+                Expanded(
+                    child: Text(entries[i].key,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: AppColors.text(dark),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700))),
+                Text(_money(entries[i].value),
+                    style: TextStyle(
+                        color: AppColors.text(dark),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800))
+              ]))
+      ]))
     ]);
   }
 
   Widget _hourChart(bool dark) {
     final horas = List<double>.filled(24, 0);
     for (final v in _ventas) {
-      try { final d=DateTime.parse('${v['fecha']}'); horas[d.hour]+= _num(v['total']); } catch (_) {}
+      try {
+        final d = DateTime.parse('${v['fecha']}');
+        horas[d.hour] += _num(v['total']);
+      } catch (_) {}
     }
     final spots = <FlSpot>[];
-    for (var h=0;h<24;h++) spots.add(FlSpot(h.toDouble(), horas[h]));
-    final maxY = horas.fold<double>(0,(m,v)=>v>m?v:m);
-    return SizedBox(height: 180, child: LineChart(LineChartData(minX:0,maxX:23,minY:0,maxY:maxY<=0?10:maxY*1.25, gridData: const FlGridData(show:false), borderData: FlBorderData(show:false), titlesData: FlTitlesData(leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles:false)), topTitles: const AxisTitles(sideTitles: SideTitles(showTitles:false)), rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles:false)), bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles:true, reservedSize:22, interval:4, getTitlesWidget:(v,m)=>Text('${v.toInt()}h',style:TextStyle(color:AppColors.subtext(dark),fontSize:8))))), lineBarsData:[LineChartBarData(spots:spots,isCurved:true,barWidth:3,color:AppColors.primary,dotData: const FlDotData(show:false), belowBarData: BarAreaData(show:true,color:AppColors.primary.withValues(alpha:.08))) ])));
+    for (var h = 0; h < 24; h++) spots.add(FlSpot(h.toDouble(), horas[h]));
+    final maxY = horas.fold<double>(0, (m, v) => v > m ? v : m);
+    return SizedBox(
+        height: 180,
+        child: LineChart(LineChartData(
+            minX: 0,
+            maxX: 23,
+            minY: 0,
+            maxY: maxY <= 0 ? 10 : maxY * 1.25,
+            gridData: const FlGridData(show: false),
+            borderData: FlBorderData(show: false),
+            titlesData: FlTitlesData(
+                leftTitles:
+                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                topTitles:
+                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                rightTitles:
+                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 22,
+                        interval: 4,
+                        getTitlesWidget: (v, m) => Text('${v.toInt()}h',
+                            style: TextStyle(
+                                color: AppColors.subtext(dark),
+                                fontSize: 8))))),
+            lineBarsData: [
+              LineChartBarData(
+                  spots: spots,
+                  isCurved: true,
+                  barWidth: 3,
+                  color: AppColors.primary,
+                  dotData: const FlDotData(show: false),
+                  belowBarData: BarAreaData(
+                      show: true,
+                      color: AppColors.primary.withValues(alpha: .08)))
+            ])));
   }
 
   Widget _topProducts(bool dark) {
-    if (_masVendidos.isEmpty) return Text('Sin productos vendidos todavía.', style: TextStyle(color: AppColors.subtext(dark), fontSize: 11));
-    final top=_masVendidos.take(6).toList();
-    final max=top.fold<double>(1,(m,p)=>_num(p['cantidad'])>m?_num(p['cantidad']):m);
-    return Column(children:[for(final p in top) Padding(padding:const EdgeInsets.symmetric(vertical:5),child:Row(children:[Expanded(flex:3,child:Text('${p['nombre']??''}',maxLines:1,overflow:TextOverflow.ellipsis,style:TextStyle(color:AppColors.text(dark),fontSize:10,fontWeight:FontWeight.w700))),Expanded(flex:4,child:Padding(padding:const EdgeInsets.symmetric(horizontal:8),child:ClipRRect(borderRadius:BorderRadius.circular(8),child:LinearProgressIndicator(value:_num(p['cantidad'])/max,minHeight:8,backgroundColor:AppColors.divider(dark),valueColor:AlwaysStoppedAnimation(AppColors.primary))))),SizedBox(width:55,child:Text('${p['cantidad']} uds',textAlign:TextAlign.right,style:TextStyle(color:AppColors.subtext(dark),fontSize:9,fontWeight:FontWeight.w700))) ]))]);
+    if (_masVendidos.isEmpty)
+      return Text('Sin productos vendidos todavÃ­a.',
+          style: TextStyle(color: AppColors.subtext(dark), fontSize: 11));
+    final top = _masVendidos.take(6).toList();
+    final max = top.fold<double>(
+        1, (m, p) => _num(p['cantidad']) > m ? _num(p['cantidad']) : m);
+    return Column(children: [
+      for (final p in top)
+        Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Row(children: [
+              Expanded(
+                  flex: 3,
+                  child: Text('${p['nombre'] ?? ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: AppColors.text(dark),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700))),
+              Expanded(
+                  flex: 4,
+                  child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                              value: _num(p['cantidad']) / max,
+                              minHeight: 8,
+                              backgroundColor: AppColors.divider(dark),
+                              valueColor:
+                                  AlwaysStoppedAnimation(AppColors.primary))))),
+              SizedBox(
+                  width: 55,
+                  child: Text('${p['cantidad']} uds',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                          color: AppColors.subtext(dark),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700)))
+            ]))
+    ]);
   }
 
   @override
   Widget build(BuildContext context) {
-    final dark=widget.modoOscuro;
-    final fecha=DateFormat('dd MMM yyyy', 'es').format(DateTime.now());
-    return Scaffold(backgroundColor:AppColors.background(dark),appBar:AppBar(backgroundColor:Colors.transparent,elevation:0,leading:IconButton(onPressed:widget.onAbrirSidebar,tooltip:'Abrir menú',icon:Icon(Icons.menu_rounded,color:AppColors.text(dark))),title:Text('Estadísticas y métricas',style:TextStyle(color:AppColors.text(dark),fontSize:18,fontWeight:FontWeight.w900))),body:_cargando?const Center(child:CircularProgressIndicator(color:AppColors.primary)):RefreshIndicator(onRefresh:_cargarDatos,child:ListView(padding:const EdgeInsets.fromLTRB(14,4,14,28),children:[
-      Row(children:[Expanded(child:Text('Resumen del negocio',style:TextStyle(color:AppColors.text(dark),fontSize:20,fontWeight:FontWeight.w900))),Container(padding:const EdgeInsets.symmetric(horizontal:9,vertical:5),decoration:BoxDecoration(color:AppColors.primary.withValues(alpha:.08),borderRadius:BorderRadius.circular(10)),child:Text(fecha,style:TextStyle(color:AppColors.primary,fontSize:9,fontWeight:FontWeight.w800)))]),
-      const SizedBox(height:10),
-      SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(children:[for(final p in ['Hoy','7 días','30 días','Mes']) Padding(padding:const EdgeInsets.only(right:7),child:ChoiceChip(label:Text(p),selected:_periodo==p,onSelected:(_){if(_){setState(()=>_periodo=p);_cargarDatos();}}))])),
-      const SizedBox(height:10),
-      LayoutBuilder(builder:(ctx,c)=>GridView.count(crossAxisCount:c.maxWidth>700?4:2,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),crossAxisSpacing:8,mainAxisSpacing:8,childAspectRatio:c.maxWidth>700?2.5:1.8,children:[_card(title:'Ventas',value:_money(_ventasTotal),icon:Icons.point_of_sale_outlined,detail:'Ingresos por ventas',dark:dark),_card(title:'Transacciones',value:'${_ventas.length}',icon:Icons.receipt_long_outlined,detail:'Tickets procesados',dark:dark),_card(title:'Ticket promedio',value:_money(_ticketPromedio),icon:Icons.analytics_outlined,detail:'Venta media',dark:dark),_card(title:'Ganancia',value:_money(_ganancia),icon:Icons.trending_up_rounded,detail:'Utilidad registrada',dark:dark)])),
-      const SizedBox(height:10),
-      _section('Dinero recogido',Row(children:[Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(_money(_ventasTotal),style:TextStyle(color:AppColors.text(dark),fontSize:25,fontWeight:FontWeight.w900)),Text('Total cobrado en ventas',style:TextStyle(color:AppColors.subtext(dark),fontSize:10)),const SizedBox(height:9),Row(children:[Expanded(child:Text('Efectivo\n${_money(_efectivo)}',style:TextStyle(color:AppColors.text(dark),fontSize:11,fontWeight:FontWeight.w800))),Expanded(child:Text('Digital\n${_money(_digital)}',style:TextStyle(color:AppColors.text(dark),fontSize:11,fontWeight:FontWeight.w800))),Expanded(child:Text('Gastos\n${_money(_gastos)}',style:TextStyle(color:AppColors.danger,fontSize:11,fontWeight:FontWeight.w800)))])])),Container(width:95,height:95,decoration:BoxDecoration(shape:BoxShape.circle,color:AppColors.success.withValues(alpha:.10)),child:Icon(Icons.account_balance_wallet_rounded,color:AppColors.success,size:42))]),dark,subtitle:'Cuánto dinero entró y cuánto salió durante el periodo.'),
-      const SizedBox(height:10),
-      _section('Pagos por método',_paymentChart(dark),dark,subtitle:'Monto recaudado por cada forma de pago.'),
-      const SizedBox(height:10),
-      _section('Ventas por hora',_hourChart(dark),dark,subtitle:'Distribución de ingresos durante el día.'),
-      const SizedBox(height:10),
-      _section('Productos más vendidos',_topProducts(dark),dark,subtitle:'Unidades vendidas y ranking del catálogo.'),
-      const SizedBox(height:10),
-      _section('Indicadores adicionales',Column(children:[_metricRow('Efectivo recaudado',_money(_efectivo),Icons.payments_outlined,dark),_metricRow('Pagos digitales',_money(_digital),Icons.credit_card_outlined,dark),_metricRow('Gastos registrados',_money(_gastos),Icons.remove_circle_outline,dark),_metricRow('Margen de ganancia',_ventasTotal<=0?'0%':'${(_ganancia/_ventasTotal*100).toStringAsFixed(1)}%',Icons.percent_rounded,dark)]),dark),
-    ])));
+    final dark = widget.modoOscuro;
+    final fecha = DateFormat('dd MMM yyyy', 'es').format(DateTime.now());
+    return Scaffold(
+        backgroundColor: AppColors.background(dark),
+        appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+                onPressed: widget.onAbrirSidebar,
+                tooltip: 'Abrir menÃº',
+                icon: Icon(Icons.menu_rounded, color: AppColors.text(dark))),
+            title: Text('EstadÃ­sticas y mÃ©tricas',
+                style: TextStyle(
+                    color: AppColors.text(dark),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900))),
+        body: _cargando
+            ? const Center(
+                child: CircularProgressIndicator(color: AppColors.primary))
+            : RefreshIndicator(
+                onRefresh: _cargarDatos,
+                child: ListView(
+                    padding: const EdgeInsets.fromLTRB(14, 4, 14, 28),
+                    children: [
+                      Row(children: [
+                        Expanded(
+                            child: Text('Resumen del negocio',
+                                style: TextStyle(
+                                    color: AppColors.text(dark),
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w900))),
+                        Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 9, vertical: 5),
+                            decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: .08),
+                                borderRadius: BorderRadius.circular(10)),
+                            child: Text(fecha,
+                                style: TextStyle(
+                                    color: AppColors.primary,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800)))
+                      ]),
+                      const SizedBox(height: 10),
+                      SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(children: [
+                            for (final p in [
+                              'Hoy',
+                              '7 dÃ­as',
+                              '30 dÃ­as',
+                              'Mes'
+                            ])
+                              Padding(
+                                  padding: const EdgeInsets.only(right: 7),
+                                  child: ChoiceChip(
+                                      label: Text(p),
+                                      selected: _periodo == p,
+                                      onSelected: (_) {
+                                        if (_) {
+                                          setState(() => _periodo = p);
+                                          _cargarDatos();
+                                        }
+                                      }))
+                          ])),
+                      const SizedBox(height: 10),
+                      LayoutBuilder(
+                          builder: (ctx, c) => GridView.count(
+                                  crossAxisCount: c.maxWidth > 700 ? 4 : 2,
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  crossAxisSpacing: 8,
+                                  mainAxisSpacing: 8,
+                                  childAspectRatio:
+                                      c.maxWidth > 700 ? 2.5 : 1.8,
+                                  children: [
+                                    _card(
+                                        title: 'Ventas',
+                                        value: _money(_ventasTotal),
+                                        icon: Icons.point_of_sale_outlined,
+                                        detail: 'Ingresos por ventas',
+                                        dark: dark),
+                                    _card(
+                                        title: 'Transacciones',
+                                        value: '${_ventas.length}',
+                                        icon: Icons.receipt_long_outlined,
+                                        detail: 'Tickets procesados',
+                                        dark: dark),
+                                    _card(
+                                        title: 'Ticket promedio',
+                                        value: _money(_ticketPromedio),
+                                        icon: Icons.analytics_outlined,
+                                        detail: 'Venta media',
+                                        dark: dark),
+                                    _card(
+                                        title: 'Ganancia',
+                                        value: _money(_ganancia),
+                                        icon: Icons.trending_up_rounded,
+                                        detail: 'Utilidad registrada',
+                                        dark: dark)
+                                  ])),
+                      const SizedBox(height: 10),
+                      _section(
+                          'Dinero recogido',
+                          Row(children: [
+                            Expanded(
+                                child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                  Text(_money(_ventasTotal),
+                                      style: TextStyle(
+                                          color: AppColors.text(dark),
+                                          fontSize: 25,
+                                          fontWeight: FontWeight.w900)),
+                                  Text('Total cobrado en ventas',
+                                      style: TextStyle(
+                                          color: AppColors.subtext(dark),
+                                          fontSize: 10)),
+                                  const SizedBox(height: 9),
+                                  Row(children: [
+                                    Expanded(
+                                        child: Text(
+                                            'Efectivo\n${_money(_efectivo)}',
+                                            style: TextStyle(
+                                                color: AppColors.text(dark),
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w800))),
+                                    Expanded(
+                                        child: Text(
+                                            'Digital\n${_money(_digital)}',
+                                            style: TextStyle(
+                                                color: AppColors.text(dark),
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w800))),
+                                    Expanded(
+                                        child: Text(
+                                            'Gastos\n${_money(_gastos)}',
+                                            style: TextStyle(
+                                                color: AppColors.danger,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w800)))
+                                  ])
+                                ])),
+                            Container(
+                                width: 95,
+                                height: 95,
+                                decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: AppColors.success
+                                        .withValues(alpha: .10)),
+                                child: Icon(
+                                    Icons.account_balance_wallet_rounded,
+                                    color: AppColors.success,
+                                    size: 42))
+                          ]),
+                          dark,
+                          subtitle:
+                              'CuÃ¡nto dinero entrÃ³ y cuÃ¡nto saliÃ³ durante el periodo.'),
+                      const SizedBox(height: 10),
+                      _section('Pagos por mÃ©todo', _paymentChart(dark), dark,
+                          subtitle: 'Monto recaudado por cada forma de pago.'),
+                      const SizedBox(height: 10),
+                      _section('Ventas por hora', _hourChart(dark), dark,
+                          subtitle:
+                              'DistribuciÃ³n de ingresos durante el dÃ­a.'),
+                      const SizedBox(height: 10),
+                      _section(
+                          'Productos mÃ¡s vendidos', _topProducts(dark), dark,
+                          subtitle:
+                              'Unidades vendidas y ranking del catÃ¡logo.'),
+                      const SizedBox(height: 10),
+                      _section(
+                          'Indicadores adicionales',
+                          Column(children: [
+                            _metricRow('Efectivo recaudado', _money(_efectivo),
+                                Icons.payments_outlined, dark),
+                            _metricRow('Pagos digitales', _money(_digital),
+                                Icons.credit_card_outlined, dark),
+                            _metricRow('Gastos registrados', _money(_gastos),
+                                Icons.remove_circle_outline, dark),
+                            _metricRow(
+                                'Margen de ganancia',
+                                _ventasTotal <= 0
+                                    ? '0%'
+                                    : '${(_ganancia / _ventasTotal * 100).toStringAsFixed(1)}%',
+                                Icons.percent_rounded,
+                                dark)
+                          ]),
+                          dark),
+                    ])));
   }
 
-  Widget _buildFiltroDropdown(String value, List<String> items, ValueChanged<String?> onChanged, bool isDark) {
+  Widget _buildFiltroDropdown(String value, List<String> items,
+      ValueChanged<String?> onChanged, bool isDark) {
     final safeItems = <String>[];
     for (final item in items) {
       if (item.isEmpty || safeItems.contains(item)) continue;
@@ -17367,22 +22025,45 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
           isExpanded: true,
           isDense: true,
           dropdownColor: AppColors.card(isDark),
-          icon: Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.subtext(isDark), size: 18),
+          icon: Icon(Icons.keyboard_arrow_down_rounded,
+              color: AppColors.subtext(isDark), size: 18),
           style: TextStyle(
             color: AppColors.text(isDark),
             fontSize: 10,
             fontWeight: FontWeight.w800,
           ),
-          items: safeItems.map((item) => DropdownMenuItem<String>(
-            value: item,
-            child: Text(item, maxLines: 1, overflow: TextOverflow.ellipsis),
-          )).toList(),
+          items: safeItems
+              .map((item) => DropdownMenuItem<String>(
+                    value: item,
+                    child: Text(item,
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ))
+              .toList(),
           onChanged: onChanged,
         ),
       ),
     );
   }
 
-  Widget _metricRow(String label,String value,IconData icon,bool dark)=>Container(padding:const EdgeInsets.symmetric(vertical:9),decoration:BoxDecoration(border:Border(bottom:BorderSide(color:AppColors.divider(dark)))),child:Row(children:[Icon(icon,color:AppColors.primary,size:18),const SizedBox(width:10),Expanded(child:Text(label,style:TextStyle(color:AppColors.text(dark),fontSize:11,fontWeight:FontWeight.w700))),Text(value,style:TextStyle(color:AppColors.text(dark),fontSize:12,fontWeight:FontWeight.w900))]));
+  Widget _metricRow(String label, String value, IconData icon, bool dark) =>
+      Container(
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+              border:
+                  Border(bottom: BorderSide(color: AppColors.divider(dark)))),
+          child: Row(children: [
+            Icon(icon, color: AppColors.primary, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+                child: Text(label,
+                    style: TextStyle(
+                        color: AppColors.text(dark),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700))),
+            Text(value,
+                style: TextStyle(
+                    color: AppColors.text(dark),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900))
+          ]));
 }
-

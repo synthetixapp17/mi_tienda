@@ -1,0 +1,2 @@
+﻿// SINTHETIX PRO
+// Tarjetas reutilizables.

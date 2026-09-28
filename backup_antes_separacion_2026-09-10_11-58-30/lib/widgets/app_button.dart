@@ -1,0 +1,2 @@
+﻿// SINTHETIX PRO
+// Botones reutilizables.

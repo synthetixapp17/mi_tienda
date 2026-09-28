@@ -1,0 +1,23 @@
+﻿            onTap: () async {
+              if (index == -1) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Sincronizando con la nube...'),
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+                final n = await SupabaseSyncService.syncFromCloud();
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                        n > 0 ? 'Sincronizado: $n registros' : 'Todo actualizado'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+                return;
+              }
+              setState(() => _currentIndex = index);
+              if (index == 15 || index == 0 || index == 1)
+                _actualizarStockBajo();
+            },

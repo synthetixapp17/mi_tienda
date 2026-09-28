@@ -1,0 +1,137 @@
+  // ============================================
+  // PULL: Bajar productos de Supabase a local
+  // ============================================
+  static Future<int> pullFromSupabase() async {
+    final c = client;
+    if (c == null) {
+      debugPrint('PULL: Supabase no disponible');
+      return 0;
+    }
+    try {
+      if (c.auth.currentSession == null) {
+        try {
+          await c.auth.signInAnonymously();
+        } catch (_) {}
+      }
+      if (c.auth.currentSession == null) {
+        debugPrint('PULL: sin sesion autenticada');
+        return 0;
+      }
+
+      final db = DatabaseService();
+      int totalBajados = 0;
+
+      // 1) CATEGORIAS
+      try {
+        final cats = await c.from('store_categories').select('id, name, description, active, created_at');
+        for (final cat in (cats as List)) {
+          final name = cat['name']?.toString().trim() ?? '';
+          if (name.isEmpty) continue;
+          final localId = cat['id']?.toString() ?? '';
+          if (localId.isEmpty) continue;
+          final existing = await db.query(
+            'SELECT id FROM categorias WHERE nombre = ? LIMIT 1',
+            [name],
+          );
+          if (existing.isEmpty) {
+            await db.query(
+              'INSERT OR REPLACE INTO categorias (id, nombre, descripcion, activo, sync_estado, creado_en) VALUES (?, ?, ?, ?, ?, ?)',
+              [
+                localId,
+                name,
+                cat['description']?.toString(),
+                (cat['active'] == true) ? 1 : 0,
+                'sincronizado',
+                cat['created_at']?.toString() ?? DateTime.now().toIso8601String(),
+              ],
+            );
+            totalBajados++;
+          }
+        }
+        debugPrint('PULL: categorias OK');
+      } catch (e) {
+        debugPrint('PULL categorias error: $e');
+      }
+
+      // 2) PRODUCTOS
+      final prods = await c.from('store_products').select('*').order('updated_at', ascending: false);
+      for (final p in (prods as List)) {
+        final localId = p['local_id']?.toString().trim() ?? '';
+        if (localId.isEmpty) continue;
+
+        String categoriaNombre = 'General';
+        final catId = p['category_id']?.toString();
+        if (catId != null && catId.isNotEmpty) {
+          try {
+            final catResult = await c.from('store_categories').select('name').eq('id', catId).maybeSingle();
+            if (catResult != null && catResult['name'] != null) {
+              categoriaNombre = catResult['name'].toString();
+            }
+          } catch (_) {}
+        }
+
+        final localData = <String, dynamic>{
+          'id': localId,
+          'nombre': p['name']?.toString() ?? '',
+          'codigo_barras': p['barcode']?.toString(),
+          'precio': (p['price'] as num?)?.toDouble() ?? 0.0,
+          'stock': (p['stock'] as num?)?.toInt() ?? 0,
+          'categoria': categoriaNombre,
+          'descripcion': p['description']?.toString(),
+          'imagen_url': p['image_url']?.toString(),
+          'marca': p['brand']?.toString(),
+          'talla': p['size']?.toString(),
+          'color': p['color']?.toString(),
+          'activo': (p['active'] == true) ? 1 : 0,
+          'destacado': (p['featured'] == true) ? 1 : 0,
+          'sync_estado': 'sincronizado',
+          'sync_error': null,
+          'creado_en': p['created_at']?.toString() ?? DateTime.now().toIso8601String(),
+          'actualizado_en': p['updated_at']?.toString() ?? DateTime.now().toIso8601String(),
+        };
+
+        final existe = await db.query(
+          'SELECT id FROM productos WHERE id = ? LIMIT 1',
+          [localId],
+        );
+        if (existe.isEmpty) {
+          final cols = localData.keys.join(', ');
+          final placeholders = localData.keys.map((_) => '?').join(', ');
+          final values = localData.values.toList();
+          await db.query(
+            'INSERT OR REPLACE INTO productos ($cols) VALUES ($placeholders)',
+            values,
+          );
+        } else {
+          await db.update('productos', localData, 'id = ?', [localId]);
+        }
+        totalBajados++;
+      }
+
+      debugPrint('PULL: total $totalBajados registros bajados');
+      return totalBajados;
+    } catch (e) {
+      debugPrint('PULL ERROR: $e');
+      return 0;
+    }
+  }
+
+  // ============================================
+  // SYNC FROM CLOUD
+  // ============================================
+  static Future<int> syncFromCloud() async {
+    try {
+      debugPrint('SYNC FROM CLOUD: iniciando...');
+      final n = await pullFromSupabase();
+      if (n > 0) {
+        productosVersion.value++;
+        debugPrint('SYNC FROM CLOUD: $n registros bajados');
+      } else {
+        debugPrint('SYNC FROM CLOUD: sin cambios');
+      }
+      return n;
+    } catch (e) {
+      debugPrint('SYNC FROM CLOUD error: $e');
+      return 0;
+    }
+  }

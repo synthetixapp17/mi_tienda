@@ -208,7 +208,7 @@ class LocalDatabase {
         numero_copias INTEGER DEFAULT 1,
         usar_misma_impresora INTEGER DEFAULT 1,
         tamano_etiqueta TEXT DEFAULT '40x30mm',
-        mensaje_pie TEXT DEFAULT '¡Gracias por su compra!',
+        mensaje_pie TEXT DEFAULT '?Gracias por su compra!',
         mensaje_adicional TEXT,
         actualizado_en TEXT
       )
@@ -344,7 +344,7 @@ class LocalDatabase {
       });
       await db.insert('metodos_pago', {
         'id': 'mp_pago_movil',
-        'nombre': 'Pago Móvil',
+        'nombre': 'Pago M?vil',
         'activo': 1,
         'creado_en': DateTime.now().toIso8601String(),
       });
@@ -370,7 +370,7 @@ class LocalDatabase {
         'Ropa',
         'Calzado',
         'Accesorios',
-        'Electrónica',
+        'Electr?nica',
         'Alimentos'
       ];
       for (var i = 0; i < categoriasDefault.length; i++) {

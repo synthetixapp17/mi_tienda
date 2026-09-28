@@ -1,0 +1,158 @@
+﻿ M .metadata
+ M analysis_options.yaml
+ D build/web/.last_build_id
+ D build/web/assets/AssetManifest.bin
+ D build/web/assets/AssetManifest.bin.json
+ D build/web/assets/FontManifest.json
+ D build/web/assets/NOTICES
+ D build/web/assets/assets/bit.mp3
+ D build/web/assets/assets/sounds/bit.mp3
+ D build/web/assets/fonts/MaterialIcons-Regular.otf
+ D build/web/assets/packages/cupertino_icons/assets/CupertinoIcons.ttf
+ D build/web/assets/shaders/ink_sparkle.frag
+ D build/web/assets/shaders/stretch_effect.frag
+ D build/web/canvaskit/canvaskit.js
+ D build/web/canvaskit/canvaskit.js.symbols
+ D build/web/canvaskit/canvaskit.wasm
+ D build/web/canvaskit/chromium/canvaskit.js
+ D build/web/canvaskit/chromium/canvaskit.js.symbols
+ D build/web/canvaskit/chromium/canvaskit.wasm
+ D build/web/canvaskit/experimental_webparagraph/canvaskit.js
+ D build/web/canvaskit/experimental_webparagraph/canvaskit.js.symbols
+ D build/web/canvaskit/experimental_webparagraph/canvaskit.wasm
+ D build/web/canvaskit/skwasm.js
+ D build/web/canvaskit/skwasm.js.symbols
+ D build/web/canvaskit/skwasm.wasm
+ D build/web/canvaskit/skwasm_heavy.js
+ D build/web/canvaskit/skwasm_heavy.js.symbols
+ D build/web/canvaskit/skwasm_heavy.wasm
+ D build/web/canvaskit/wimp.js
+ D build/web/canvaskit/wimp.js.symbols
+ D build/web/canvaskit/wimp.wasm
+ D build/web/favicon.png
+ D build/web/flutter.js
+ D build/web/flutter_bootstrap.js
+ D build/web/flutter_service_worker.js
+ D build/web/icons/Icon-192.png
+ D build/web/icons/Icon-512.png
+ D build/web/icons/Icon-maskable-192.png
+ D build/web/icons/Icon-maskable-512.png
+ D build/web/index.html
+ D build/web/main.dart.js
+ D build/web/manifest.json
+ D build/web/sqflite_sw.js
+ D build/web/sqlite3.wasm
+ D build/web/tienda.html
+ D build/web/tienda/index.html
+ D build/web/version.json
+ D devtools_options.yaml
+ M lib/main.dart
+ M linux/flutter/generated_plugin_registrant.cc
+ M linux/flutter/generated_plugins.cmake
+ M macos/Flutter/GeneratedPluginRegistrant.swift
+ M pubspec.lock
+ M pubspec.yaml
+ M test/widget_test.dart
+ M web/manifest.json
+ M windows/flutter/generated_plugin_registrant.cc
+ M windows/flutter/generated_plugins.cmake
+?? BACKUP_ANTES_RESTAURAR_V34_3_20260918_182603/
+?? INSTALAR_RESTAURAR_V34_3.ps1
+?? INSTALAR_SINTETIX_PRO_V34_2.ps1
+?? INSTALAR_SINTETIX_PRO_V34_3.ps1
+?? INSTALAR_SINTETIX_PRO_V36_1.ps1
+?? INSTALAR_SINTETIX_PRO_V37.ps1
+?? INSTALAR_SINTETIX_PRO_V37_CORREGIDO.ps1
+?? INSTALAR_SINTHETIX_PRO_V35_1.ps1
+?? INSTALAR_SINTHETIX_PRO_V35_PRO.ps1
+?? INSTALAR_SINTHETIX_PRO_V36.ps1
+?? LEEME.txt
+?? LEEME_V34_2.txt
+?? LEEME_V34_3.txt
+?? REPARAR_PROYECTO_V37.ps1
+?? assets/bit.mp3
+?? backup_V33.2_20260917-190733/
+?? backup_V33.3_20260917-193318/
+?? backup_V33.3_20260917-193651/
+?? backup_V33.5_20260917-200538/
+?? backup_V33.6_20260917-202301/
+?? backup_V34.1_20260917-210408/
+?? backup_V34.2_20260917-220647/
+?? backup_V34.3_20260917-224342/
+?? backup_V34.3_20260918-133859/
+?? backup_V34.3_20260918-134357/
+?? backup_V34_PRO_20260917-203939/
+?? backup_V35.1_20260918-104657/
+?? backup_V35_PRO_20260918-102425/
+?? backup_V36_1_20260918-122802/
+?? backup_V36_NAVBAR_MORADO_20260918-121922/
+?? backup_V37_20260918-152927/
+?? backup_V37_20260918-155912/
+?? backup_V37_20260918-165951/
+?? backup_antes_separacion_2026-09-10_11-58-30/
+?? backup_base_estable_2026-09-11_14-45-23/
+?? backup_extraccion_2026-09-10_12-17-19/
+?? backup_integracion_2026-09-10_12-24-36/
+?? backup_pos_carrito_2026-09-10_13-27-04/
+?? backup_scanner_v10_2026-09-10_21-13-58/
+?? backup_scanner_v10_2026-09-10_21-14-17/
+?? backup_sinthetix_2026-09-10_11-53-17/
+?? backup_v11_corregido_2026-09-11_09-19-57/
+?? backup_v12_1_2026-09-11_13-32-25/
+?? backup_v12_1_2026-09-11_13-35-49/
+?? backup_v12_1_fix_2026-09-11_14-07-07/
+?? backup_v12_1_fix_2026-09-11_14-18-31/
+?? backup_v12_1_fix_2026-09-11_14-20-13/
+?? backup_v12_2026-09-11_11-47-34/
+?? backup_v13_2026-09-11_15-57-16/
+?? backup_v13_2026-09-11_16-01-59/
+?? backup_v13_fix_seguro_2026-09-11_17-01-29/
+?? backup_v14_1_2026-09-11_19-43-55/
+?? backup_v14_2_fix_2026-09-11_20-10-56/
+?? backup_v14_2_menu_2026-09-11_20-03-50/
+?? backup_v14_2_menu_2026-09-11_20-10-14/
+?? backup_v14_3_menu_real_2026-09-11_20-31-12/
+?? backup_v14_3_menu_real_2026-09-11_20-48-58/
+?? backup_v15_fix_inkwell_2026-09-12_10-05-03/
+?? backup_v15_menu_movil_2026-09-12_09-55-06/
+?? backup_v16_menu_elevado_2026-09-12_12-20-21/
+?? backup_v16_menu_elevado_2026-09-12_12-34-58/
+?? backup_v17_menu_flotante_2026-09-12_13-42-28/
+?? backup_v19_pos_drawer_2026-09-12_14-21-28/
+?? backup_v20_pos_drawer_2026-09-12_14-47-45/
+?? backup_v21.1_2026-09-12_15-48-36/
+?? backup_v21.2_2026-09-12_16-00-58/
+?? backup_v21.3_2026-09-12_16-59-35/
+?? backup_v21_pos_2026-09-12_15-40-02/
+?? backup_v21_pos_fix_2026-09-12_15-30-16/
+?? backup_v21_pos_redesign_2026-09-12_15-15-50/
+?? backup_v22_2026-09-13_11-00-04/
+?? backup_v23_2026-09-13_15-32-19/
+?? backup_v23_fix_2026-09-13_15-42-07/
+?? backup_v24_1_2026-09-13_17-30-25/
+?? backup_v24_2026-09-13_17-13-58/
+?? backup_v25.2_2026-09-13_19-10-39/
+?? backup_v25.3_2026-09-13_19-30-17/
+?? backup_v25_1_2026-09-13_18-56-42/
+?? backup_v25_2026-09-13_18-50-00/
+?? backup_v26.1_2026-09-13_21-38-52/
+?? backup_v26_2026-09-13_21-09-09/
+?? backup_v27_2026-09-13_22-38-53/
+?? backup_v28_1_20260916_193348/
+?? backup_v28_20260916_191310/
+?? backup_v28_2_1_20260916_222212/
+?? backup_v28_2_20260916_215436/
+?? backup_v28_2_2_20260916_223341/
+?? backups/
+?? lib/database/
+?? lib/models/
+?? lib/services/
+?? lib/theme/
+?? lib/widgets/
+?? main.dart
+?? pubspec_backup_2026-09-11_16-16-46.yaml
+?? pubspec_backup_DEFINITIVO_2026-09-11_16-23-33.yaml
+?? pubspec_backup_final_2026-09-11_16-19-29.yaml
+?? test_widget_test.dart
+?? web/tienda.html
+?? web/tienda/
