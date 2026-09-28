@@ -1,20 +1,328 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b0f14"><title>SINTHETIX PRO · Tienda</title><style>
-:root{--bg:#080b10;--surface:#10151c;--surface2:#151b23;--line:#252d38;--text:#f5f7fa;--muted:#8c97a7;--gold:#f0b90b;--green:#20c997}*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#070a0e,#0d1218 45%,#080b10);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}button,input{font:inherit}button{cursor:pointer}.wrap{max-width:1180px;margin:auto;padding:18px 18px 90px}.top{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:8px 0 18px;position:sticky;top:0;background:rgba(8,11,16,.88);backdrop-filter:blur(16px);z-index:20}.brand{display:flex;align-items:center;gap:12px;min-width:0}.logo{width:46px;height:46px;border-radius:15px;background:#171d26;border:1px solid var(--line);display:grid;place-items:center;overflow:hidden;font-weight:900;color:var(--gold)}.logo img{width:100%;height:100%;object-fit:contain}.brand h1{font-size:17px;margin:0;font-weight:900}.brand p{font-size:10px;color:var(--muted);margin:3px 0 0}.actions{display:flex;gap:8px}.iconbtn{width:44px;height:44px;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:14px}.hero{border-radius:28px;overflow:hidden;min-height:235px;background:linear-gradient(135deg,#f0b90b,#f8d33a);position:relative;display:flex;align-items:flex-end;margin-bottom:18px;background-size:cover;background-position:center}.hero:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.62),rgba(0,0,0,.08))}.heroText{position:relative;z-index:2;padding:30px;max-width:720px}.eyebrow{font-size:10px;letter-spacing:1.6px;font-weight:900;color:#fff8d8}.hero h2{font-size:clamp(30px,5vw,58px);line-height:.98;margin:8px 0 10px;font-weight:950}.hero p{margin:0;color:#fff8df;font-size:14px}.chips{display:flex;gap:8px;overflow:auto;padding:2px 0 14px}.chip{white-space:nowrap;border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:10px 15px;border-radius:999px;font-weight:800;font-size:11px}.chip.active{background:var(--gold);color:#101010;border-color:var(--gold)}.toolbar{display:flex;gap:9px;margin-bottom:18px}.search{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:15px;padding:13px 15px;color:var(--text);outline:none}.search:focus{border-color:var(--gold)}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.card{background:var(--surface);border:1px solid var(--line);border-radius:22px;overflow:hidden;transition:.2s;position:relative}.card:hover{transform:translateY(-2px);border-color:#3a4452}.pic{height:230px;background:#171d26;position:relative;overflow:hidden}.pic img{width:100%;height:100%;object-fit:cover}.badge{position:absolute;top:10px;left:10px;background:rgba(8,11,16,.78);padding:7px 9px;border-radius:10px;font-size:9px;font-weight:900}.heart{position:absolute;top:9px;right:9px;width:38px;height:38px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(8,11,16,.72);color:#fff;font-size:18px}.heart.on{color:#ffcf3a}.info{padding:13px}.name{font-size:13px;font-weight:900;margin:0 0 5px;min-height:32px}.meta{color:var(--muted);font-size:9px;min-height:16px}.price{font-size:20px;color:var(--gold);font-weight:950;margin-top:8px}.buy{width:100%;border:0;background:var(--gold);color:#111;border-radius:13px;padding:11px;margin-top:11px;font-weight:950}.empty{padding:70px 20px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:22px;background:var(--surface)}.float{position:fixed;right:20px;bottom:20px;width:58px;height:58px;border-radius:50%;border:0;background:#20c997;color:#06120e;font-size:25px;box-shadow:0 12px 35px rgba(0,0,0,.35);z-index:30}.drawer{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:flex-end;z-index:40}.drawer.open{display:flex}.sheet{width:100%;max-height:82vh;background:#10151c;border-top:1px solid var(--line);border-radius:26px 26px 0 0;padding:18px;overflow:auto}.sheet h3{margin:0 0 14px}.cartrow{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}.cartrow img{width:60px;height:60px;border-radius:12px;object-fit:cover;background:#171d26}.cartrow .grow{flex:1}.qty{display:flex;align-items:center;gap:10px;margin-top:7px}.qty button{width:30px;height:30px;border:1px solid var(--line);border-radius:9px;background:var(--surface2);color:var(--gold)}.checkout{width:100%;border:0;background:var(--gold);color:#111;border-radius:14px;padding:14px;font-weight:950;margin-top:14px}.loading{padding:50px;text-align:center;color:var(--muted)}@media(max-width:950px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.pic{height:205px}}@media(max-width:680px){.wrap{padding:12px 12px 90px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.pic{height:175px}.hero{min-height:210px}.heroText{padding:22px}.hero h2{font-size:34px}.brand p{display:none}}
-</style></head><body><main class="wrap"><header class="top"><div class="brand"><div class="logo" id="logo">S</div><div><h1 id="storeName">SINTHETIX PRO</h1><p id="storeDesc">Tienda online</p></div></div><div class="actions"><button class="iconbtn" onclick="shareStore()">↗</button><button class="iconbtn" onclick="openCart()">🛒</button></div></header><section class="hero" id="hero"><div class="heroText"><div class="eyebrow">TIENDA ONLINE</div><h2 id="heroTitle">Descubre nuestros productos</h2><p id="heroSub">Compra fácil y consulta por WhatsApp.</p></div></section><div class="toolbar"><input id="search" class="search" placeholder="Buscar producto, código o marca…" oninput="renderProducts()"></div><div id="chips" class="chips"></div><div id="content" class="loading">Cargando catálogo…</div></main><button class="float" onclick="whatsapp()">◔</button><div id="drawer" class="drawer" onclick="if(event.target.id==='drawer')closeCart()"><section class="sheet"><div style="display:flex;justify-content:space-between;align-items:center"><h3>Tu carrito</h3><button class="iconbtn" onclick="closeCart()">×</button></div><div id="cart"></div><div id="cartTotal" style="font-size:22px;font-weight:950;color:#f0b90b;margin-top:14px"></div><button class="checkout" onclick="sendOrder()">Enviar pedido por WhatsApp</button></section></div><script>
-const SUPA={"url": "https://euujrzmhhzikwwwmxgep.supabase.co", "key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV1dWpyem1oaHppa3d3d214Z2VwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0ODIxOTcsImV4cCI6MjEwNTA1ODE5N30.VWMnbhdcmoO6g_QkY019essMUlrYbhJP0TPjKznTJ4A"};let products=[],categories=[],banners=[],config={},cart=[],cat='Todas';const headers={'apikey':SUPA.key,'Authorization':'Bearer '+SUPA.key};
-async function api(path){const r=await fetch(SUPA.url+'/rest/v1/'+path,{headers});if(!r.ok)throw Error(await r.text());return r.json()}
-async function load(){try{[config,categories,products,banners]=await Promise.all([api('store_config?select=*&active=eq.true&limit=1'),api('store_categories?select=*&active=eq.true&order=sort_order.asc'),api('store_products?select=*&active=eq.true&order=created_at.desc'),api('store_banners?select=*&active=eq.true&order=sort_order.asc')]);config=config[0]||{};applyConfig();renderChips();renderProducts();rotateBanners()}catch(e){document.getElementById('content').innerHTML='<div class="empty"><b>No hay catálogo publicado todavía.</b><br><br>La tienda está lista. Cuando el POS sincronice productos con la nube aparecerán aquí.</div>';console.error(e)}}
-function applyConfig(){document.title=(config.store_name||'SINTHETIX PRO')+' · Tienda';document.getElementById('storeName').textContent=config.store_name||'SINTHETIX PRO';document.getElementById('storeDesc').textContent=config.description||'Tienda online';if(config.logo_url)document.getElementById('logo').innerHTML='<img src="'+esc(config.logo_url)+'">';if(config.whatsapp)document.body.dataset.whatsapp=config.whatsapp}
-function selectCat(n){cat=n;renderChips();renderProducts()}
-function renderChips(){let names=['Todas',...categories.map(c=>c.name)];document.getElementById('chips').innerHTML=names.map(n=>'<button class="chip '+(n===cat?'active':'')+'" data-cat="'+esc(n)+'" onclick="selectCat(this.dataset.cat)">'+esc(n)+'</button>').join('')}
-function img(p){return p.image_url||p.imagen_url||p.image_base64||p.imagen_base64||''}
-function renderProducts(){let q=document.getElementById('search').value.trim().toLowerCase();let list=products.filter(p=>(cat==='Todas'||String(p.category_id||'')===String(categories.find(c=>c.name===cat)?.id||'')||String(p.categoria||'')===cat)&&(!q||String(p.name||p.nombre||'').toLowerCase().includes(q)||String(p.sku||'').toLowerCase().includes(q)||String(p.barcode||p.codigo_barras||'').includes(q)));if(!list.length){document.getElementById('content').innerHTML='<div class="empty">No hay productos para mostrar.</div>';return}document.getElementById('content').className='grid';document.getElementById('content').innerHTML=list.map(p=>card(p)).join('')}
-function card(p){let id=p.id||p.local_id;let name=p.name||p.nombre||'Producto';let price=Number(p.price??p.precio??0);let im=img(p);let fav=localStorage.getItem('fav_'+id)==='1';return '<article class="card"><div class="pic">'+(im?'<img loading="lazy" src="'+esc(im)+'">':'<div style="height:100%;display:grid;place-items:center;color:#8c97a7;font-size:42px">□</div>')+'<div class="badge">'+esc(p.brand||p.marca||p.categoria||'General')+'</div><button class="heart '+(fav?'on':'')+'" data-id="'+escAttr(id)+'" onclick="toggleFav(this.dataset.id,this)">'+(fav?'♥':'♡')+'</button></div><div class="info"><p class="name">'+esc(name)+'</p><div class="meta">'+esc(p.sku||p.barcode||p.codigo_barras||'')+'</div><div class="price">$ '+price.toFixed(2)+'</div><button class="buy" data-id="'+escAttr(id)+'" onclick="add(this.dataset.id)">Agregar al carrito</button></div></article>'}
-function toggleFav(id,b){let on=localStorage.getItem('fav_'+id)==='1';localStorage.setItem('fav_'+id,on?'0':'1');b.classList.toggle('on',!on);b.textContent=!on?'♥':'♡'}function add(id){let p=products.find(x=>String(x.id||x.local_id)===String(id));if(!p)return;let x=cart.find(x=>String(x.id)===String(id));if(x)x.qty++;else cart.push({id,p,qty:1});openCart()}function openCart(){renderCart();document.getElementById('drawer').classList.add('open')}function closeCart(){document.getElementById('drawer').classList.remove('open')}
-function renderCart(){let el=document.getElementById('cart');if(!cart.length){el.innerHTML='<div class="empty">Tu carrito está vacío.</div>';document.getElementById('cartTotal').textContent='';return}let total=0;el.innerHTML=cart.map(x=>{let p=x.p;let price=Number(p.price??p.precio??0);total+=price*x.qty;let im=img(p);return '<div class="cartrow">'+(im?'<img src="'+esc(im)+'">':'<div style="width:60px;height:60px;background:#171d26;border-radius:12px"></div>')+'<div class="grow"><b>'+esc(p.name||p.nombre||'Producto')+'</b><div style="color:#f0b90b;margin-top:4px">$ '+price.toFixed(2)+'</div><div class="qty"><button data-id="'+escAttr(x.id)+'" onclick="changeQty(this.dataset.id,-1)">−</button><b>'+x.qty+'</b><button data-id="'+escAttr(x.id)+'" onclick="changeQty(this.dataset.id,1)">+</button></div></div></div>'}).join('');document.getElementById('cartTotal').textContent='$ '+total.toFixed(2)}
-function changeQty(id,d){let x=cart.find(x=>String(x.id)===String(id));if(!x)return;x.qty+=d;if(x.qty<=0)cart=cart.filter(y=>String(y.id)!==String(id));renderCart()}
-function sendOrder(){if(!cart.length)return;let phone=(config.whatsapp||document.body.dataset.whatsapp||'').replace(/\D/g,'');if(!phone){alert('Configura el WhatsApp de la tienda.');return}let lines=cart.map(x=>'- '+(x.p.name||x.p.nombre)+' x'+x.qty).join('\n');let total=cart.reduce((a,x)=>a+Number(x.p.price??x.p.precio??0)*x.qty,0);let msg='Hola, quiero realizar este pedido:\n\n'+lines+'\n\nTotal estimado: $ '+total.toFixed(2);location.href='https://wa.me/'+phone+'?text='+encodeURIComponent(msg)}
-function whatsapp(){let phone=(config.whatsapp||'').replace(/\D/g,'');if(!phone){alert('Configura el WhatsApp de la tienda.');return}location.href='https://wa.me/'+phone+'?text='+encodeURIComponent('Hola, necesito información sobre la tienda.')}
-function shareStore(){if(navigator.share)navigator.share({title:config.store_name||'SINTHETIX PRO',url:location.href});else if(navigator.clipboard)navigator.clipboard.writeText(location.href).then(()=>alert('Enlace copiado'))}
-function rotateBanners(){if(!banners.length)return;let i=0;const hero=document.getElementById('hero');function go(){let b=banners[i++%banners.length];document.getElementById('heroTitle').textContent=b.title||'Descubre nuestros productos';document.getElementById('heroSub').textContent=b.subtitle||'Compra fácil y consulta por WhatsApp.';if(b.image_url)hero.style.backgroundImage='url('+JSON.stringify(b.image_url)+')'}go();setInterval(go,5000)}
-function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}function escAttr(v){return String(v??'').replaceAll("'",'').replaceAll('\\','')}load();</script></body></html>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SINTHETIX PRO · Tienda</title>
+<link rel="stylesheet" href="karma/css/bootstrap.css">
+<link rel="stylesheet" href="karma/css/font-awesome.min.css">
+<link rel="stylesheet" href="karma/css/linearicons.css">
+<link rel="stylesheet" href="karma/css/themify-icons.css">
+<link rel="stylesheet" href="karma/css/main.css">
+<style>
+:root{--gold:#f0b90b;--gold2:#ff6c00;--dark:#0d1117;--gray:#6b7280}
+body{font-family:'Poppins',system-ui,-apple-system,sans-serif;background:#f9fafc;color:#222;padding-bottom:80px}
+.topbar{background:linear-gradient(90deg,var(--gold),var(--gold2));color:#111;padding:8px 0;text-align:center;font-size:11px;font-weight:700;letter-spacing:1px}
+.header{background:#fff;box-shadow:0 2px 15px rgba(0,0,0,.06);padding:15px 0;position:sticky;top:0;z-index:100}
+.header-inner{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:#222}
+.brand-logo{width:45px;height:45px;background:linear-gradient(135deg,var(--gold),var(--gold2));border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#111;font-size:20px}
+.brand-text h1{margin:0;font-size:18px;font-weight:900;color:#111;line-height:1}
+.brand-text p{margin:2px 0 0;font-size:10px;color:var(--gray);font-weight:600}
+.header-actions{display:flex;align-items:center;gap:10px}
+.search-wrap{position:relative;flex:1;max-width:400px;min-width:200px}
+.search-wrap input{width:100%;padding:12px 45px 12px 18px;border:2px solid #eee;border-radius:30px;font-size:13px;outline:none;background:#f9fafc;transition:.2s}
+.search-wrap input:focus{border-color:var(--gold);background:#fff}
+.search-wrap .icon{position:absolute;right:18px;top:50%;transform:translateY(-50%);color:var(--gray);font-size:16px}
+.cart-btn{position:relative;background:#111;color:#fff;border:0;width:48px;height:48px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;transition:.2s}
+.cart-btn:hover{background:var(--gold);color:#111}
+.cart-count{position:absolute;top:-4px;right:-4px;background:var(--gold2);color:#fff;font-size:10px;font-weight:900;min-width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;padding:0 4px}
+.hero{background:linear-gradient(135deg,#111 0%,#2a2a2a 100%);padding:70px 0;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;right:-100px;top:-100px;width:500px;height:500px;background:radial-gradient(circle,var(--gold) 0%,transparent 70%);opacity:.15}
+.hero-inner{display:flex;align-items:center;gap:40px;position:relative;z-index:2}
+.hero-text{flex:1;color:#fff}
+.hero-text .eyebrow{color:var(--gold);font-size:11px;font-weight:900;letter-spacing:2px;margin-bottom:12px}
+.hero-text h2{font-size:56px;font-weight:900;line-height:1;margin:0 0 15px}
+.hero-text h2 span{color:var(--gold)}
+.hero-text p{color:#b0b0b0;font-size:15px;margin:0 0 25px;max-width:500px}
+.hero-cta{display:flex;gap:12px;flex-wrap:wrap}
+.btn-primary{background:linear-gradient(90deg,var(--gold),var(--gold2));color:#111;border:0;padding:14px 32px;border-radius:30px;font-weight:900;font-size:13px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px;transition:.2s}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(240,185,11,.4)}
+.btn-secondary{background:transparent;color:#fff;border:2px solid #fff;padding:12px 30px;border-radius:30px;font-weight:900;font-size:13px;cursor:pointer;text-decoration:none;transition:.2s}
+.btn-secondary:hover{background:#fff;color:#111}
+.section{padding:60px 0}
+.section-title{font-size:32px;font-weight:900;text-align:center;margin-bottom:10px;color:#111}
+.section-sub{text-align:center;color:var(--gray);font-size:14px;margin-bottom:40px}
+.categories{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:35px}
+.cat-chip{background:#fff;border:2px solid #eee;color:#6b7280;padding:10px 22px;border-radius:30px;font-size:12px;font-weight:800;cursor:pointer;transition:.2s}
+.cat-chip:hover{border-color:var(--gold);color:#111}
+.cat-chip.active{background:linear-gradient(90deg,var(--gold),var(--gold2));color:#111;border-color:transparent}
+.products{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;max-width:1300px;margin:0 auto;padding:0 20px}
+.product{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.05);transition:.25s;display:flex;flex-direction:column;cursor:pointer}
+.product:hover{transform:translateY(-6px);box-shadow:0 18px 40px rgba(0,0,0,.12)}
+.product-img{height:230px;background:#f4f4f6;position:relative;overflow:hidden}
+.product-img img{width:100%;height:100%;object-fit:cover;transition:.4s}
+.product:hover .product-img img{transform:scale(1.08)}
+.product-badge{position:absolute;top:12px;left:12px;background:rgba(17,17,17,.85);color:#fff;font-size:9px;font-weight:900;padding:5px 10px;border-radius:8px;backdrop-filter:blur(8px)}
+.product-fav{position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.9);border:0;cursor:pointer;font-size:15px;color:#999;display:flex;align-items:center;justify-content:center;transition:.2s}
+.product-fav.on{color:#ff3b5c;background:#fff}
+.product-info{padding:16px;flex:1;display:flex;flex-direction:column}
+.product-name{font-size:14px;font-weight:800;color:#111;margin:0 0 6px;min-height:38px;line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.product-brand{font-size:10px;color:var(--gray);text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-bottom:8px}
+.product-price{font-size:20px;font-weight:900;background:linear-gradient(90deg,var(--gold),var(--gold2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:10px}
+.product-btn{background:#111;color:#fff;border:0;width:100%;padding:11px;border-radius:10px;font-size:11px;font-weight:900;cursor:pointer;transition:.2s;letter-spacing:.5px}
+.product-btn:hover{background:linear-gradient(90deg,var(--gold),var(--gold2));color:#111}
+.product-btn:disabled{background:#e5e7eb;color:#9ca3af;cursor:not-allowed}
+.features{background:#fff;padding:35px 20px;border-radius:20px;max-width:1300px;margin:40px auto 0;box-shadow:0 2px 12px rgba(0,0,0,.04);display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+.feature{text-align:center;padding:15px}
+.feature-icon{width:60px;height:60px;margin:0 auto 12px;background:linear-gradient(135deg,#fff5d6,#ffe0b3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px}
+.feature h6{font-size:13px;font-weight:900;margin:0 0 5px;color:#111}
+.feature p{font-size:11px;color:var(--gray);margin:0}
+.drawer{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;display:none;align-items:flex-end;backdrop-filter:blur(4px)}
+.drawer.open{display:flex}
+.drawer-sheet{background:#fff;width:100%;max-height:85vh;border-radius:24px 24px 0 0;padding:24px;overflow-y:auto}
+.drawer-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:16px;border-bottom:2px solid #f0f0f0}
+.drawer-head h3{margin:0;font-size:20px;font-weight:900;color:#111}
+.close-btn{background:#f0f0f0;border:0;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:16px;color:#666}
+.cart-item{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid #f0f0f0}
+.cart-item img{width:70px;height:70px;border-radius:12px;object-fit:cover;background:#f4f4f6}
+.cart-item-info{flex:1}
+.cart-item-info b{font-size:13px;color:#111;display:block;margin-bottom:4px}
+.cart-item-price{color:var(--gold2);font-weight:900;font-size:14px}
+.qty-row{display:flex;align-items:center;gap:10px;margin-top:8px}
+.qty-btn{width:30px;height:30px;border:2px solid #eee;background:#fff;border-radius:8px;cursor:pointer;font-weight:900;color:var(--gold2)}
+.qty-num{font-weight:900;min-width:20px;text-align:center}
+.cart-total{font-size:24px;font-weight:900;color:#111;margin-top:20px;text-align:right}
+.checkout-btn{background:linear-gradient(90deg,var(--gold),var(--gold2));color:#111;border:0;width:100%;padding:16px;border-radius:14px;font-size:14px;font-weight:900;cursor:pointer;margin-top:16px;letter-spacing:.5px}
+.empty{padding:60px 20px;text-align:center;color:var(--gray);font-size:14px}
+.whatsapp-fab{position:fixed;bottom:24px;right:24px;width:60px;height:60px;border-radius:50%;background:#25d366;color:#fff;border:0;cursor:pointer;font-size:26px;box-shadow:0 10px 30px rgba(37,211,102,.4);z-index:100;display:flex;align-items:center;justify-content:center;transition:.2s}
+.whatsapp-fab:hover{transform:scale(1.1)}
+.loading{text-align:center;padding:80px 20px;color:var(--gray)}
+@media(max-width:1024px){.products{grid-template-columns:repeat(3,1fr)}.hero-text h2{font-size:40px}.features{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:768px){.products{grid-template-columns:repeat(2,1fr);gap:12px}.product-img{height:180px}.hero{padding:45px 0}.hero-text h2{font-size:30px}.section{padding:40px 0}.section-title{font-size:24px}.search-wrap{order:3;width:100%;max-width:none}}
+</style>
+</head>
+<body>
+
+<div class="topbar">ENVÍO GRATIS EN COMPRAS MAYORES · CONSULTA POR WHATSAPP</div>
+
+<header class="header">
+<div class="container">
+<div class="header-inner">
+<a href="#" class="brand">
+<div class="brand-logo" id="brandLogo">S</div>
+<div class="brand-text">
+<h1 id="storeName">SINTHETIX PRO</h1>
+<p id="storeDesc">Tienda online</p>
+</div>
+</a>
+<div class="search-wrap">
+<input type="text" id="search" placeholder="Buscar productos, códigos, marcas..." oninput="renderProducts()">
+<span class="icon">🔍</span>
+</div>
+<div class="header-actions">
+<button class="cart-btn" onclick="openCart()">
+🛒<span class="cart-count" id="cartCount">0</span>
+</button>
+</div>
+</div>
+</div>
+</header>
+
+<section class="hero">
+<div class="container">
+<div class="hero-inner">
+<div class="hero-text">
+<div class="eyebrow">NUEVA COLECCIÓN 2026</div>
+<h2>Descubre<br><span>nuestros productos</span></h2>
+<p>Compra fácil, rápido y desde cualquier dispositivo. Consulta por WhatsApp y recibe tu pedido.</p>
+<div class="hero-cta">
+<a class="btn-primary" href="#productos">VER CATÁLOGO →</a>
+<button class="btn-secondary" onclick="whatsapp()">WHATSAPP</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="section" id="productos">
+<h2 class="section-title">Nuestro Catálogo</h2>
+<p class="section-sub">Productos seleccionados para ti</p>
+<div class="categories" id="chips"><button class="cat-chip active" onclick="selectCat('Todas', this)">Todas</button></div>
+<div class="products" id="content">
+<div class="loading">Cargando catálogo...</div>
+</div>
+</section>
+
+<div class="features">
+<div class="feature"><div class="feature-icon">🚚</div><h6>Envío gratis</h6><p>En compras grandes</p></div>
+<div class="feature"><div class="feature-icon">💳</div><h6>Pago seguro</h6><p>Múltiples métodos</p></div>
+<div class="feature"><div class="feature-icon">📞</div><h6>Soporte 24/7</h6><p>Estamos para ti</p></div>
+<div class="feature"><div class="feature-icon">↩️</div><h6>Devoluciones</h6><p>Sin complicaciones</p></div>
+</div>
+
+<button class="whatsapp-fab" onclick="whatsapp()">💬</button>
+
+<div class="drawer" id="drawer" onclick="if(event.target.id==='drawer')closeCart()">
+<div class="drawer-sheet">
+<div class="drawer-head">
+<h3>Tu carrito</h3>
+<button class="close-btn" onclick="closeCart()">✕</button>
+</div>
+<div id="cart"></div>
+<div id="cartTotal" class="cart-total"></div>
+<button class="checkout-btn" onclick="sendOrder()">ENVIAR PEDIDO POR WHATSAPP</button>
+</div>
+</div>
+
+<script>
+const SUPA={url:"https://euujrzmhhzikwwwmxgep.supabase.co",key:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV1dWpyem1oaHppa3d3d214Z2VwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0ODIxOTcsImV4cCI6MjEwNTA1ODE5N30.VWMnbhdcmoO6g_QkY019essMUlrYbhJP0TPjKznTJ4A"};
+const headers={"apikey":SUPA.key,"Authorization":"Bearer "+SUPA.key};
+let products=[],categories=[],config={},cart=[],cat="Todas";
+
+async function api(path){const r=await fetch(SUPA.url+"/rest/v1/"+path,{headers});if(!r.ok)throw new Error(await r.text());return r.json()}
+
+async function load(){
+try{
+[config,categories,products]=await Promise.all([
+api("store_config?select=*&limit=1"),
+api("store_categories?select=*&active=eq.true&order=name.asc"),
+api("store_products?select=*&active=eq.true&order=created_at.desc")
+]);
+config=config[0]||{};
+applyConfig();
+renderChips();
+renderProducts();
+}catch(e){
+document.getElementById("content").innerHTML='<div class="empty">No hay catálogo publicado todavía.<br>Cuando el POS sincronice productos, aparecerán aquí.</div>';
+console.error(e);
+}
+}
+
+function applyConfig(){
+if(config.store_name){document.getElementById("storeName").textContent=config.store_name;document.title=config.store_name;}
+if(config.description)document.getElementById("storeDesc").textContent=config.description;
+if(config.logo_url){document.getElementById("brandLogo").innerHTML='<img src="'+config.logo_url+'" style="width:100%;height:100%;object-fit:contain;border-radius:12px">';}
+}
+
+function renderChips(){
+const names=["Todas",...categories.map(c=>c.name)];
+document.getElementById("chips").innerHTML=names.map(n=>`<button class="cat-chip ${n===cat?"active":""}" onclick="selectCat('${esc(n)}',this)">${esc(n)}</button>`).join("");
+}
+
+function selectCat(n,el){
+cat=n;
+document.querySelectorAll(".cat-chip").forEach(c=>c.classList.remove("active"));
+if(el)el.classList.add("active");
+renderProducts();
+}
+
+function getImg(p){return p.image_url||p.imagen_url||"";}
+
+function renderProducts(){
+const q=document.getElementById("search").value.trim().toLowerCase();
+const catId=categories.find(c=>c.name===cat)?.id;
+const list=products.filter(p=>{
+const catOk=cat==="Todas"||String(p.category_id||"")===String(catId||"")||String(p.categoria||"")===cat;
+const searchOk=!q||String(p.name||p.nombre||"").toLowerCase().includes(q)||String(p.barcode||"").toLowerCase().includes(q)||String(p.brand||"").toLowerCase().includes(q);
+return catOk&&searchOk;
+});
+if(!list.length){document.getElementById("content").innerHTML='<div class="empty">No hay productos para mostrar.</div>';return;}
+document.getElementById("content").innerHTML=list.map(p=>card(p)).join("");
+}
+
+function card(p){
+const id=p.id||p.local_id;
+const name=p.name||p.nombre||"Producto";
+const price=Number(p.price||p.precio||0);
+const stock=Number(p.stock||0);
+const im=getImg(p);
+const fav=localStorage.getItem("fav_"+id)==="1";
+const brand=p.brand||p.marca||"";
+return `<article class="product">
+<div class="product-img">
+${im?`<img loading="lazy" src="${esc(im)}" onerror="this.style.display='none'">`:`<div style="height:100%;display:flex;align-items:center;justify-content:center;color:#ccc;font-size:48px">📦</div>`}
+${brand?`<span class="product-badge">${esc(brand)}</span>`:""}
+<button class="product-fav ${fav?"on":""}" onclick="event.stopPropagation();toggleFav('${esc(id)}',this)">${fav?"♥":"♡"}</button>
+</div>
+<div class="product-info">
+<p class="product-name">${esc(name)}</p>
+${p.barcode||p.codigo_barras?`<div class="product-brand">${esc(p.barcode||p.codigo_barras)}</div>`:""}
+<div class="product-price">$${price.toFixed(2)}</div>
+<button class="product-btn" ${stock<=0?"disabled":""} onclick="event.stopPropagation();add('${esc(id)}')">${stock<=0?"AGOTADO":"AGREGAR AL CARRITO"}</button>
+</div>
+</article>`;
+}
+
+function toggleFav(id,btn){
+const on=localStorage.getItem("fav_"+id)==="1";
+localStorage.setItem("fav_"+id,on?"0":"1");
+btn.classList.toggle("on",!on);
+btn.textContent=!on?"♥":"♡";
+}
+
+function add(id){
+const p=products.find(x=>String(x.id||x.local_id)===String(id));
+if(!p)return;
+const x=cart.find(c=>String(c.id)===String(id));
+if(x)x.qty++;
+else cart.push({id,p,qty:1});
+updateCartCount();
+openCart();
+}
+
+function updateCartCount(){
+const n=cart.reduce((s,x)=>s+x.qty,0);
+document.getElementById("cartCount").textContent=n;
+}
+
+function openCart(){renderCart();document.getElementById("drawer").classList.add("open");}
+function closeCart(){document.getElementById("drawer").classList.remove("open");}
+
+function renderCart(){
+const el=document.getElementById("cart");
+if(!cart.length){el.innerHTML='<div class="empty">Tu carrito está vacío</div>';document.getElementById("cartTotal").textContent="";return;}
+let total=0;
+el.innerHTML=cart.map(x=>{
+const p=x.p;
+const price=Number(p.price||p.precio||0);
+total+=price*x.qty;
+const im=getImg(p);
+return `<div class="cart-item">
+${im?`<img src="${esc(im)}">`:`<div style="width:70px;height:70px;background:#f4f4f6;border-radius:12px"></div>`}
+<div class="cart-item-info">
+<b>${esc(p.name||p.nombre||"Producto")}</b>
+<div class="cart-item-price">$${price.toFixed(2)}</div>
+<div class="qty-row">
+<button class="qty-btn" onclick="changeQty('${esc(x.id)}',-1)">−</button>
+<span class="qty-num">${x.qty}</span>
+<button class="qty-btn" onclick="changeQty('${esc(x.id)}',1)">+</button>
+</div>
+</div>
+</div>`;
+}).join("");
+document.getElementById("cartTotal").textContent="Total: $"+total.toFixed(2);
+updateCartCount();
+}
+
+function changeQty(id,d){
+const x=cart.find(c=>String(c.id)===String(id));
+if(!x)return;
+x.qty+=d;
+if(x.qty<=0)cart=cart.filter(c=>String(c.id)!==String(id));
+renderCart();
+}
+
+function sendOrder(){
+if(!cart.length)return;
+const phone=(config.whatsapp||"").replace(/\D/g,"");
+if(!phone){alert("Configura el WhatsApp de la tienda en Administrar tienda.");return;}
+const lines=cart.map(x=>"• "+(x.p.name||x.p.nombre)+" x"+x.qty+" = $"+(Number(x.p.price||x.p.precio||0)*x.qty).toFixed(2)).join("\n");
+const total=cart.reduce((s,x)=>s+Number(x.p.price||x.p.precio||0)*x.qty,0);
+const msg="🛍️ NUEVO PEDIDO\n\n"+lines+"\n\n💰 Total: $"+total.toFixed(2)+"\n\nPor favor confírmenme disponibilidad.";
+location.href="https://wa.me/"+phone+"?text="+encodeURIComponent(msg);
+}
+
+function whatsapp(){
+const phone=(config.whatsapp||"").replace(/\D/g,"");
+if(!phone){alert("Configura el WhatsApp de la tienda.");return;}
+location.href="https://wa.me/"+phone+"?text="+encodeURIComponent("Hola, necesito información sobre los productos.");
+}
+
+function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));}
+
+load();
+</script>
+
+</body>
+</html>
