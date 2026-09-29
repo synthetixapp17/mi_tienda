@@ -19756,22 +19756,22 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
   Future<void> _load() async {
     if (mounted) setState(() => _loading = true);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString('sinthetix_store_banners');
-      if (raw != null && raw.isNotEmpty) {
-        final decoded = jsonDecode(raw);
-        if (decoded is List)
-          _banners = decoded
-              .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList();
-      } else {
-        _banners = [];
-      }
       final db = DatabaseService();
       _productos = await db.getProductos();
       _categorias = await db.getCategorias();
-      _whatsapp.text = prefs.getString('sinthetix_store_whatsapp') ?? '';
+
+      final c = SupabaseSyncService.client;
+      if (c != null) {
+        final cfg = await c.from('store_config').select('*').limit(1).maybeSingle();
+        if (cfg != null) {
+          _whatsapp.text = (cfg['whatsapp'] ?? '').toString();
+          _title.text = (cfg['store_name'] ?? '').toString();
+        }
+        final banners = await c.from('store_banners').select('*').order('sort_order', ascending: true);
+        _banners = (banners as List).map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+
+      final prefs = await SharedPreferences.getInstance();
       _publicUrl.text = prefs.getString('sinthetix_store_public_url') ??
           'https://synthetixapp17.github.io/mi_tienda/tienda/';
     } catch (e) {
@@ -19782,9 +19782,20 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
 
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('sinthetix_store_banners', jsonEncode(_banners));
-    await prefs.setString('sinthetix_store_whatsapp', _whatsapp.text.trim());
     await prefs.setString('sinthetix_store_public_url', _publicUrl.text.trim());
+    final c = SupabaseSyncService.client;
+    if (c != null) {
+      try {
+        await c.from('store_config').update({
+          'whatsapp': _whatsapp.text.trim(),
+          'store_name': _title.text.trim(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }).eq('id', 'ab88215d-c8e5-4eff-8877-a929e684c164');
+        debugPrint('SAVE config OK');
+      } catch (e) {
+        debugPrint('SAVE config error: $e');
+      }
+    }
   }
 
   Future<void> _pickBanner() async {
@@ -19808,23 +19819,40 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
           content: Text('Selecciona una imagen para el banner.')));
       return;
     }
-    final banner = <String, dynamic>{
-      'id': DateTime.now().millisecondsSinceEpoch.toString(),
-      'image': image,
-      'title':
-          _title.text.trim().isEmpty ? 'Nueva promociÃ³n' : _title.text.trim(),
-      'subtitle': _subtitle.text.trim(),
-      'button': _button.text.trim(),
-      'active': true
-    };
-    setState(() => _banners.add(banner));
-    await _save();
-    _title.clear();
-    _subtitle.clear();
-    if (mounted) {
-      setState(() => _bannerImage = null);
+    final c = SupabaseSyncService.client;
+    if (c == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Banner agregado a la tienda.')));
+          const SnackBar(content: Text('Supabase no disponible')));
+      return;
+    }
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Subiendo imagen...')));
+      final url = await SupabaseSyncService.uploadBase64(image);
+      if (url == null || url.isEmpty) {
+        throw Exception('No se pudo subir la imagen');
+      }
+      final payload = <String, dynamic>{
+        'title': _title.text.trim().isEmpty ? 'Nueva promocion' : _title.text.trim(),
+        'subtitle': _subtitle.text.trim(),
+        'image_url': url,
+        'active': true,
+        'sort_order': _banners.length,
+      };
+      await c.from('store_banners').insert(payload);
+      await _load();
+      _title.clear();
+      _subtitle.clear();
+      if (mounted) {
+        setState(() => _bannerImage = null);
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Banner agregado a la tienda.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: ')));
+      }
     }
   }
 
