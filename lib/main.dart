@@ -19858,15 +19858,31 @@ class _TiendaAdminScreenState extends State<TiendaAdminScreen> {
 
   Future<void> _toggle(int index) async {
     if (index < 0 || index >= _banners.length) return;
-    setState(
-        () => _banners[index]['active'] = !(_banners[index]['active'] ?? true));
-    await _save();
+    final banner = _banners[index];
+    final newActive = !(banner['active'] ?? true);
+    setState(() => banner['active'] = newActive);
+    final c = SupabaseSyncService.client;
+    if (c != null && banner['id'] != null) {
+      try {
+        await c.from('store_banners').update({'active': newActive}).eq('id', banner['id'].toString());
+      } catch (e) {
+        debugPrint('Error toggle banner: $e');
+      }
+    }
   }
 
   Future<void> _delete(int index) async {
     if (index < 0 || index >= _banners.length) return;
+    final banner = _banners[index];
     setState(() => _banners.removeAt(index));
-    await _save();
+    final c = SupabaseSyncService.client;
+    if (c != null && banner['id'] != null) {
+      try {
+        await c.from('store_banners').delete().eq('id', banner['id'].toString());
+      } catch (e) {
+        debugPrint('Error delete banner: $e');
+      }
+    }
   }
 
   Future<void> _saveSettings() async {
