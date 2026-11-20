@@ -1,2 +1,0 @@
-﻿// SINTHETIX PRO
-// Encabezados reutilizables.
